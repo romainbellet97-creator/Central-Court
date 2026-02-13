@@ -331,6 +331,7 @@ export default function DocumentsScreen() {
   const processDocumentWithOCRBase64 = async (base64: string, uri: string, type: 'pdf' | 'image', name: string) => {
     setIsUploading(true);
     setPendingDocUri(uri);
+    setPendingDocBase64(base64); // Stocker le base64 pour la sauvegarde
     setPendingDocType(type);
     setPendingDocName(name);
 
