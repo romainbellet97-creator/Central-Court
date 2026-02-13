@@ -307,13 +307,15 @@ export default function DocumentsScreen() {
         allowsEditing: true,
         aspect: [4, 3],
         quality: 0.8,
+        base64: true, // Demander le base64 directement
       });
 
       console.log('Gallery result canceled:', result.canceled);
 
       if (!result.canceled && result.assets && result.assets[0]) {
         console.log('Image sélectionnée:', result.assets[0].uri);
-        processDocumentWithOCR(result.assets[0].uri, 'image', `Galerie_${Date.now()}.jpg`);
+        const asset = result.assets[0];
+        processDocumentWithOCRBase64(asset.base64 || '', asset.uri, 'image', `Galerie_${Date.now()}.jpg`);
       }
     } catch (error: any) {
       console.error('Erreur galerie:', error);
