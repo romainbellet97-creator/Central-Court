@@ -244,8 +244,9 @@ export default function DocumentsScreen() {
           allowsEditing: true,
           aspect: [4, 3],
           quality: 0.8,
+          base64: true, // Demander le base64 directement
         });
-        console.log('5. Camera result:', JSON.stringify(result));
+        console.log('5. Camera result:', result.canceled ? 'canceled' : 'photo prise');
       } catch (camError: any) {
         console.error('5. ERREUR caméra:', camError);
         Alert.alert('Erreur Caméra', camError?.message || 'Erreur lors de l\'ouverture de la caméra');
@@ -256,7 +257,8 @@ export default function DocumentsScreen() {
 
       if (!result.canceled && result.assets && result.assets[0]) {
         console.log('7. Photo prise:', result.assets[0].uri);
-        processDocumentWithOCR(result.assets[0].uri, 'image', `Photo_${Date.now()}.jpg`);
+        const asset = result.assets[0];
+        processDocumentWithOCRBase64(asset.base64 || '', asset.uri, 'image', `Photo_${Date.now()}.jpg`);
       } else {
         console.log('7. Photo annulée par utilisateur');
       }
