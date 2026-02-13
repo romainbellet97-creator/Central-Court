@@ -82,6 +82,7 @@ export default function DocumentsScreen() {
   // Upload/OCR state
   const [isUploading, setIsUploading] = useState(false);
   const [pendingDocUri, setPendingDocUri] = useState<string | null>(null);
+  const [pendingDocBase64, setPendingDocBase64] = useState<string | null>(null);
   const [pendingDocType, setPendingDocType] = useState<'pdf' | 'image'>('image');
   const [pendingDocName, setPendingDocName] = useState('');
 
