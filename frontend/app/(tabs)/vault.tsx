@@ -439,10 +439,8 @@ export default function DocumentsScreen() {
 
     setIsSaving(true);
     try {
-      let base64Data = null;
-      if (pendingDocUri) {
-        base64Data = await FileSystem.readAsStringAsync(pendingDocUri, { encoding: 'base64' });
-      }
+      // Utiliser le base64 stocké directement (pas besoin de FileSystem)
+      const base64Data = pendingDocBase64;
 
       const response = await api.post('/api/documents', {
         userId: 'default-user',
