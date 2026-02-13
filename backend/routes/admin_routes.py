@@ -188,6 +188,7 @@ async def list_users(
             {"prenom": {"$regex": search, "$options": "i"}},
             {"nom": {"$regex": search, "$options": "i"}},
             {"email": {"$regex": search, "$options": "i"}},
+            {"name": {"$regex": search, "$options": "i"}},
         ]
     if circuit:
         query["circuits"] = circuit
@@ -197,14 +198,45 @@ async def list_users(
     sort_dir = -1 if order == "desc" else 1
     sort_field = sortBy if sortBy in ["createdAt", "prenom", "activity.lastLoginAt"] else "createdAt"
 
-    total = await db.app_users.count_documents(query)
+    # Get users from both collections (app_users for demo, users for real users)
+    total_app = await db.app_users.count_documents(query)
+    total_real = await db.users.count_documents({})  # Real users from onboarding
+    total = total_app + total_real
+    
     total_pages = math.ceil(total / limit) if limit > 0 else 1
     skip = (page - 1) * limit
 
-    users = await db.app_users.find(query, {"_id": 0}).sort(sort_field, sort_dir).skip(skip).limit(limit).to_list(limit)
+    # Fetch from app_users (demo)
+    app_users_list = await db.app_users.find(query, {"_id": 0}).sort(sort_field, sort_dir).skip(skip).limit(limit).to_list(limit)
+
+    # Also fetch real users from 'users' collection and format them
+    real_users_raw = await db.users.find({}, {"_id": 0}).to_list(100)
+    real_users_list = []
+    for u in real_users_raw:
+        real_users_list.append({
+            "id": u.get("id", u.get("email", "")),
+            "prenom": u.get("firstName", u.get("name", "").split()[0] if u.get("name") else ""),
+            "nom": u.get("lastName", u.get("name", "").split()[-1] if u.get("name") and len(u.get("name", "").split()) > 1 else ""),
+            "email": u.get("email", ""),
+            "telephone": u.get("phone", ""),
+            "dateNaissance": u.get("birthDate", ""),
+            "circuits": u.get("circuits", []),
+            "niveauxTournois": u.get("tournamentLevels", []),
+            "classement": u.get("ranking"),
+            "status": "active",
+            "activation": {
+                "hasCompletedOnboarding": u.get("hasCompletedOnboarding", False),
+                "onboardingCompletionDate": u.get("createdAt"),
+            },
+            "createdAt": u.get("createdAt"),
+            "updatedAt": u.get("updatedAt"),
+        })
+
+    # Combine both lists
+    users = app_users_list + real_users_list
 
     # Attach staff count
-    for user in users:
+    for user in app_users_list:
         staff_count = await db.staff_members.count_documents({"userId": user["id"], "status": {"$ne": "removed"}})
         user["staffCount"] = staff_count
 
