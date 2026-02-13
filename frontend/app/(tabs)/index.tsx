@@ -242,10 +242,9 @@ export default function CalendarScreen() {
         if (stored) {
           const data = JSON.parse(stored);
           if (data.circuits && Array.isArray(data.circuits) && data.circuits.length > 0) {
-            const mappedCircuits = data.circuits.map((c: string) => 
-              c === 'ITF_WHEELCHAIR' ? 'ITF' : c
-            );
-            setUserCircuits(mappedCircuits);
+            // Keep circuits as-is (ITF_WHEELCHAIR should remain separate)
+            setUserCircuits(data.circuits);
+            console.log('User circuits loaded:', data.circuits);
           }
         }
       } catch (e) {
