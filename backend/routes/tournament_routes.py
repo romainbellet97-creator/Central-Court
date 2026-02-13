@@ -45,6 +45,7 @@ def serialize_tournament(t: dict) -> dict:
         "week": t.get("week", 0),
         "city": t.get("city"),
         "country": t.get("country"),
+        "countryCode": t.get("countryCode"),
         "venue": t.get("venue"),
         "indoor": t.get("indoor", False),
         "prizeMoney": t.get("prizeMoney", 0),
