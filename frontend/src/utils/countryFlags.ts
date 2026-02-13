@@ -140,13 +140,25 @@ export const getCountryCode = (countryName: string): string => {
   return COUNTRY_CODES[countryName] || 'XX';
 };
 
-export const getFlagEmoji = (countryName: string): string => {
-  let code = COUNTRY_CODES[countryName];
-  if (!code) return '';
-  if (code === 'UK') code = 'GB';
-  const codePoints = code
-    .toUpperCase()
+// Convert country code directly to flag emoji (e.g., 'FR' -> 🇫🇷)
+export const codeToFlag = (code: string): string => {
+  if (!code || code.length !== 2) return '';
+  const upperCode = code.toUpperCase();
+  const codePoints = upperCode
     .split('')
     .map(char => 127397 + char.charCodeAt(0));
   return String.fromCodePoint(...codePoints);
+};
+
+export const getFlagEmoji = (countryNameOrCode: string): string => {
+  // If it's a 2-letter code, convert directly
+  if (countryNameOrCode && countryNameOrCode.length === 2) {
+    return codeToFlag(countryNameOrCode);
+  }
+  
+  // Otherwise look up the country name
+  let code = COUNTRY_CODES[countryNameOrCode];
+  if (!code) return '';
+  if (code === 'UK') code = 'GB';
+  return codeToFlag(code);
 };
