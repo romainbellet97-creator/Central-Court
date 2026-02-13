@@ -24,6 +24,15 @@ class HideTournamentRequest(BaseModel):
 
 def serialize_tournament(t: dict) -> dict:
     """Serialize tournament for API response"""
+    start_date = t.get("startDate")
+    end_date = t.get("endDate")
+    
+    # Convert to ISO string if needed
+    if start_date and hasattr(start_date, 'isoformat'):
+        start_date = start_date.isoformat()
+    if end_date and hasattr(end_date, 'isoformat'):
+        end_date = end_date.isoformat()
+    
     return {
         "id": t.get("id"),
         "name": t.get("name"),
@@ -31,8 +40,8 @@ def serialize_tournament(t: dict) -> dict:
         "circuit": t.get("circuit"),
         "category": t.get("category"),
         "surface": t.get("surface"),
-        "startDate": t.get("startDate").isoformat() if t.get("startDate") else None,
-        "endDate": t.get("endDate").isoformat() if t.get("endDate") else None,
+        "startDate": start_date,
+        "endDate": end_date,
         "week": t.get("week", 0),
         "city": t.get("city"),
         "country": t.get("country"),
