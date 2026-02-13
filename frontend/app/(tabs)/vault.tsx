@@ -326,6 +326,59 @@ export default function DocumentsScreen() {
   // Note: handleSelectFile supprimé - utiliser ImagePicker pour les images
   // DocumentPicker cause des problèmes "picker in progress"
 
+  // Nouvelle fonction qui utilise directement le base64 de ImagePicker
+  const processDocumentWithOCRBase64 = async (base64: string, uri: string, type: 'pdf' | 'image', name: string) => {
+    setIsUploading(true);
+    setPendingDocUri(uri);
+    setPendingDocType(type);
+    setPendingDocName(name);
+
+    try {
+      console.log('OCR: Envoi de l\'image en base64...');
+      const response = await api.post('/api/invoices/analyze-base64', {
+        image_base64: base64,
+        filename: name,
+      });
+
+      console.log('OCR Response:', response.data);
+
+      if (response.data.success && response.data.data) {
+        const data = response.data.data;
+        setEditedFournisseur(data.fournisseur || '');
+        setEditedDate(data.dateFacture || new Date().toISOString().split('T')[0]);
+        setEditedMontant(data.montantTotal?.toString() || '');
+        setEditedMontantHT(data.montantHT?.toString() || '');
+        setEditedMontantTVA(data.montantTVA?.toString() || '');
+        setEditedCategorie(data.categorie || 'Autre');
+        setEditedCurrency(data.currency || 'EUR');
+        setShowVerificationModal(true);
+      } else {
+        // OCR failed - manual entry
+        console.log('OCR: Pas de données, saisie manuelle');
+        setEditedFournisseur('');
+        setEditedDate(new Date().toISOString().split('T')[0]);
+        setEditedMontant('');
+        setEditedMontantHT('');
+        setEditedMontantTVA('');
+        setEditedCategorie('Autre');
+        setEditedCurrency('EUR');
+        setShowVerificationModal(true);
+      }
+    } catch (error: any) {
+      console.error('OCR error:', error?.message || error);
+      // Still show form for manual entry
+      setEditedFournisseur('');
+      setEditedDate(new Date().toISOString().split('T')[0]);
+      setEditedMontant('');
+      setEditedCategorie('Autre');
+      setEditedCurrency('EUR');
+      setShowVerificationModal(true);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  // Ancienne fonction gardée pour compatibilité (utilise expo-file-system/legacy)
   const processDocumentWithOCR = async (uri: string, type: 'pdf' | 'image', name: string) => {
     setIsUploading(true);
     setPendingDocUri(uri);
