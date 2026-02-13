@@ -262,19 +262,46 @@ async def list_user_tournaments(user_id: str, limit: int = Query(default=100, le
 
 @router.get("/weeks")
 async def list_tournament_weeks(
-    circuits: Optional[str] = Query(None, description="Comma-separated circuit filter: ATP,WTA,ITF")
+    circuits: Optional[str] = Query(None, description="Comma-separated circuit filter: ATP,WTA,ITF,ITF_WHEELCHAIR"),
+    categories: Optional[str] = Query(None, description="Comma-separated category filter: Grand Slam,Masters 1000,ATP 500,etc.")
 ):
     """Get tournaments grouped by week with registrations and hidden status.
-    Filter by circuits (comma-separated) to show only relevant tournaments."""
-    # Parse circuit filter (case-insensitive)
-    circuit_filter = None
+    Filter by circuits and categories (comma-separated) to show only relevant tournaments."""
+    
+    # Mapping of user-facing circuits to database values
+    circuit_mapping = {
+        'atp': ['atp'],
+        'wta': ['wta'],
+        'itf': ['itf'],
+        'itf_wheelchair': ['itf_wheelchair'],
+        # Handle uppercase versions
+        'ATP': ['atp'],
+        'WTA': ['wta'],
+        'ITF': ['itf'],
+        'ITF_WHEELCHAIR': ['itf_wheelchair'],
+    }
+    
+    # Parse circuit filter
+    db_circuits = []
     if circuits:
-        circuit_filter = [c.strip().lower() for c in circuits.split(",") if c.strip()]
-
-    # Get all tournaments matching filter
+        for c in circuits.split(","):
+            c = c.strip()
+            if c in circuit_mapping:
+                db_circuits.extend(circuit_mapping[c])
+            else:
+                # Direct lowercase match
+                db_circuits.append(c.lower())
+    
+    # Build query
     t_query = {}
-    if circuit_filter:
-        t_query["circuit"] = {"$in": circuit_filter}
+    if db_circuits:
+        t_query["circuit"] = {"$in": db_circuits}
+    
+    # Parse category filter
+    if categories:
+        cat_list = [c.strip() for c in categories.split(",") if c.strip()]
+        if cat_list:
+            t_query["category"] = {"$in": cat_list}
     
     cursor = db.tournaments.find(t_query, {"_id": 0}).sort("startDate", 1)
     all_tournaments = await cursor.to_list(length=500)
