@@ -436,6 +436,7 @@ export default function DocumentsScreen() {
 
   const resetOCR = () => {
     setPendingDocUri(null);
+    setPendingDocBase64(null);
     setPendingDocName('');
     setEditedFournisseur('');
     setEditedDate('');
