@@ -256,10 +256,10 @@ async def list_tournament_weeks(
 ):
     """Get tournaments grouped by week with registrations and hidden status.
     Filter by circuits (comma-separated) to show only relevant tournaments."""
-    # Parse circuit filter
+    # Parse circuit filter (case-insensitive)
     circuit_filter = None
     if circuits:
-        circuit_filter = [c.strip().upper() for c in circuits.split(",") if c.strip()]
+        circuit_filter = [c.strip().lower() for c in circuits.split(",") if c.strip()]
 
     # Get all tournaments matching filter
     t_query = {}
