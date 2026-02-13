@@ -197,23 +197,20 @@ export default function DocumentsScreen() {
     setShowUploadModal(false);
 
     try {
-      // 1. Demander permission AVANT tout
-      console.log('1. Demande permission caméra...');
+      // 1. Vérifier/Demander permission
+      console.log('1. Vérification permission caméra...');
+      const { status } = await ImagePicker.getCameraPermissionsAsync();
       
-      let permissionResult;
-      try {
-        permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-        console.log('2. Permission result:', JSON.stringify(permissionResult));
-      } catch (permError: any) {
-        console.error('2. ERREUR permission:', permError);
-        Alert.alert('Erreur Permission', permError?.message || 'Erreur lors de la demande de permission');
-        return;
+      let finalStatus = status;
+      if (status !== 'granted') {
+        console.log('2. Demande permission caméra...');
+        const { status: newStatus } = await ImagePicker.requestCameraPermissionsAsync();
+        finalStatus = newStatus;
       }
       
-      console.log('3. Permission status:', permissionResult.status);
+      console.log('3. Permission status:', finalStatus);
       
-      if (permissionResult.status !== 'granted') {
-        console.log('4. Permission REFUSÉE');
+      if (finalStatus !== 'granted') {
         Alert.alert(
           'Permission requise',
           'Autorisez l\'accès à la caméra pour scanner les reçus.',
@@ -237,33 +234,23 @@ export default function DocumentsScreen() {
       console.log('4. Permission OK, ouverture caméra...');
       
       // 2. Ouvrir caméra
-      let result;
-      try {
-        result = await ImagePicker.launchCameraAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.Images,
-          allowsEditing: true,
-          aspect: [4, 3],
-          quality: 0.8,
-          base64: true, // Demander le base64 directement
-        });
-        console.log('5. Camera result:', result.canceled ? 'canceled' : 'photo prise');
-      } catch (camError: any) {
-        console.error('5. ERREUR caméra:', camError);
-        Alert.alert('Erreur Caméra', camError?.message || 'Erreur lors de l\'ouverture de la caméra');
-        return;
-      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+        base64: true,
+      });
 
-      console.log('6. Camera canceled:', result.canceled);
+      console.log('5. Camera result:', result.canceled ? 'canceled' : 'photo prise');
 
       if (!result.canceled && result.assets && result.assets[0]) {
-        console.log('7. Photo prise:', result.assets[0].uri);
+        console.log('6. Photo prise, envoi OCR...');
         const asset = result.assets[0];
-        processDocumentWithOCRBase64(asset.base64 || '', asset.uri, 'image', `Photo_${Date.now()}.jpg`);
-      } else {
-        console.log('7. Photo annulée par utilisateur');
+        await processDocumentWithOCRBase64(asset.base64 || '', asset.uri, 'image', `Photo_${Date.now()}.jpg`);
       }
     } catch (error: any) {
-      console.error('ERREUR GLOBALE caméra:', error);
+      console.error('ERREUR caméra:', error);
       Alert.alert('Erreur', error?.message || 'Impossible d\'ouvrir la caméra');
     }
   };
