@@ -260,12 +260,20 @@ export default function DocumentsScreen() {
     setShowUploadModal(false);
 
     try {
-      // 1. Demander permission AVANT tout
-      console.log('Demande permission galerie...');
-      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      console.log('Permission status:', permissionResult.status);
+      // 1. Vérifier/Demander permission
+      console.log('1. Vérification permission galerie...');
+      const { status } = await ImagePicker.getMediaLibraryPermissionsAsync();
       
-      if (permissionResult.status !== 'granted') {
+      let finalStatus = status;
+      if (status !== 'granted') {
+        console.log('2. Demande permission galerie...');
+        const { status: newStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        finalStatus = newStatus;
+      }
+      
+      console.log('3. Permission status:', finalStatus);
+      
+      if (finalStatus !== 'granted') {
         Alert.alert(
           'Permission requise',
           'Autorisez l\'accès à la galerie pour sélectionner des photos.',
@@ -286,7 +294,7 @@ export default function DocumentsScreen() {
         return;
       }
 
-      console.log('Permission OK, ouverture galerie...');
+      console.log('4. Permission OK, ouverture galerie...');
 
       // 2. Ouvrir galerie
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -294,18 +302,18 @@ export default function DocumentsScreen() {
         allowsEditing: true,
         aspect: [4, 3],
         quality: 0.8,
-        base64: true, // Demander le base64 directement
+        base64: true,
       });
 
-      console.log('Gallery result canceled:', result.canceled);
+      console.log('5. Gallery result:', result.canceled ? 'canceled' : 'image sélectionnée');
 
       if (!result.canceled && result.assets && result.assets[0]) {
-        console.log('Image sélectionnée:', result.assets[0].uri);
+        console.log('6. Image sélectionnée, envoi OCR...');
         const asset = result.assets[0];
-        processDocumentWithOCRBase64(asset.base64 || '', asset.uri, 'image', `Galerie_${Date.now()}.jpg`);
+        await processDocumentWithOCRBase64(asset.base64 || '', asset.uri, 'image', `Galerie_${Date.now()}.jpg`);
       }
     } catch (error: any) {
-      console.error('Erreur galerie:', error);
+      console.error('ERREUR galerie:', error);
       Alert.alert('Erreur', error?.message || 'Impossible d\'ouvrir la galerie');
     }
   };
