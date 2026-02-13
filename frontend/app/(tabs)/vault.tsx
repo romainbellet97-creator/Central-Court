@@ -380,55 +380,8 @@ export default function DocumentsScreen() {
     }
   };
 
-  // Ancienne fonction gardée pour compatibilité (utilise expo-file-system/legacy)
-  const processDocumentWithOCR = async (uri: string, type: 'pdf' | 'image', name: string) => {
-    setIsUploading(true);
-    setPendingDocUri(uri);
-    setPendingDocType(type);
-    setPendingDocName(name);
-
-    try {
-      const base64 = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' });
-      const response = await api.post('/api/invoices/analyze-base64', {
-        file_base64: base64,
-        file_type: type,
-        file_name: name,
-      });
-
-      if (response.data.success && response.data.data) {
-        const data = response.data.data;
-        setEditedFournisseur(data.fournisseur || '');
-        setEditedDate(data.dateFacture || new Date().toISOString().split('T')[0]);
-        setEditedMontant(data.montantTotal?.toString() || '');
-        setEditedMontantHT(data.montantHT?.toString() || '');
-        setEditedMontantTVA(data.montantTVA?.toString() || '');
-        setEditedCategorie(data.categorie || 'Autre');
-        setEditedCurrency(data.currency || 'EUR');
-        setShowVerificationModal(true);
-      } else {
-        // OCR failed - manual entry
-        setEditedFournisseur('');
-        setEditedDate(new Date().toISOString().split('T')[0]);
-        setEditedMontant('');
-        setEditedMontantHT('');
-        setEditedMontantTVA('');
-        setEditedCategorie('Autre');
-        setEditedCurrency('EUR');
-        setShowVerificationModal(true);
-      }
-    } catch (error) {
-      console.error('OCR error:', error);
-      // Still show form for manual entry
-      setEditedFournisseur('');
-      setEditedDate(new Date().toISOString().split('T')[0]);
-      setEditedMontant('');
-      setEditedCategorie('Autre');
-      setEditedCurrency('EUR');
-      setShowVerificationModal(true);
-    } finally {
-      setIsUploading(false);
-    }
-  };
+  // Fonction supprimée - l'ancienne processDocumentWithOCR utilisait FileSystem.readAsStringAsync
+  // Maintenant tout passe par processDocumentWithOCRBase64 avec le base64 direct de ImagePicker
 
   const handleSaveDocument = async () => {
     if (isSaving) return; // Prevent double submission
