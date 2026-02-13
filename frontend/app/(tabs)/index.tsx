@@ -174,8 +174,10 @@ interface Tournament {
   week: number;
   city: string;
   country: string;
+  countryCode?: string;
   prizeMoney: number;
   currency: string;
+  points?: number;
   registration?: { status: string };
   hidden?: boolean;
 }
