@@ -915,7 +915,7 @@ export default function CalendarScreen() {
                 <View key={tournament.id} style={[styles.tournamentDetail, tournament.hidden && styles.tournamentHidden]}>
                   <View style={styles.tournamentDetailHeader}>
                     <Text style={styles.tournamentDetailFlag}>
-                      {getFlagEmoji(tournament.country)}
+                      {getFlagEmoji(tournament.countryCode || tournament.country)}
                     </Text>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.tournamentDetailName}>{tournament.name}</Text>
