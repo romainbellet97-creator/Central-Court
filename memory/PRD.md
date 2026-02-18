@@ -108,28 +108,38 @@ Application professionnelle de tennis: FastAPI + MongoDB + React Native (Expo)
 ## Key API Endpoints
 - POST /api/users/onboarding, PUT /api/users/profile/{user_id}
 - GET /api/tournaments/weeks, /conflicts/{id}, /register, /hide
+- GET /api/tournaments/stats - Statistiques (total: 137, byCircuit)
 - GET /api/documents, POST /api/documents, PUT/DELETE /api/documents/{id}
 - POST /api/invoices/analyze-base64 (OCR)
 - GET /api/residence/countries, /stats, /days
 - POST /api/residence/days, /days/bulk
-- PUT /api/residence/days/{date} ✅ NEW
+- PUT /api/residence/days/{date}
 - DELETE /api/residence/days/{date}
+- **Events API (Feb 18, 2026)**:
+  - GET /api/events?month=YYYY-MM - Liste événements
+  - GET /api/events?date=YYYY-MM-DD - Événements d'un jour
+  - POST /api/events - Créer événement
+  - PUT /api/events/{id} - Modifier événement
+  - DELETE /api/events/{id} - Supprimer événement
+  - POST /api/events/{id}/observations - Ajouter observation staff
 
 ## Backlog
 
-### P0 - Next
+### P0 - En cours
 - **Phase 3 - Résidence Fiscale**: Alertes push + génération de rapports PDF
-- **Bug P0 - Sauvegarde dépenses**: Backend vérifié OK - peut être un problème de cache client Expo Go. Surveiller les rapports utilisateur.
+- **Bug P0 - Upload documents**: Boutons Caméra/Galerie non réactifs après première utilisation
 
 ### P1
 - PDF export of documents
-- Bug modal tournoi non réactif après changement de statut
+- Bug modal tournoi non réactif après changement de statut (récurrent)
+- Élargir les cartes tournois + homogénéité visuelle
 
 ### P2
 - Invitation emails via Resend
 - Push notifications
 - Deadline reminders
 - "Pas intéressé" - demander la raison
+- Export calendrier vers Google Calendar/iCal
 - UI de reprogrammation des conflits de calendrier
 
 ## Architecture
