@@ -192,9 +192,9 @@ async def list_tournaments(
     """
     query = {}
     
-    # Circuit filter
+    # Circuit filter - convert to lowercase to match DB
     if circuits:
-        circuit_list = [c.strip().upper() for c in circuits.split(",") if c.strip()]
+        circuit_list = [c.strip().lower() for c in circuits.split(",") if c.strip()]
         if circuit_list:
             query["circuit"] = {"$in": circuit_list}
     
