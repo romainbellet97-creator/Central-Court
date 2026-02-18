@@ -997,7 +997,10 @@ export default function CalendarScreen() {
                       {formatDate(selectedEvent.date)} à {selectedEvent.time || '--:--'}
                     </Text>
                   </View>
-                  <TouchableOpacity onPress={() => setShowEventDetailModal(false)}>
+                  <TouchableOpacity onPress={() => {
+                    setShowEventDetailModal(false);
+                    setSelectedEvent(null);
+                  }}>
                     <Ionicons name="close" size={28} color="#666" />
                   </TouchableOpacity>
                 </View>
