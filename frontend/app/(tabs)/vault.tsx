@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,6 @@ import {
   TextInput,
   Platform,
   KeyboardAvoidingView,
-  Dimensions,
   Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -62,6 +61,9 @@ const getCatConfig = (cat: string) => CATEGORY_CONFIG[cat] || CATEGORY_CONFIG['o
 
 export default function DocumentsScreen() {
   const insets = useSafeAreaInsets();
+  
+  // Ref pour éviter les appels multiples
+  const isProcessingRef = useRef(false);
 
   // Core state
   const [documents, setDocuments] = useState<Document[]>([]);
@@ -78,8 +80,9 @@ export default function DocumentsScreen() {
   const [showDocDetail, setShowDocDetail] = useState<Document | null>(null);
   const [showAllCategories, setShowAllCategories] = useState(false);
 
-  // Upload/OCR state
+  // Upload/OCR state - CRITIQUE: Utiliser des états séparés
   const [isUploading, setIsUploading] = useState(false);
+  const [isProcessingOCR, setIsProcessingOCR] = useState(false);
   const [pendingDocUri, setPendingDocUri] = useState<string | null>(null);
   const [pendingDocBase64, setPendingDocBase64] = useState<string | null>(null);
   const [pendingDocType, setPendingDocType] = useState<'pdf' | 'image'>('image');
@@ -97,6 +100,48 @@ export default function DocumentsScreen() {
 
   // Available currencies
   const CURRENCIES = ['EUR', 'USD', 'GBP', 'CHF', 'AUD', 'CAD', 'AED'];
+
+  // ============ CLEANUP / RESET ============
+
+  // CRITIQUE: Fonction de reset complète pour tout l'état upload
+  const resetUploadState = useCallback(() => {
+    console.log('🔄 === RESET UPLOAD STATE ===');
+    isProcessingRef.current = false;
+    setIsUploading(false);
+    setIsProcessingOCR(false);
+    setPendingDocUri(null);
+    setPendingDocBase64(null);
+    setPendingDocName('');
+    setPendingDocType('image');
+  }, []);
+
+  // CRITIQUE: Fonction de reset pour l'OCR
+  const resetOCRState = useCallback(() => {
+    console.log('🔄 === RESET OCR STATE ===');
+    setEditedFournisseur('');
+    setEditedDate('');
+    setEditedMontant('');
+    setEditedMontantHT('');
+    setEditedMontantTVA('');
+    setEditedCategorie('Autre');
+    setEditedCurrency('EUR');
+  }, []);
+
+  // Cleanup complet
+  const fullReset = useCallback(() => {
+    resetUploadState();
+    resetOCRState();
+    setShowUploadModal(false);
+    setShowVerificationModal(false);
+  }, [resetUploadState, resetOCRState]);
+
+  // CRITIQUE: Cleanup au démontage du composant
+  useEffect(() => {
+    return () => {
+      console.log('🧹 Component unmounting, cleaning up...');
+      isProcessingRef.current = false;
+    };
+  }, []);
 
   // ============ COMPUTED ============
 
@@ -190,27 +235,30 @@ export default function DocumentsScreen() {
     else setCurrentMonth(m => m + 1);
   };
 
-  // ============ UPLOAD / OCR ============
+  // ============ UPLOAD / OCR - CORRIGÉ ============
 
   const handleTakePhoto = async () => {
-    console.log('=== CAMERA BUTTON PRESSED ===');
+    console.log('📸 === TAKE PHOTO PRESSED ===');
+    
+    // CRITIQUE: Garde contre double appel
+    if (isProcessingRef.current) {
+      console.log('⚠️ Already processing, ignoring click');
+      return;
+    }
+    
+    // Fermer le modal immédiatement
     setShowUploadModal(false);
-
+    
     try {
-      // 1. Vérifier/Demander permission
-      console.log('1. Vérification permission caméra...');
-      const { status } = await ImagePicker.getCameraPermissionsAsync();
+      isProcessingRef.current = true;
       
-      let finalStatus = status;
-      if (status !== 'granted') {
-        console.log('2. Demande permission caméra...');
-        const { status: newStatus } = await ImagePicker.requestCameraPermissionsAsync();
-        finalStatus = newStatus;
-      }
+      // 1. Toujours demander les permissions
+      console.log('1. Requesting camera permissions...');
+      const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+      console.log('2. Permission result:', permissionResult.status);
       
-      console.log('3. Permission status:', finalStatus);
-      
-      if (finalStatus !== 'granted') {
+      if (permissionResult.status !== 'granted') {
+        isProcessingRef.current = false;
         Alert.alert(
           'Permission requise',
           'Autorisez l\'accès à la caméra pour scanner les reçus.',
@@ -231,49 +279,65 @@ export default function DocumentsScreen() {
         return;
       }
 
-      console.log('4. Permission OK, ouverture caméra...');
+      console.log('3. Launching camera...');
       
-      // 2. Ouvrir caméra
+      // 2. Ouvrir caméra avec options fraîches
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [4, 3],
         quality: 0.8,
         base64: true,
+        exif: false, // Éviter les métadonnées qui peuvent bloquer
       });
 
-      console.log('5. Camera result:', result.canceled ? 'canceled' : 'photo prise');
+      console.log('4. Camera result:', result.canceled ? 'CANCELED' : 'PHOTO TAKEN');
 
       if (!result.canceled && result.assets && result.assets[0]) {
-        console.log('6. Photo prise, envoi OCR...');
         const asset = result.assets[0];
-        await processDocumentWithOCRBase64(asset.base64 || '', asset.uri, 'image', `Photo_${Date.now()}.jpg`);
+        console.log('5. Photo URI:', asset.uri?.substring(0, 50) + '...');
+        console.log('6. Base64 length:', asset.base64?.length || 0);
+        
+        // Traiter immédiatement
+        await processDocumentWithOCRBase64(
+          asset.base64 || '', 
+          asset.uri, 
+          'image', 
+          `Photo_${Date.now()}.jpg`
+        );
+      } else {
+        console.log('5. Photo canceled by user');
+        isProcessingRef.current = false;
       }
     } catch (error: any) {
-      console.error('ERREUR caméra:', error);
+      console.error('❌ CAMERA ERROR:', error);
+      isProcessingRef.current = false;
       Alert.alert('Erreur', error?.message || 'Impossible d\'ouvrir la caméra');
     }
   };
 
   const handleSelectGallery = async () => {
-    console.log('=== GALLERY BUTTON PRESSED ===');
+    console.log('🖼️ === GALLERY PRESSED ===');
+    
+    // CRITIQUE: Garde contre double appel
+    if (isProcessingRef.current) {
+      console.log('⚠️ Already processing, ignoring click');
+      return;
+    }
+    
+    // Fermer le modal immédiatement
     setShowUploadModal(false);
-
+    
     try {
-      // 1. Vérifier/Demander permission
-      console.log('1. Vérification permission galerie...');
-      const { status } = await ImagePicker.getMediaLibraryPermissionsAsync();
+      isProcessingRef.current = true;
       
-      let finalStatus = status;
-      if (status !== 'granted') {
-        console.log('2. Demande permission galerie...');
-        const { status: newStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        finalStatus = newStatus;
-      }
+      // 1. Toujours demander les permissions
+      console.log('1. Requesting gallery permissions...');
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      console.log('2. Permission result:', permissionResult.status);
       
-      console.log('3. Permission status:', finalStatus);
-      
-      if (finalStatus !== 'granted') {
+      if (permissionResult.status !== 'granted') {
+        isProcessingRef.current = false;
         Alert.alert(
           'Permission requise',
           'Autorisez l\'accès à la galerie pour sélectionner des photos.',
@@ -294,52 +358,72 @@ export default function DocumentsScreen() {
         return;
       }
 
-      console.log('4. Permission OK, ouverture galerie...');
+      console.log('3. Launching gallery...');
 
-      // 2. Ouvrir galerie
+      // 2. Ouvrir galerie avec options fraîches
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [4, 3],
         quality: 0.8,
         base64: true,
+        exif: false,
       });
 
-      console.log('5. Gallery result:', result.canceled ? 'canceled' : 'image sélectionnée');
+      console.log('4. Gallery result:', result.canceled ? 'CANCELED' : 'IMAGE SELECTED');
 
       if (!result.canceled && result.assets && result.assets[0]) {
-        console.log('6. Image sélectionnée, envoi OCR...');
         const asset = result.assets[0];
-        await processDocumentWithOCRBase64(asset.base64 || '', asset.uri, 'image', `Galerie_${Date.now()}.jpg`);
+        console.log('5. Image URI:', asset.uri?.substring(0, 50) + '...');
+        console.log('6. Base64 length:', asset.base64?.length || 0);
+        
+        // Traiter immédiatement
+        await processDocumentWithOCRBase64(
+          asset.base64 || '', 
+          asset.uri, 
+          'image', 
+          `Galerie_${Date.now()}.jpg`
+        );
+      } else {
+        console.log('5. Selection canceled by user');
+        isProcessingRef.current = false;
       }
     } catch (error: any) {
-      console.error('ERREUR galerie:', error);
+      console.error('❌ GALLERY ERROR:', error);
+      isProcessingRef.current = false;
       Alert.alert('Erreur', error?.message || 'Impossible d\'ouvrir la galerie');
     }
   };
 
-  // Note: handleSelectFile supprimé - utiliser ImagePicker pour les images
-  // DocumentPicker cause des problèmes "picker in progress"
-
-  // Nouvelle fonction qui utilise directement le base64 de ImagePicker
+  // Fonction OCR corrigée
   const processDocumentWithOCRBase64 = async (base64: string, uri: string, type: 'pdf' | 'image', name: string) => {
+    console.log('🔍 === OCR PROCESSING START ===');
+    
+    // Mettre à jour les états
     setIsUploading(true);
+    setIsProcessingOCR(true);
     setPendingDocUri(uri);
-    setPendingDocBase64(base64); // Stocker le base64 pour la sauvegarde
+    setPendingDocBase64(base64);
     setPendingDocType(type);
     setPendingDocName(name);
 
     try {
-      console.log('OCR: Envoi de l\'image en base64...');
+      console.log('OCR: Sending image to API...');
       const response = await api.post('/api/invoices/analyze-base64', {
         image_base64: base64,
         filename: name,
       });
 
-      console.log('OCR Response:', response.data);
+      console.log('OCR Response success:', response.data.success);
 
       if (response.data.success && response.data.data) {
         const data = response.data.data;
+        console.log('OCR Data:', {
+          fournisseur: data.fournisseur,
+          montant: data.montantTotal,
+          date: data.dateFacture,
+        });
+        
         setEditedFournisseur(data.fournisseur || '');
         setEditedDate(data.dateFacture || new Date().toISOString().split('T')[0]);
         setEditedMontant(data.montantTotal?.toString() || '');
@@ -347,10 +431,9 @@ export default function DocumentsScreen() {
         setEditedMontantTVA(data.montantTVA?.toString() || '');
         setEditedCategorie(data.categorie || 'Autre');
         setEditedCurrency(data.currency || 'EUR');
-        setShowVerificationModal(true);
       } else {
-        // OCR failed - manual entry
-        console.log('OCR: Pas de données, saisie manuelle');
+        // OCR failed - prepare for manual entry
+        console.log('OCR: No data extracted, manual entry mode');
         setEditedFournisseur('');
         setEditedDate(new Date().toISOString().split('T')[0]);
         setEditedMontant('');
@@ -358,37 +441,46 @@ export default function DocumentsScreen() {
         setEditedMontantTVA('');
         setEditedCategorie('Autre');
         setEditedCurrency('EUR');
-        setShowVerificationModal(true);
       }
+      
+      // Afficher le modal de vérification
+      setShowVerificationModal(true);
+      
     } catch (error: any) {
-      console.error('OCR error:', error?.message || error);
+      console.error('❌ OCR ERROR:', error?.message || error);
       // Still show form for manual entry
       setEditedFournisseur('');
       setEditedDate(new Date().toISOString().split('T')[0]);
       setEditedMontant('');
+      setEditedMontantHT('');
+      setEditedMontantTVA('');
       setEditedCategorie('Autre');
       setEditedCurrency('EUR');
       setShowVerificationModal(true);
     } finally {
+      // CRITIQUE: Toujours libérer les verrous
+      console.log('🔓 Releasing OCR lock');
       setIsUploading(false);
+      setIsProcessingOCR(false);
+      isProcessingRef.current = false;
     }
   };
 
-  // Fonction supprimée - l'ancienne processDocumentWithOCR utilisait FileSystem.readAsStringAsync
-  // Maintenant tout passe par processDocumentWithOCRBase64 avec le base64 direct de ImagePicker
-
   const handleSaveDocument = async () => {
-    if (isSaving) return; // Prevent double submission
+    console.log('💾 === SAVE DOCUMENT ===');
+    
+    if (isSaving) {
+      console.log('⚠️ Already saving, ignoring');
+      return;
+    }
     
     const parsedMontant = parseFloat(editedMontant.replace(',', '.')) || 0;
     const parsedHT = parseFloat(editedMontantHT.replace(',', '.')) || undefined;
     const parsedTVA = parseFloat(editedMontantTVA.replace(',', '.')) || undefined;
 
     setIsSaving(true);
+    
     try {
-      // Utiliser le base64 stocké directement (pas besoin de FileSystem)
-      const base64Data = pendingDocBase64;
-
       const response = await api.post('/api/documents', {
         userId: 'default-user',
         name: editedFournisseur || pendingDocName,
@@ -399,9 +491,11 @@ export default function DocumentsScreen() {
         montantHT: parsedHT,
         montantTVA: parsedTVA,
         currency: editedCurrency,
-        fileBase64: base64Data,
+        fileBase64: pendingDocBase64,
         fileType: pendingDocType,
       });
+
+      console.log('✅ Document saved:', response.data.id);
 
       const saved = response.data;
       setDocuments(prev => [{
@@ -416,29 +510,25 @@ export default function DocumentsScreen() {
         createdAt: saved.createdAt,
       }, ...prev]);
 
+      // CRITIQUE: Reset complet après succès
       setShowVerificationModal(false);
-      resetOCR();
+      fullReset();
+      
       Alert.alert('Succès', 'Document enregistré avec succès');
+      
     } catch (error: any) {
-      console.error('Save error:', error);
-      const errorMsg = error?.response?.data?.detail || error?.message || "Échec de l'enregistrement. Vérifiez votre connexion.";
+      console.error('❌ SAVE ERROR:', error);
+      const errorMsg = error?.response?.data?.detail || error?.message || "Échec de l'enregistrement";
       Alert.alert('Erreur', errorMsg);
     } finally {
       setIsSaving(false);
     }
   };
 
-  const resetOCR = () => {
-    setPendingDocUri(null);
-    setPendingDocBase64(null);
-    setPendingDocName('');
-    setEditedFournisseur('');
-    setEditedDate('');
-    setEditedMontant('');
-    setEditedMontantHT('');
-    setEditedMontantTVA('');
-    setEditedCategorie('Autre');
-    setEditedCurrency('EUR');
+  const handleCancelVerification = () => {
+    console.log('❌ Verification canceled');
+    setShowVerificationModal(false);
+    fullReset();
   };
 
   const handleDeleteDoc = async (docId: string) => {
@@ -466,6 +556,9 @@ export default function DocumentsScreen() {
       </View>
     );
   }
+
+  // CRITIQUE: Désactiver les boutons pendant le traitement
+  const isButtonsDisabled = isUploading || isProcessingOCR || isProcessingRef.current;
 
   return (
     <View style={[s.container, { paddingTop: insets.top }]} data-testid="documents-screen">
@@ -571,21 +664,42 @@ export default function DocumentsScreen() {
 
       {/* ── FAB Camera ── */}
       <TouchableOpacity
-        style={[s.fab, { bottom: insets.bottom + 80 }]}
-        onPress={() => setShowUploadModal(true)}
+        style={[s.fab, { bottom: insets.bottom + 80 }, isButtonsDisabled && s.fabDisabled]}
+        onPress={() => {
+          console.log('🔘 FAB pressed');
+          if (!isButtonsDisabled) {
+            setShowUploadModal(true);
+          }
+        }}
+        disabled={isButtonsDisabled}
+        activeOpacity={0.7}
         data-testid="fab-upload"
       >
         <Ionicons name="camera" size={28} color="#fff" />
       </TouchableOpacity>
 
       {/* ── Upload Modal ── */}
-      <Modal visible={showUploadModal} animationType="slide" transparent>
+      <Modal 
+        visible={showUploadModal} 
+        animationType="slide" 
+        transparent
+        onRequestClose={() => {
+          console.log('Upload modal close requested');
+          setShowUploadModal(false);
+        }}
+      >
         <View style={s.modalOverlay}>
           <View style={s.uploadSheet}>
             <View style={s.sheetHandle} />
             <Text style={s.sheetTitle}>Ajouter un reçu</Text>
 
-            <TouchableOpacity style={s.uploadOption} onPress={handleTakePhoto} data-testid="upload-camera">
+            <TouchableOpacity 
+              style={[s.uploadOption, isButtonsDisabled && s.uploadOptionDisabled]} 
+              onPress={handleTakePhoto} 
+              disabled={isButtonsDisabled}
+              activeOpacity={0.7}
+              data-testid="upload-camera"
+            >
               <View style={[s.uploadIconWrap, { backgroundColor: '#e3f2fd' }]}>
                 <Ionicons name="camera" size={24} color="#1976d2" />
               </View>
@@ -595,7 +709,13 @@ export default function DocumentsScreen() {
               </View>
             </TouchableOpacity>
 
-            <TouchableOpacity style={s.uploadOption} onPress={handleSelectGallery} data-testid="upload-gallery">
+            <TouchableOpacity 
+              style={[s.uploadOption, isButtonsDisabled && s.uploadOptionDisabled]} 
+              onPress={handleSelectGallery} 
+              disabled={isButtonsDisabled}
+              activeOpacity={0.7}
+              data-testid="upload-gallery"
+            >
               <View style={[s.uploadIconWrap, { backgroundColor: '#e8f5e9' }]}>
                 <Ionicons name="images" size={24} color="#388e3c" />
               </View>
@@ -613,7 +733,12 @@ export default function DocumentsScreen() {
       </Modal>
 
       {/* ── OCR Verification Modal ── */}
-      <Modal visible={showVerificationModal} animationType="slide" transparent>
+      <Modal 
+        visible={showVerificationModal} 
+        animationType="slide" 
+        transparent
+        onRequestClose={handleCancelVerification}
+      >
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={s.modalOverlay}>
           <View style={s.verifySheet}>
             <View style={s.sheetHandle} />
@@ -676,7 +801,7 @@ export default function DocumentsScreen() {
                   <Text style={s.saveBtnText}>Enregistrer</Text>
                 )}
               </TouchableOpacity>
-              <TouchableOpacity style={s.cancelBtn} onPress={() => { setShowVerificationModal(false); resetOCR(); }}>
+              <TouchableOpacity style={s.cancelBtn} onPress={handleCancelVerification}>
                 <Text style={s.cancelText}>Annuler</Text>
               </TouchableOpacity>
             </ScrollView>
@@ -795,6 +920,7 @@ const s = StyleSheet.create({
 
   // FAB
   fab: { position: 'absolute', right: 20, width: 60, height: 60, borderRadius: 30, backgroundColor: '#1e3c72', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 8, elevation: 8 },
+  fabDisabled: { opacity: 0.5 },
 
   // Modals
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
@@ -806,6 +932,7 @@ const s = StyleSheet.create({
 
   // Upload options
   uploadOption: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
+  uploadOptionDisabled: { opacity: 0.5 },
   uploadIconWrap: { width: 48, height: 48, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
   uploadOptionTitle: { fontSize: 16, fontWeight: '600', color: '#1a1a1a' },
   uploadOptionSub: { fontSize: 13, color: '#999', marginTop: 2 },
