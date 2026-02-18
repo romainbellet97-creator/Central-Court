@@ -140,27 +140,9 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: ITEM_HEIGHT,
-    backgroundColor: 'rgba(45, 80, 22, 0.08)',
+    backgroundColor: 'rgba(30, 60, 114, 0.08)',
     borderRadius: 8,
     zIndex: 1,
-  },
-  gradientTop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: ITEM_HEIGHT,
-    backgroundColor: 'rgba(255,255,255,0.7)',
-    zIndex: 2,
-  },
-  gradientBottom: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: ITEM_HEIGHT,
-    backgroundColor: 'rgba(255,255,255,0.7)',
-    zIndex: 2,
   },
   item: {
     height: ITEM_HEIGHT,
@@ -174,7 +156,7 @@ const styles = StyleSheet.create({
   },
   itemTextSelected: {
     fontWeight: '600',
-    color: '#2D5016',
+    color: '#1e3c72',
   },
   itemTextFaded: {
     color: '#9CA3AF',
