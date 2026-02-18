@@ -13,7 +13,7 @@ import pytest
 import requests
 import os
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://taxdays.preview.emergentagent.com').rstrip('/')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://tournytrack.preview.emergentagent.com').rstrip('/')
 
 # Test tournament IDs from the database
 TEST_TOURNAMENT_ID_HIDE = "adelaide-2026"  # Used for hide/unhide tests

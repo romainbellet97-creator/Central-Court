@@ -14,7 +14,7 @@ import pytest
 import requests
 import os
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://taxdays.preview.emergentagent.com').rstrip('/')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://tournytrack.preview.emergentagent.com').rstrip('/')
 
 # Test tournament IDs
 TEST_TOURNAMENT_ID_REGISTER = "australian-open-2026"  # Grand Slam for registration tests

@@ -1,161 +1,246 @@
 <analysis>**original_problem_statement:**
-The user wants to implement a new feature for geolocation and tax residency management. The user provided a detailed specification document () outlining the requirements. The agent has proposed a phased implementation, and the user has agreed to start with Phase 1.
+The session began with several pending issues from a previous fork, including a critical bug preventing users from saving expenses, the inability to edit residency periods, and a non-reactive tournament modal.
 
-The user's previous requests, which have been addressed in this session, include:
-- Fixing various bugs related to onboarding, login, and the calendar UI.
-- A complete redesign of the Documents screen.
-- Adding extensive new features to the tournament view, including country flags, advanced filtering (prize money, surface, country, level), hiding tournaments (Not interested), and simplifying tournament registration statuses.
-- Resolving deployment and production access issues.
+During this session, the user's requests were:
+-   Prioritize and fix the critical (P0) expense-saving bug and the (P1) residency period editing issue.
+-   Improve the OCR module to use GPT-4o Vision and fix its non-functionality.
+-   Test the OCR on three user-provided documents (2 PDFs, 1 PNG) and add them as test data for a .
+-   Fix multiple recurring issues with the Expo Go preview link, which was frequently offline or pointing to an incorrect URL.
+-   Fix the document upload feature, which was not working for the user (buttons unresponsive, or a patientez modal getting stuck).
+-   Fix a bug where upcoming tournaments were not appearing on the calendar screen.
+-   Ensure newly created users appear in the admin dashboard.
+-   Restore and expand the tournament database, which was incomplete. The user requested all ATP, WTA, and ITF tournaments be included, with prize money and country flags.
+-   Adjust the UI to make tournament cards wider and more visually homogeneous.
 
 **User's preferred language**: French
 
 **what currently exists?**
-The project is a functional mobile application for tennis players, built with React Native (Expo) for the frontend and a FastAPI backend. Key features include user authentication, a comprehensive tournament calendar with advanced filtering and status management, and a redesigned document management section for tracking expenses. The web deployment serves a landing page that directs users to the Expo Go mobile application.
+The application is a full-stack React Native (Expo) app for tennis players, with a FastAPI backend and a MongoDB database.
+
+-   **Authentication & Users**: Users can onboard, and their data is now correctly saved to the  collection, which is visible in the admin dashboard.
+-   **Tax Residency**: A dashboard tracks days spent per country. Users can now view, delete, AND **edit** past residency entries.
+-   **Document Vault & OCR**: The document vault allows users to upload receipts. The backend OCR service has been fixed and now uses GPT-4o via the Emergent LLM Key to successfully extract data from images and PDFs. The user-provided documents have been processed and added to the database for a .
+-   **Tournament Calendar**: The calendar screen displays tournaments filtered by the user's preferred circuits (ATP, WTA, ITF, ITF Wheelchair). Tournament data includes prize money and country flags. The database is in the process of being fully restored with a comprehensive list of tournaments.
 
 **Last working item**:
--   **Last item agent was working**: The agent was initiating Phase 1 of the Geolocation/Tax Residency feature. The plan is to create the necessary backend models and API endpoints, and build a new Résidence dashboard screen in the frontend. This screen will display the user's current tax residency, track the number of days spent in each country against legal limits, and list the relevant tax rules. The agent has identified an existing hidden  tab to repurpose for this new screen.
+-   **Last item agent was working**: Restoring the complete tournament database. The agent identified that the current DB only had 49 tournaments. Following the user's request, the agent created a new seed data file at  and was about to populate it with a comprehensive list of ATP tournaments provided by the user, with the goal of then creating an import script.
 -   **Status**: IN PROGRESS
 -   **Agent Testing Done**: N
--   **Which testing method agent to use?**: both
+-   **Which testing method agent to use?**: backend testing agent
 -   **User Testing Done**: N
 
 **All Pending/In progress Issue list**:
--   **Issue 1**: Implement Phase 1 of the Geolocation/Tax Residency feature (P0)
--   **Issue 2**: The simplified status and reactive modal are not 100% operational (P1)
+-   **Issue 1**: Document upload buttons (Camera/Gallery) do not work after the first use (P0).
+-   **Issue 2**: The tournament detail modal UI does not update reactively after changing a tournament's status (P1).
+-   **Issue 3**: Tournament cards in the calendar are not visually homogeneous (P2).
 
 **Issues Detail**:
 -   **Issue 1**:
-    -   **Description**: Implement the backend and frontend for the initial Résidence dashboard as per the user's request for Phase 1 and the specifications in .
+    -   **Description**: The user reports that after granting camera/gallery permissions once, the buttons become unresponsive on subsequent clicks. The agent has tried multiple fixes, but the user confirms the issue persists. This is a critical blocker for a core feature.
+    -   **Attempted fixes**:
+        1.  Refactored state management from  to a simpler  () to prevent a stuck state.
+        2.  Implemented explicit permission requests (, ) before trying to launch the camera or gallery.
+        3.  Added the  package and its corresponding plugin in .
+        4.  Refactored the code to use  in  options to avoid the deprecated .
+        5.  Forced multiple Expo cache clears and restarts.
     -   **Next debug checklist**:
-        1.  Create the  and  models in .
-        2.  Create the API endpoints () in a new  file to get residency status and log stays.
-        3.  Rename and repurpose  to .
-        4.  Enable the tab in .
-        5.  Build the UI for the Résidence dashboard, including progress bars for days spent and a list of rules.
-    -   **Why fix this issue and what will be achieved with the fix?**: This is the user's current primary feature request. Completing it will deliver the first part of the new geolocation module.
+        1.  Thoroughly review the state management in , specifically how the  state is set and cleared within the  blocks of  and .
+        2.  Check for any race conditions or unhandled promises that might prevent the  block from executing correctly.
+        3.  Add extensive  statements at every step of the functions to trace the exact point of failure on the user's device.
+    -   **Why fix this issue and what will be achieved with the fix?**: This is a critical P0 bug that makes the document upload feature unusable.
     -   **Status**: IN PROGRESS
-    -   **Should Test frontend/backend/both after fix?**: both
--   **Issue 2**:
-    -   **Description**: The user reported that the tournament detail modal does not update its state correctly after a status change (e.g., from Pending to Participating). The agent previously investigated and believed it was a testing tool artifact, but the user's report indicates a potential underlying bug or a poor user experience.
-    -   **Attempted fixes**: The agent refactored the modal's state management to derive its data from a reactive  hook. An  was removed to prevent UI blocking. The agent confirmed the backend was updated correctly on click, but the UI did not refresh during the automated test.
-    -   **Next debug checklist**:
-        1.  In , manually test the flow on the web preview: open the tournament detail modal, change a tournament's status, and verify that the buttons and status indicators update immediately without closing the modal.
-        2.  Trace the state update in the  function to ensure  triggers the intended re-render of the  component.
-    -   **Why fix this issue and what will be achieved with the fix?**: To resolve a user-reported bug and ensure the UI is intuitive and responsive.
-    -   **Status**: USER VERIFICATION PENDING
     -   **Is recurring issue?**: Y
     -   **Should Test frontend/backend/both after fix?**: Frontend
+    -   **Blocked on other issue**: None
+-   **Issue 2**:
+    -   **Description**: A recurring issue from a previous session. The tournament detail modal does not update its state correctly after a status change (e.g., from Pending to Participating) without being closed and reopened.
+    -   **Attempted fixes**: None in this session.
+    -   **Next debug checklist**:
+        1.  In , trace the state that controls the modal's content.
+        2.  Ensure that after the  API call successfully completes, the local state for tournaments is being updated in a way that triggers a re-render of the modal component. A state lifting or callback mechanism might be needed.
+    -   **Why fix this issue and what will be achieved with the fix?**: Resolves a known, recurring UX friction point.
+    -   **Status**: NOT STARTED
+    -   **Is recurring issue?**: Y
+    -   **Should Test frontend/backend/both after fix?**: Frontend
+    -   **Blocked on other issue**: None
+-   **Issue 3**:
+    -   **Description**: The user provided a screenshot showing that tournament cards have varying amounts of information, leading to inconsistent heights and an unaligned layout. They requested the cards be made wider and more uniform.
+    -   **Attempted fixes**: The agent located the relevant styles (, ) in  but was interrupted by a higher-priority task.
+    -   **Next debug checklist**:
+        1.  Modify the styles in .
+        2.  Apply a fixed  to  to ensure all cards have the same height regardless of content.
+        3.  Adjust , , and  to make the cards wider and improve layout.
+    -   **Why fix this issue and what will be achieved with the fix?**: Improves UI/UX consistency on a primary screen.
+    -   **Status**: NOT STARTED
+    -   **Is recurring issue?**: N
+    -   **Should Test frontend/backend/both after fix?**: Frontend
+    -   **Blocked on other issue**: None
 
 **In progress Task List**:
--   **Task 1**: Implement Phase 1 of Geolocation/Tax Residency feature (P0)
-    -   **Where to resume**: The agent has completed its initial analysis of the codebase. The next step is to begin creating the new files for the feature, starting with the backend model and API routes.
-    -   **What will be achieved with this?**: A new Résidence tab will be available in the app, providing users with a dashboard to monitor their tax residency status based on days spent in various countries.
-    -   **Status**: IN PROGRESS
-    -   **Should Test frontend/backend/both after fix?**: both
+-   **Task 1**: Restore and expand the tournament database (P0)
+
+ **Task Detail**:
+  -   **Task 1**:
+     -   **Where to resume**:
+         1. Open .
+         2. Paste the large JSON array of ATP tournaments provided by the user in chat message 507 into this file.
+         3. Create a new script, , that reads the data from  and performs an  with  into the  collection in MongoDB. The script should map the user-provided fields to the DB schema.
+         4. Execute the import script.
+         5. Verify the new tournament count in the database.
+     -   **What will be achieved with this?**: The application will have a complete and accurate set of tournament data, fulfilling a critical user requirement.
+     -   **Status**: IN PROGRESS
+     -   **Should Test frontend/backend/both after fix?**: both
+     -   **Blocked on something**: No
 
 **Upcoming and Future Tasks**
--   **Upcoming Tasks (P1)**:
-    -   **Geolocation Phase 2: Data Input & Tracking**: Implement screens for manual entry of stays and add automatic location tracking (with user consent) to log days in countries.
-    -   **Geolocation Phase 3: Alerts & Reporting**: Develop a system to alert users when they approach tax residency thresholds and allow them to generate reports of their stays.
--   **Future Tasks (P2)**:
-    -   **Not Interested Reason**: Enhance the Not Interested feature by adding a prompt to ask the user for the reason (e.g., schedule conflict, surface), as specified in the original PRD.
-    -   **Calendar Conflict Rescheduling**: Implement the UI and logic to allow users to reschedule their personal calendar events when a tournament conflict is detected.
+-   **Upcoming Tasks**:
+    -   Geolocation Phase 3: Alerts & Reporting (P1): Develop a system for push notification alerts on approaching tax residency thresholds and add functionality to generate PDF reports of stays.
+-   **Future Tasks**:
+    -   Not Interested Reason (P2): Enhance the Not Interested feature by adding a prompt for the user to provide a reason.
+    -   Calendar Conflict Rescheduling UI (P2): Build the UI to allow users to reschedule personal calendar events when a tournament conflict is detected.
 
 **Completed work in this session**
--   **UI & Feature Enhancements**:
-    -   **Tournament Screen**: Added country flags, advanced filters (prize money, surface, country, level), colored level badges, and simplified status transitions.
-    -   **Documents Screen**: Executed a complete UI/UX overhaul based on user designs, including monthly summaries and category breakdowns. Removed TTC/TVA fields as requested.
--   **Bug Fixes**:
-    -   Resolved a critical onboarding bug related to a data type mismatch.
-    -   Fixed a login issue caused by an incorrect Expo tunnel URL in the environment configuration.
-    -   Corrected a calendar bug where selecting a date would display the previous day due to a timezone handling error.
--   **Deployment & Backend**:
-    -   Addressed multiple N+1 query performance issues in the backend.
-    -   Resolved a production Not Found error by creating a landing page on the backend to correctly guide users to the Expo Go mobile app.
+-   **Residency Period Editing**: Implemented  and the corresponding frontend modal to allow editing of residency entries.
+-   **OCR Module Fix**: Corrected the OCR service to use the Emergent LLM Key, installed  to handle PDFs, and successfully processed user-provided test documents.
+-   **Admin User Visibility**: Modified the  endpoint to query from the correct  collection, making all registered users visible in the admin dashboard.
+-   **Tournament Data & API Fixes**:
+    -   Restored a partial list of tournaments (49 total) with correct , , and calculated  numbers.
+    -   Fixed backend API filtering for circuits (e.g.,  vs ).
+    -   Fixed a  error for date objects.
+    -   Updated frontend to pass all user circuits to the API and to use  for flags.
+-   **Expo Go & Upload Stability Fixes**:
+    -   Continuously troubleshooted and fixed the ngrok tunnel URL across the environment, backend, and frontend landing page.
+    -   Refactored the document upload logic in  to explicitly request permissions, avoiding a critical UI freeze.
+    -   Replaced deprecated  calls with  from .
+
+**Earlier issues found/mentioned but not fixed**
+-   **Issue 1**: The tournament detail modal UI does not update reactively after changing a tournament's status. This is a recurring issue from the previous fork that remains unresolved.
+
+**Known issue recurrence from previous fork**
+-   **Issue recurrence in previous fork**: The tournament modal UI reactivity issue.
+-   **Recurrence count**: 2
+-   **Status**: NOT STARTED
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
 -   **Frontend**: React Native, Expo, TypeScript
--   **Backend**: Python, FastAPI, Pydantic
--   **Database**: PostgreSQL
--   **Architecture**: Monorepo with a mobile-first design, intended for use via the Expo Go app.
+-   **Backend**: Python, FastAPI
+-   **Database**: MongoDB
+-   **Environment**: Expo Go, ngrok for tunneling (recurring issue source)
 
 **key DB schema**
--   **users**: {id, email, password_hash, prenom, nom, classement, residence_fiscale}
--   **tournaments**: {id, name, city, country, surface, start_date, end_date, prize_money, category}
--   **player_tournaments**: {player_id, tournament_id, status}
--   **documents**: {id, user_id, date, vendor, total, category, file_url}
--   **(New) tax_residency**: To be defined, will likely include {user_id, country_code, start_date, end_date}.
-
-**changes in tech stack**
--   None.
+-   **users**: 
+-   **documents**: 
+-   **day_presences**: 
+-   **tournaments**: 
 
 **All files of reference**
--   **Key modified files**:
-    -   : Major updates for tournament features and bug fixes.
-    -   : Complete rewrite for the new documents UI.
-    -   : Added the root landing page for production.
-    -   : Added conflict detection endpoint.
-    -   : Optimized database queries.
--   **Key new files (to be created)**:
-    -   
-    -    (by renaming )
--   **Documentation**:
-    -   : The specification for the current feature request.
+-   ****: Heavily modified to fix the recurring document upload bug by adding explicit permission requests and refactoring state management. This file is the source of the current P0 bug.
+-   ****: Modified to correctly pass user circuits to the API and to use  for displaying flags. Contains the styles for the tournament cards that need to be adjusted.
+-   ****: Heavily modified to fix filtering logic (case-insensitivity), add  to the response, and handle date serialization correctly.
+-   ****: Modified the  endpoint to fetch from both  and the main  collection.
+-   ****: Added a  endpoint for editing entries.
+-   ****: Updated to use the Emergent LLM Key, fixing the previously non-functional OCR.
+-   ****: New file created to hold the comprehensive tournament data for restoration.
+-   ****: Modified to add the  plugin, a critical step for the upload fix.
+-   ****: Was found to have an incorrect , which was fixed to resolve an issue with documents not appearing for the correct user.
 
 **Areas that need refactoring**:
--   : This file has become excessively large and complex. It should be broken down into smaller components and custom hooks to improve maintainability.
--   : The data access layer uses raw SQL queries. Migrating to an ORM like SQLAlchemy would make the code more robust and easier to manage.
+-   ****: This file has undergone multiple rapid bug fixes and its state management for the upload process () is still causing issues. It should be refactored into a more robust state machine to handle loading, success, error, and permission-denied states cleanly.
+-   ****: Still a very large file that could be broken down into smaller components.
 
 **key api endpoints**
 -   
 -   
 -   
 -   
--   
--   **(New)** 
--   **(New)** 
+-    (New)
+-    (OCR endpoint)
 
 **Critical Info for New Agent**
--   The user's primary language is **French**. Please maintain all communication in French.
--   This is a **React Native (Expo) app**, not a standard web application. The production web URL serves a landing page that directs users to download and use the Expo Go mobile app. Do not attempt to deploy it as a traditional website.
--   Before starting new features, re-verify the modal reactivity bug reported by the user (). It's a recurring point of friction.
--   Follow the user-provided specification document () closely for the new geolocation feature.
+-   The user's primary language is **French**.
+-   **Document upload is the top priority bug (P0)**. The user is blocked as the camera/gallery buttons are unresponsive after first use. The issue likely lies in the state management within .
+-   **Tournament data restoration is the top priority task (P0)**. The agent must populate  and create/run an import script to restore the full tournament list.
+-   **Expo Go stability is a recurring problem.** The  tunnel is fragile. If the user reports connection issues, the first step is always to check expo                             STOPPED   Feb 18 05:34 AM and restart it if needed, then verify the tunnel URL. Be prepared to guide the user on clearing their Expo Go cache.
 
 **documents and test reports created in this job**
--   /app/TAX_RESIDENCY_COMPLETE.md
--   /app/memory/PRD.md
+-   
+-    (updated multiple times)
+-   
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  : User confirmed to start Phase 1 of the geolocation feature. **(In Progress)**
-2.   + spec file: User requested a major new feature. **(Started)**
-3.  : User asked about deployment options and suggested improving the landing page. **(Completed)**
-4.  : User reported a production access issue. **(Completed)**
-5.  : User requested a deployment health check. **(Completed)**
-6.  : User reported two minor bugs. **(Completed)**
-7.  : User requested UI improvements for the documents section. **(Completed)**
-8.  : User initiated the redesign of the document space. **(Completed)**
-9.  : User reported a recurring bug and requested to move to the next task. **(Partially Addressed - Bug remains pending)**
-10. : User requested advanced filtering for tournaments. **(Completed)**
+1.  **Bug Report**: User cannot use Camera/Gallery after granting permissions; upcoming tournaments are missing; new users don't appear in admin dashboard. (Partially resolved: tournaments & admin fixed; camera/gallery is the current P0 bug).
+2.  **Request**: Add missing prize money to tournaments and ensure the full database is displayed with country flags. (Completed).
+3.  **Request**: Filter tournaments based on the user's profile (ATP, WTA, etc.). (Completed).
+4.  **Request**: Make tournament cards wider and more homogeneous. (Not started).
+5.  **Request**: URGENT - Restore the complete tournament database (ATP/WTA/ITF). (In Progress).
+6.  **User Data**: Provided a large JSON of ATP tournaments to be seeded. (Pending implementation).
+7.  **Feedback**: it works perfect!. Followed by a request to update the landing page link. (Completed).
+8.  **Bug Report**:  error message appears when taking a photo for OCR. (Fixed).
+9.  **Bug Report**: User sees an error message. (Identified as a cached bundle issue, new code was deployed).
+10. **Feedback**: Still nothing when I click on camera and When I click on gallery I get a waiting popup. (This is the current P0 bug).
 
 **Project Health Check:**
--   **Broken**: No critical breakages.
--   **Mocked**: OCR for document scanning and the full conflict-rescheduling flow are designed but not implemented.
+-   **Broken**: The document upload feature, a core part of the app, is not reliably working for the user. The tournament database is incomplete, pending a data restoration task.
+-   **Mocked**: OCR was not working and has been fixed. No other mocked components were addressed.
 
 **3rd Party Integrations**
--   **Expo**: Core framework for React Native development and deployment.
+-   **Expo**: Core React Native framework.
+-   **ngrok**: Used by the environment to create the Expo Go tunnel.
+-   **poppler-utils**: Installed via apt 2.6.1 (arm64)
+Usage: apt-get [options] command
+       apt-get [options] install|remove pkg1 [pkg2 ...]
+       apt-get [options] source pkg1 [pkg2 ...]
+
+apt-get is a command line interface for retrieval of packages
+and information about them from authenticated sources and
+for installation, upgrade and removal of packages together
+with their dependencies.
+
+Most used commands:
+  update - Retrieve new lists of packages
+  upgrade - Perform an upgrade
+  install - Install new packages (pkg is libc6 not libc6.deb)
+  reinstall - Reinstall packages (pkg is libc6 not libc6.deb)
+  remove - Remove packages
+  purge - Remove packages and config files
+  autoremove - Remove automatically all unused packages
+  dist-upgrade - Distribution upgrade, see apt-get(8)
+  dselect-upgrade - Follow dselect selections
+  build-dep - Configure build-dependencies for source packages
+  satisfy - Satisfy dependency strings
+  clean - Erase downloaded archive files
+  autoclean - Erase old downloaded archive files
+  check - Verify that there are no broken dependencies
+  source - Download source archives
+  download - Download the binary package into the current directory
+  changelog - Download and display the changelog for the given package
+
+See apt-get(8) for more information about the available commands.
+Configuration options and syntax is detailed in apt.conf(5).
+Information about how to configure sources can be found in sources.list(5).
+Package and version choices can be expressed via apt_preferences(5).
+Security details are available in apt-secure(8).
+                                        This APT has Super Cow Powers. to enable PDF processing for the OCR service.
+-   **expo-camera**: Installed via yarn install v1.22.22
+[1/4] Resolving packages...
+success Already up-to-date.
+Done in 0.39s. to fix camera access issues.
 
 **Testing status**
--   **Testing agent used after significant changes**: YES
+-   **Testing agent used after significant changes**: YES, for backend API testing after implementing residency edit.
 -   **Troubleshoot agent used after agent stuck in loop**: NO
 -   **Test files created**: None.
--   **Known regressions**: The tournament modal's lack of UI reactivity after a status change.
+-   **Known regressions**:
+    -   The document upload feature has regressed into an unusable state for the user.
+    -   The tournament modal UI reactivity issue remains unfixed.
 
 **Credentials to test flow:**
--   Create a new user through the application's onboarding flow.
+-   **App User**:  /  (This user has 3 documents associated with it).
+-   **Admin User**:  / 
 
 **What agent forgot to execute**
--   **Not Interested Reasons**: The agent implemented the button to mark a tournament as not interested but omitted the follow-up prompt to ask the user for a reason, which was part of the original design.
--   **Conflict Rescheduling UI**: The agent implemented conflict detection but did not build the UI for users to reschedule their conflicting personal events.</analysis>
+-   The agent did not address the recurring bug with the tournament modal's lack of reactivity.
+-   The agent started to investigate the user's request to make tournament cards wider but was interrupted by the urgent database restore task.</analysis>

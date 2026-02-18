@@ -10,7 +10,7 @@ import time
 from datetime import datetime
 
 # Base URL from environment
-BASE_URL = os.environ.get('EXPO_PUBLIC_BACKEND_URL', 'https://taxdays.preview.emergentagent.com').rstrip('/')
+BASE_URL = os.environ.get('EXPO_PUBLIC_BACKEND_URL', 'https://tournytrack.preview.emergentagent.com').rstrip('/')
 
 # Test data
 TEST_PLAYER_ID = "698aa79d59d2bf64a89327fb"

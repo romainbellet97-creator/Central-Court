@@ -222,7 +222,7 @@ export default function ProfileScreen() {
       
       const invitation = response.data;
       const roleInfo = STAFF_ROLES.find(r => r.id === selectedRole);
-      const webUrl = `https://taxdays.preview.emergentagent.com/join/${invitation.token}`;
+      const webUrl = `https://tournytrack.preview.emergentagent.com/join/${invitation.token}`;
       
       // Add to local team
       setTeam(prev => [...prev, {
