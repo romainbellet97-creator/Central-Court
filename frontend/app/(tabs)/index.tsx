@@ -966,8 +966,19 @@ export default function CalendarScreen() {
       </Modal>
 
       {/* Event Detail Modal */}
-      <Modal visible={showEventDetailModal} animationType="slide" transparent>
+      <Modal visible={showEventDetailModal} animationType="slide" transparent onRequestClose={() => {
+        setShowEventDetailModal(false);
+        setSelectedEvent(null);
+      }}>
         <View style={styles.modalOverlay}>
+          <TouchableOpacity 
+            style={styles.modalBackdrop} 
+            activeOpacity={1} 
+            onPress={() => {
+              setShowEventDetailModal(false);
+              setSelectedEvent(null);
+            }}
+          />
           <View style={styles.detailModal}>
             {selectedEvent && (
               <>
