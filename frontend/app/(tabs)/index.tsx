@@ -388,7 +388,11 @@ export default function CalendarScreen() {
 
       const updatedEvent = await apiUpdateEvent(selectedEvent.id, updatedData);
       setEvents(prev => prev.map(e => e.id === selectedEvent.id ? { ...e, ...updatedEvent } : e));
+      
+      // Clean up state
       setShowEditEventModal(false);
+      setSelectedEvent(null);
+      resetEventForm();
       
       Alert.alert('Succès', 'Événement modifié !');
     } catch (error) {
