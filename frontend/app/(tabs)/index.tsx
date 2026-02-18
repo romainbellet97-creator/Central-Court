@@ -873,12 +873,29 @@ export default function CalendarScreen() {
       </Modal>
 
       {/* Edit Event Modal */}
-      <Modal visible={showEditEventModal} animationType="slide" transparent>
+      <Modal visible={showEditEventModal} animationType="slide" transparent onRequestClose={() => {
+        setShowEditEventModal(false);
+        setSelectedEvent(null);
+        resetEventForm();
+      }}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
+          <TouchableOpacity 
+            style={styles.modalBackdrop} 
+            activeOpacity={1} 
+            onPress={() => {
+              setShowEditEventModal(false);
+              setSelectedEvent(null);
+              resetEventForm();
+            }}
+          />
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Modifier l'événement</Text>
-              <TouchableOpacity onPress={() => setShowEditEventModal(false)}>
+              <TouchableOpacity onPress={() => {
+                setShowEditEventModal(false);
+                setSelectedEvent(null);
+                resetEventForm();
+              }}>
                 <Ionicons name="close" size={28} color="#666" />
               </TouchableOpacity>
             </View>
@@ -935,7 +952,11 @@ export default function CalendarScreen() {
 
               <TouchableOpacity
                 style={styles.cancelButton}
-                onPress={() => setShowEditEventModal(false)}
+                onPress={() => {
+                  setShowEditEventModal(false);
+                  setSelectedEvent(null);
+                  resetEventForm();
+                }}
               >
                 <Text style={styles.cancelButtonText}>Annuler</Text>
               </TouchableOpacity>
