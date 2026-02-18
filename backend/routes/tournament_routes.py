@@ -46,6 +46,7 @@ def serialize_tournament(t: dict) -> dict:
         "city": t.get("city"),
         "country": t.get("country"),
         "countryCode": t.get("countryCode"),
+        "flag": t.get("flag", "🏳️"),
         "venue": t.get("venue"),
         "indoor": t.get("indoor", False),
         "prizeMoney": t.get("prizeMoney", 0),
@@ -56,6 +57,7 @@ def serialize_tournament(t: dict) -> dict:
         "year": t.get("year", 2026),
         "tournamentUrl": t.get("tournamentUrl"),
         "signUpLink": t.get("signUpLink"),
+        "level": t.get("level"),
     }
 
 
