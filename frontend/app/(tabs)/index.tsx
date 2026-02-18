@@ -1344,6 +1344,7 @@ const styles = StyleSheet.create({
   
   // Modals
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  modalBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   modalContent: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 40, maxHeight: '85%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   modalTitle: { fontSize: 20, fontWeight: '700', color: '#1a1a1a' },
