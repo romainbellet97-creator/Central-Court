@@ -8,7 +8,7 @@ import os
 from datetime import datetime
 
 # Base URL from environment
-BASE_URL = os.environ.get('EXPO_PUBLIC_BACKEND_URL', 'https://tournytrack.preview.emergentagent.com')
+BASE_URL = os.environ.get('EXPO_PUBLIC_BACKEND_URL', 'https://courtside-48.preview.emergentagent.com')
 
 # Test emails (Resend test mode only allows verified email)
 VERIFIED_EMAIL = "romainbasket77@gmail.com"

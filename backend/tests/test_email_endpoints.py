@@ -7,7 +7,7 @@ import requests
 import os
 
 # Use EXPO_PUBLIC_BACKEND_URL from frontend/.env for external testing
-BASE_URL = os.environ.get('EXPO_PUBLIC_BACKEND_URL', 'https://tournytrack.preview.emergentagent.com')
+BASE_URL = os.environ.get('EXPO_PUBLIC_BACKEND_URL', 'https://courtside-48.preview.emergentagent.com')
 
 # Resend testing mode only allows sending to verified email (owner's email)
 # Other emails will result in 500 error - this is expected behavior

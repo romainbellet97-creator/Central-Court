@@ -7,7 +7,7 @@ import pytest
 import requests
 import os
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://tournytrack.preview.emergentagent.com').rstrip('/')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://courtside-48.preview.emergentagent.com').rstrip('/')
 
 # Test credentials from main agent
 TEST_USER_ID = "698aaef916877c9eb27fdeb4"
