@@ -795,12 +795,26 @@ export default function CalendarScreen() {
       {/* ===================== MODALS ===================== */}
 
       {/* Add Event Modal */}
-      <Modal visible={showAddEventModal} animationType="slide" transparent>
+      <Modal visible={showAddEventModal} animationType="slide" transparent onRequestClose={() => {
+        setShowAddEventModal(false);
+        resetEventForm();
+      }}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
+          <TouchableOpacity 
+            style={styles.modalBackdrop} 
+            activeOpacity={1} 
+            onPress={() => {
+              setShowAddEventModal(false);
+              resetEventForm();
+            }}
+          />
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Nouvel événement</Text>
-              <TouchableOpacity onPress={() => setShowAddEventModal(false)}>
+              <TouchableOpacity onPress={() => {
+                setShowAddEventModal(false);
+                resetEventForm();
+              }}>
                 <Ionicons name="close" size={28} color="#666" />
               </TouchableOpacity>
             </View>
