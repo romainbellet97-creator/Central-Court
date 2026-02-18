@@ -877,7 +877,10 @@ export default function CalendarScreen() {
 
               <TouchableOpacity
                 style={styles.cancelButton}
-                onPress={() => setShowAddEventModal(false)}
+                onPress={() => {
+                  setShowAddEventModal(false);
+                  resetEventForm();
+                }}
               >
                 <Text style={styles.cancelButtonText}>Annuler</Text>
               </TouchableOpacity>
