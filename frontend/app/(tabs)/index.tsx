@@ -333,14 +333,21 @@ export default function CalendarScreen() {
   };
 
   const openEditEventModal = (event: CalendarEvent) => {
+    // First close the detail modal completely
+    setShowEventDetailModal(false);
+    
+    // Set form values
     setSelectedEvent(event);
     setEventType(event.type || 'other');
     setEventDate(event.date);
     setEventTime(event.time || '09:00');
     setEventNotes(event.description || '');
     setEventLocation(event.location || '');
-    setShowEventDetailModal(false);
-    setShowEditEventModal(true);
+    
+    // Open edit modal after a small delay to ensure detail modal is closed
+    setTimeout(() => {
+      setShowEditEventModal(true);
+    }, 100);
   };
 
   const handleSaveEvent = async () => {
