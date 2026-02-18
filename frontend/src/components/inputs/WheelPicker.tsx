@@ -4,6 +4,8 @@ import {
   Text,
   StyleSheet,
   ScrollView,
+  TouchableOpacity,
+  Platform,
 } from 'react-native';
 
 const ITEM_HEIGHT = 44;
@@ -72,14 +74,20 @@ export default function WheelPicker({
     setIsScrolling(true);
   };
 
+  const handleItemPress = (index: number) => {
+    if (scrollViewRef.current) {
+      scrollViewRef.current.scrollTo({
+        y: index * ITEM_HEIGHT,
+        animated: true,
+      });
+    }
+    onValueChange(items[index].value);
+  };
+
   return (
     <View style={[styles.container, { width }]}>
       {/* Selection indicator */}
       <View style={styles.selectionIndicator} pointerEvents="none" />
-      
-      {/* Gradient overlays for fading effect */}
-      <View style={styles.gradientTop} pointerEvents="none" />
-      <View style={styles.gradientBottom} pointerEvents="none" />
       
       <ScrollView
         ref={scrollViewRef}
@@ -91,13 +99,18 @@ export default function WheelPicker({
         onMomentumScrollEnd={handleMomentumScrollEnd}
         scrollEventThrottle={16}
         contentContainerStyle={{
-          paddingVertical: ITEM_HEIGHT, // Add padding for center alignment
+          paddingVertical: ITEM_HEIGHT,
         }}
       >
         {items.map((item, index) => {
           const isSelected = index === selectedIndex;
           return (
-            <View key={`${item.value}-${index}`} style={styles.item}>
+            <TouchableOpacity
+              key={`${item.value}-${index}`}
+              style={styles.item}
+              onPress={() => handleItemPress(index)}
+              activeOpacity={0.7}
+            >
               <Text
                 style={[
                   styles.itemText,
@@ -107,7 +120,7 @@ export default function WheelPicker({
               >
                 {item.label}
               </Text>
-            </View>
+            </TouchableOpacity>
           );
         })}
       </ScrollView>
