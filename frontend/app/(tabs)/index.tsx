@@ -1081,7 +1081,10 @@ export default function CalendarScreen() {
 
                   <TouchableOpacity
                     style={styles.closeDetailButton}
-                    onPress={() => setShowEventDetailModal(false)}
+                    onPress={() => {
+                      setShowEventDetailModal(false);
+                      setSelectedEvent(null);
+                    }}
                   >
                     <Text style={styles.closeDetailButtonText}>Fermer</Text>
                   </TouchableOpacity>
