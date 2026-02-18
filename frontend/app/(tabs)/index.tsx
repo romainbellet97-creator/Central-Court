@@ -11,6 +11,7 @@ import {
   Platform,
   KeyboardAvoidingView,
   ActivityIndicator,
+  Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,11 +21,17 @@ import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Colors from '../../src/constants/colors';
 import { getFlagEmoji } from '../../src/utils/countryFlags';
+import AppleDatePicker from '../../src/components/inputs/AppleDatePicker';
+import AppleTimePicker from '../../src/components/inputs/AppleTimePicker';
+import AppleOptionPicker from '../../src/components/inputs/AppleOptionPicker';
 import {
   fetchEvents,
   fetchTournamentWeeks,
   fetchAlerts,
   createEvent as apiCreateEvent,
+  updateEvent as apiUpdateEvent,
+  deleteEvent as apiDeleteEvent,
+  addObservation as apiAddObservation,
   registerTournament as apiRegisterTournament,
   hideTournament as apiHideTournament,
   unhideTournament as apiUnhideTournament,
@@ -34,14 +41,19 @@ import {
 // ============ CONSTANTS ============
 
 const ONBOARDING_DATA_KEY = 'onboarding_data';
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-const EVENT_CATEGORIES: Record<string, { color: string; icon: string; label: string }> = {
-  training_tennis: { color: '#4CAF50', icon: 'tennisball', label: 'Tennis' },
-  training_physical: { color: '#2196F3', icon: 'fitness', label: 'Physique' },
-  medical: { color: '#E91E63', icon: 'medkit', label: 'Médical' },
-  tournament: { color: '#FF9800', icon: 'trophy', label: 'Tournoi' },
-  travel: { color: '#9C27B0', icon: 'airplane', label: 'Voyage' },
-  other: { color: '#607D8B', icon: 'ellipsis-horizontal', label: 'Autre' },
+// Types d'événements avec couleurs et icônes
+const EVENT_TYPES: Record<string, { label: string; color: string; icon: string }> = {
+  training: { label: '🎾 Entraînement Tennis', color: '#10B981', icon: 'tennisball-outline' },
+  physicalPrep: { label: '💪 Préparation Physique', color: '#F59E0B', icon: 'fitness-outline' },
+  match: { label: '🏆 Match', color: '#EF4444', icon: 'trophy-outline' },
+  tournament: { label: '🎯 Tournoi', color: '#8B5CF6', icon: 'flag-outline' },
+  recovery: { label: '🧘 Récupération', color: '#06B6D4', icon: 'heart-outline' },
+  meeting: { label: '📋 Réunion', color: '#6B7280', icon: 'people-outline' },
+  medical: { label: '🏥 Médical', color: '#E91E63', icon: 'medkit-outline' },
+  travel: { label: '✈️ Voyage', color: '#9C27B0', icon: 'airplane-outline' },
+  other: { label: '📌 Autre', color: '#607D8B', icon: 'ellipsis-horizontal-outline' },
 };
 
 const TOURNAMENT_STATUS_LABELS: Record<string, { label: string; color: string }> = {
@@ -57,49 +69,11 @@ const SURFACE_COLORS: Record<string, string> = {
   'Clay': '#E65100',
   'Grass': '#4CAF50',
   'Carpet': '#9C27B0',
-  'Indoor Hard': '#1565C0',
+  'dur': '#2196F3',
+  'terre': '#E65100',
+  'gazon': '#4CAF50',
+  'indoor': '#1565C0',
 };
-
-// Normalize surfaces for filtering
-const normalizeSurface = (surface: string): string => {
-  if (!surface) return 'Hard';
-  const s = surface.toLowerCase();
-  if (s.includes('clay')) return 'Clay';
-  if (s.includes('grass')) return 'Grass';
-  if (s.includes('carpet')) return 'Carpet';
-  return 'Hard';
-};
-
-// Get surface color for normalized or raw surface
-const getSurfaceColor = (surface: string): string => {
-  return SURFACE_COLORS[surface] || SURFACE_COLORS[normalizeSurface(surface)] || '#666';
-};
-
-// Category display labels
-const CATEGORY_LABELS: Record<string, string> = {
-  'Grand Slam': 'Grand Chelem',
-  'Masters 1000': 'Masters 1000',
-  '1000': 'Masters 1000',
-  'ATP 500': 'ATP 500',
-  '500': 'ATP 500',
-  'ATP 250': 'ATP 250',
-  '250': 'ATP 250',
-  'ATP Finals': 'ATP Finals',
-  'WTA 1000': 'WTA 1000',
-  'WTA 500': 'WTA 500',
-  'WTA 250': 'WTA 250',
-  'WTA Finals': 'WTA Finals',
-  'ITF Futures Series': 'ITF Futures',
-  'ITF Junior Series': 'ITF Juniors',
-  'Team Event': 'Equipe',
-  'Regional Games': 'Jeux Régionaux',
-  'Wheelchair World Team Cup': 'Wheelchair',
-  '100': 'Challenger 100',
-  '175': 'Challenger 175',
-  '50': 'ITF 50',
-};
-
-const getCategoryLabel = (category: string): string => CATEGORY_LABELS[category] || category;
 
 const CATEGORY_COLORS: Record<string, string> = {
   'Grand Chelem': '#D4AF37',
@@ -111,36 +85,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   'WTA 500': '#9C27B0',
   'WTA 250': '#E91E63',
   'WTA Finals': '#FFD700',
-  'ITF Futures': '#4CAF50',
-  'ITF Juniors': '#8BC34A',
-  'Challenger 100': '#FF9800',
-  'Challenger 175': '#FF9800',
-  'Equipe': '#607D8B',
 };
-
-const getCategoryColor = (category: string): string => {
-  const label = getCategoryLabel(category);
-  return CATEGORY_COLORS[label] || '#607D8B';
-};
-
-// Filter surfaces
-const FILTER_SURFACES = ['Hard', 'Clay', 'Grass', 'Carpet'];
-
-// Filter levels
-const FILTER_LEVELS = [
-  'Grand Chelem', 'Masters 1000', 'ATP 500', 'ATP 250', 'ATP Finals',
-  'WTA 1000', 'WTA 500', 'WTA 250', 'WTA Finals',
-  'Challenger 175', 'Challenger 100', 'ITF Futures',
-];
-
-// Prize money ranges
-const PRIZE_RANGES = [
-  { label: 'Tous', min: 0, max: Infinity },
-  { label: '> 5M', min: 5000000, max: Infinity },
-  { label: '1M - 5M', min: 1000000, max: 5000000 },
-  { label: '500K - 1M', min: 500000, max: 1000000 },
-  { label: '< 500K', min: 0, max: 500000 },
-];
 
 // Configure French locale
 LocaleConfig.locales['fr'] = {
@@ -154,6 +99,14 @@ LocaleConfig.defaultLocale = 'fr';
 
 // ============ TYPES ============
 
+interface Observation {
+  id: string;
+  author: string;
+  role: string;
+  text: string;
+  createdAt: string;
+}
+
 interface CalendarEvent {
   id: string;
   type: string;
@@ -161,6 +114,9 @@ interface CalendarEvent {
   date: string;
   time?: string;
   location?: string;
+  description?: string;
+  observations?: Observation[];
+  createdAt?: string;
 }
 
 interface Tournament {
@@ -175,9 +131,9 @@ interface Tournament {
   city: string;
   country: string;
   countryCode?: string;
+  flag?: string;
   prizeMoney: number;
   currency: string;
-  points?: number;
   registration?: { status: string };
   hidden?: boolean;
 }
@@ -193,48 +149,58 @@ interface TournamentWeek {
 export default function CalendarScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const today = new Date().toISOString().split('T')[0];
   
   // Core state
-  const [currentMonth, setCurrentMonth] = useState('2026-02');
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [currentMonth, setCurrentMonth] = useState(today.substring(0, 7));
+  const [selectedDate, setSelectedDate] = useState<string>(today);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [tournamentWeeks, setTournamentWeeks] = useState<TournamentWeek[]>([]);
   const [unreadAlertCount, setUnreadAlertCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [userCircuits, setUserCircuits] = useState<string[]>(['ATP']);
 
-  // Modal state
-  const [showTournamentModal, setShowTournamentModal] = useState(false);
+  // Event Modals
   const [showAddEventModal, setShowAddEventModal] = useState(false);
+  const [showEditEventModal, setShowEditEventModal] = useState(false);
+  const [showEventDetailModal, setShowEventDetailModal] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
+  
+  // Observation Modal
+  const [showAddObservationModal, setShowAddObservationModal] = useState(false);
+  const [observationText, setObservationText] = useState('');
+  
+  // Event form state
+  const [eventType, setEventType] = useState('training');
+  const [eventDate, setEventDate] = useState(today);
+  const [eventTime, setEventTime] = useState('09:00');
+  const [eventNotes, setEventNotes] = useState('');
+  const [eventLocation, setEventLocation] = useState('');
+
+  // Tournament Modal
+  const [showTournamentModal, setShowTournamentModal] = useState(false);
   const [selectedWeekNumber, setSelectedWeekNumber] = useState<number | null>(null);
   
-  // Derive selectedWeek from reactive state so modal updates in real-time
-  const selectedWeek = useMemo(() => {
-    if (selectedWeekNumber === null) return null;
-    return tournamentWeeks.find(w => w.weekNumber === selectedWeekNumber) || null;
-  }, [selectedWeekNumber, tournamentWeeks]);
-  
-  // New event form
-  const [newEventTitle, setNewEventTitle] = useState('');
-  const [newEventType, setNewEventType] = useState('training_tennis');
-  const [newEventTime, setNewEventTime] = useState('');
-  const [newEventLocation, setNewEventLocation] = useState('');
-
-  // Filters state
-  const [showFilters, setShowFilters] = useState(false);
-  const [filterSurface, setFilterSurface] = useState<string | null>(null);
-  const [filterLevel, setFilterLevel] = useState<string | null>(null);
-  const [filterCountry, setFilterCountry] = useState<string | null>(null);
-  const [filterPrizeRange, setFilterPrizeRange] = useState(0); // index in PRIZE_RANGES
-
-  // Conflict detection state
+  // Conflict Modal
   const [conflictData, setConflictData] = useState<any>(null);
   const [showConflictModal, setShowConflictModal] = useState(false);
   const [pendingRegistration, setPendingRegistration] = useState<{tournamentId: string, status: string} | null>(null);
 
+  // Derive selectedWeek from reactive state
+  const selectedWeek = useMemo(() => {
+    if (selectedWeekNumber === null) return null;
+    return tournamentWeeks.find(w => w.weekNumber === selectedWeekNumber) || null;
+  }, [selectedWeekNumber, tournamentWeeks]);
+
+  // Day events
+  const dayEvents = useMemo(() => {
+    return events.filter(e => e.date === selectedDate).sort((a, b) => 
+      (a.time || '00:00').localeCompare(b.time || '00:00')
+    );
+  }, [events, selectedDate]);
+
   // ============ DATA LOADING ============
 
-  // Load user circuits from onboarding
   useEffect(() => {
     const loadUserCircuits = async () => {
       try {
@@ -242,9 +208,7 @@ export default function CalendarScreen() {
         if (stored) {
           const data = JSON.parse(stored);
           if (data.circuits && Array.isArray(data.circuits) && data.circuits.length > 0) {
-            // Keep circuits as-is (ITF_WHEELCHAIR should remain separate)
             setUserCircuits(data.circuits);
-            console.log('User circuits loaded:', data.circuits);
           }
         }
       } catch (e) {
@@ -254,7 +218,6 @@ export default function CalendarScreen() {
     loadUserCircuits();
   }, []);
 
-  // Load calendar data
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
@@ -267,10 +230,8 @@ export default function CalendarScreen() {
           fetchAlerts(true).catch(() => []),
         ]);
         
-        // Events
         setEvents(Array.isArray(eventsData) ? eventsData : []);
         
-        // Tournament weeks - handle new API format
         if (weeksData && weeksData.weeks && Array.isArray(weeksData.weeks)) {
           setTournamentWeeks(weeksData.weeks);
         } else if (Array.isArray(weeksData)) {
@@ -279,9 +240,7 @@ export default function CalendarScreen() {
           setTournamentWeeks([]);
         }
         
-        // Alerts
         setUnreadAlertCount(Array.isArray(alertsData) ? alertsData.length : 0);
-        
       } catch (e) {
         console.error('Failed to load data:', e);
         setTournamentWeeks([]);
@@ -294,87 +253,33 @@ export default function CalendarScreen() {
     loadData();
   }, [currentMonth, userCircuits]);
 
-  // ============ HELPERS ============
-
-  // Filter to only show future tournament weeks + apply user filters
-  const futureTournamentWeeks = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const prizeRange = PRIZE_RANGES[filterPrizeRange];
-    
-    return tournamentWeeks.filter(week => {
-      if (!week?.tournaments?.length) return false;
-      // Keep week if at least one tournament matches all filters
-      return week.tournaments.some(t => {
-        if (!t?.endDate) return true;
-        // Future only
-        if (new Date(t.endDate) < today) return false;
-        // Surface filter
-        if (filterSurface && normalizeSurface(t.surface) !== filterSurface) return false;
-        // Level filter
-        if (filterLevel && getCategoryLabel(t.category) !== filterLevel) return false;
-        // Country filter
-        if (filterCountry && t.country !== filterCountry) return false;
-        // Prize money filter
-        if (prizeRange && prizeRange.min > 0) {
-          if ((t.prizeMoney || 0) < prizeRange.min) return false;
-        }
-        if (prizeRange && prizeRange.max < Infinity) {
-          if ((t.prizeMoney || 0) > prizeRange.max) return false;
-        }
-        return true;
-      });
-    });
-  }, [tournamentWeeks, filterSurface, filterLevel, filterCountry, filterPrizeRange]);
-
-  // Available countries from tournaments (for filter dropdown)
-  const availableCountries = useMemo(() => {
-    const countries = new Set<string>();
-    tournamentWeeks.forEach(w => w.tournaments?.forEach(t => {
-      if (t.country) countries.add(t.country);
-    }));
-    return Array.from(countries).sort();
-  }, [tournamentWeeks]);
-
-  // Count active filters
-  const activeFilterCount = [filterSurface, filterLevel, filterCountry, filterPrizeRange > 0 ? 'x' : null].filter(Boolean).length;
-
-  const getEventsForDate = useCallback((date: string): CalendarEvent[] => {
-    return events.filter(e => e.date === date);
-  }, [events]);
-
-  const getWeekForDate = useCallback((date: string): TournamentWeek | undefined => {
-    const d = new Date(date);
-    return tournamentWeeks.find(week => {
-      if (!week.startDate || !week.tournaments?.length) return false;
-      const firstTournament = week.tournaments[0];
-      if (!firstTournament?.startDate || !firstTournament?.endDate) return false;
-      const start = new Date(firstTournament.startDate);
-      const end = new Date(firstTournament.endDate);
-      return d >= start && d <= end;
-    });
-  }, [tournamentWeeks]);
-
-  const getVisibleTournaments = useCallback((week: TournamentWeek): Tournament[] => {
-    if (!week?.tournaments || !Array.isArray(week.tournaments)) return [];
-    return week.tournaments.filter(t => !t.hidden);
-  }, []);
-
   // ============ CALENDAR MARKS ============
 
   const calendarMarks = useMemo(() => {
     const marks: Record<string, any> = {};
     
-    // Safety check
-    if (!Array.isArray(tournamentWeeks)) return marks;
+    // Add event marks with colored dots
+    events.forEach(event => {
+      if (!event?.date || !event?.type) return;
+      
+      const eventConfig = EVENT_TYPES[event.type] || EVENT_TYPES.other;
+      if (!marks[event.date]) {
+        marks[event.date] = { dots: [] };
+      }
+      const hasDot = marks[event.date].dots.some((d: any) => d.key === `event-${event.id}`);
+      if (!hasDot) {
+        marks[event.date].dots.push({ 
+          key: `event-${event.id}`,
+          color: eventConfig.color 
+        });
+      }
+    });
     
     // Add tournament marks
     tournamentWeeks.forEach(week => {
-      if (!week?.tournaments || !Array.isArray(week.tournaments)) return;
+      if (!week?.tournaments) return;
       
-      const registeredTournaments = week.tournaments.filter(t => t?.registration);
-      
-      registeredTournaments.forEach(tournament => {
+      week.tournaments.filter(t => t?.registration).forEach(tournament => {
         if (!tournament?.startDate || !tournament?.endDate) return;
         
         try {
@@ -390,35 +295,14 @@ export default function CalendarScreen() {
             if (!hasDot) {
               marks[dateStr].dots.push({ 
                 key: `tournament-${tournament.id}`,
-                color: EVENT_CATEGORIES.tournament.color 
+                color: EVENT_TYPES.tournament.color 
               });
             }
             currentDate.setDate(currentDate.getDate() + 1);
           }
-        } catch (e) {
-          // Skip invalid dates
-        }
+        } catch (e) {}
       });
     });
-    
-    // Add event marks
-    if (Array.isArray(events)) {
-      events.forEach(event => {
-        if (!event?.date || !event?.type) return;
-        
-        const category = EVENT_CATEGORIES[event.type] || EVENT_CATEGORIES.other;
-        if (!marks[event.date]) {
-          marks[event.date] = { dots: [] };
-        }
-        const hasDot = marks[event.date].dots.some((d: any) => d.key === `event-${event.id}`);
-        if (!hasDot) {
-          marks[event.date].dots.push({ 
-            key: `event-${event.id}`,
-            color: category.color 
-          });
-        }
-      });
-    }
     
     // Mark selected date
     if (selectedDate) {
@@ -426,16 +310,144 @@ export default function CalendarScreen() {
         marks[selectedDate] = { dots: [] };
       }
       marks[selectedDate].selected = true;
-      marks[selectedDate].selectedColor = Colors.accent?.primary || '#1e3c72';
+      marks[selectedDate].selectedColor = '#1e3c72';
     }
     
     return marks;
-  }, [tournamentWeeks, events, selectedDate]);
+  }, [events, tournamentWeeks, selectedDate]);
 
-  // ============ ACTIONS ============
+  // ============ EVENT HANDLERS ============
 
+  const resetEventForm = () => {
+    setEventType('training');
+    setEventDate(selectedDate || today);
+    setEventTime('09:00');
+    setEventNotes('');
+    setEventLocation('');
+  };
+
+  const openAddEventModal = () => {
+    resetEventForm();
+    setEventDate(selectedDate || today);
+    setShowAddEventModal(true);
+  };
+
+  const openEditEventModal = (event: CalendarEvent) => {
+    setSelectedEvent(event);
+    setEventType(event.type || 'other');
+    setEventDate(event.date);
+    setEventTime(event.time || '09:00');
+    setEventNotes(event.description || '');
+    setEventLocation(event.location || '');
+    setShowEventDetailModal(false);
+    setShowEditEventModal(true);
+  };
+
+  const handleSaveEvent = async () => {
+    try {
+      const newEvent = {
+        type: eventType,
+        title: EVENT_TYPES[eventType]?.label || 'Événement',
+        date: eventDate,
+        time: eventTime,
+        location: eventLocation.trim() || undefined,
+        description: eventNotes.trim() || undefined,
+      };
+
+      const savedEvent = await apiCreateEvent(newEvent);
+      setEvents(prev => [...prev, savedEvent]);
+      setShowAddEventModal(false);
+      resetEventForm();
+      
+      Alert.alert('Succès', 'Événement créé !');
+    } catch (error) {
+      console.error('Error creating event:', error);
+      Alert.alert('Erreur', 'Impossible de créer l\'événement');
+    }
+  };
+
+  const handleUpdateEvent = async () => {
+    if (!selectedEvent) return;
+    
+    try {
+      const updatedData = {
+        type: eventType,
+        title: EVENT_TYPES[eventType]?.label || 'Événement',
+        date: eventDate,
+        time: eventTime,
+        location: eventLocation.trim() || undefined,
+        description: eventNotes.trim() || undefined,
+      };
+
+      const updatedEvent = await apiUpdateEvent(selectedEvent.id, updatedData);
+      setEvents(prev => prev.map(e => e.id === selectedEvent.id ? { ...e, ...updatedEvent } : e));
+      setShowEditEventModal(false);
+      
+      Alert.alert('Succès', 'Événement modifié !');
+    } catch (error) {
+      console.error('Error updating event:', error);
+      Alert.alert('Erreur', 'Impossible de modifier l\'événement');
+    }
+  };
+
+  const handleDeleteEvent = () => {
+    if (!selectedEvent) return;
+    
+    Alert.alert(
+      'Supprimer l\'événement',
+      'Êtes-vous sûr de vouloir supprimer cet événement ?',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await apiDeleteEvent(selectedEvent.id);
+              setEvents(prev => prev.filter(e => e.id !== selectedEvent.id));
+              setShowEventDetailModal(false);
+              setSelectedEvent(null);
+              Alert.alert('Succès', 'Événement supprimé');
+            } catch (error) {
+              Alert.alert('Erreur', 'Impossible de supprimer');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleSaveObservation = async () => {
+    if (!selectedEvent || !observationText.trim()) return;
+    
+    try {
+      const newObservation = await apiAddObservation(selectedEvent.id, {
+        author: 'Coach Martin', // TODO: Get from user context
+        role: 'Entraîneur principal',
+        text: observationText.trim(),
+      });
+
+      // Update local state
+      const updatedEvent = {
+        ...selectedEvent,
+        observations: [...(selectedEvent.observations || []), newObservation]
+      };
+      
+      setSelectedEvent(updatedEvent);
+      setEvents(prev => prev.map(e => e.id === selectedEvent.id ? updatedEvent : e));
+
+      setShowAddObservationModal(false);
+      setObservationText('');
+      
+      Alert.alert('Succès', 'Observation ajoutée !');
+    } catch (error) {
+      console.error('Error adding observation:', error);
+      Alert.alert('Erreur', 'Impossible d\'ajouter l\'observation');
+    }
+  };
+
+  // Tournament handlers
   const handleRegisterTournament = async (tournamentId: string, status: string) => {
-    // For advancing statuses (pending/participating), check for conflicts first
     if (status === 'pending' || status === 'participating') {
       try {
         const conflicts = await checkTournamentConflicts(tournamentId);
@@ -446,49 +458,27 @@ export default function CalendarScreen() {
           return;
         }
       } catch (e) {
-        // If conflict check fails, proceed anyway
-        console.warn('Conflict check failed, proceeding:', e);
+        console.warn('Conflict check failed:', e);
       }
     }
-    
     await executeRegistration(tournamentId, status);
   };
   
   const executeRegistration = async (tournamentId: string, status: string) => {
     try {
       await apiRegisterTournament(tournamentId, status);
-      
-      // Update local state immediately for reactive UI
-      setTournamentWeeks(prev => {
-        if (!Array.isArray(prev)) return prev;
-        return prev.map(week => ({
+      setTournamentWeeks(prev =>
+        prev.map(week => ({
           ...week,
           tournaments: (week.tournaments || []).map(t => 
-            t.id === tournamentId 
-              ? { ...t, registration: { status } }
-              : t
+            t.id === tournamentId ? { ...t, registration: { status } } : t
           )
-        }));
-      });
+        }))
+      );
     } catch (e) {
       console.error('Registration failed:', e);
       Alert.alert('Erreur', 'Échec de l\'inscription');
     }
-  };
-  
-  const handleConflictProceed = async () => {
-    if (pendingRegistration) {
-      await executeRegistration(pendingRegistration.tournamentId, pendingRegistration.status);
-    }
-    setShowConflictModal(false);
-    setConflictData(null);
-    setPendingRegistration(null);
-  };
-  
-  const handleConflictCancel = () => {
-    setShowConflictModal(false);
-    setConflictData(null);
-    setPendingRegistration(null);
   };
 
   const handleHideTournament = async (tournamentId: string) => {
@@ -503,7 +493,6 @@ export default function CalendarScreen() {
         }))
       );
     } catch (e) {
-      console.error('Hide failed:', e);
       Alert.alert('Erreur', 'Échec du masquage');
     }
   };
@@ -520,189 +509,57 @@ export default function CalendarScreen() {
         }))
       );
     } catch (e) {
-      console.error('Unhide failed:', e);
       Alert.alert('Erreur', 'Échec du rétablissement');
     }
   };
 
-  const handleAddEvent = async () => {
-    if (!newEventTitle.trim() || !selectedDate) {
-      Alert.alert('Erreur', 'Veuillez remplir le titre');
-      return;
-    }
-    
-    try {
-      const eventData = {
-        type: newEventType,
-        title: newEventTitle.trim(),
-        date: selectedDate,
-        time: newEventTime,
-        location: newEventLocation,
-      };
-      
-      const savedEvent = await apiCreateEvent(eventData);
-      setEvents(prev => [...prev, savedEvent]);
-      
-      // Reset form
-      setNewEventTitle('');
-      setNewEventTime('');
-      setNewEventLocation('');
-      setShowAddEventModal(false);
-      
-      Alert.alert('Succès', 'Événement ajouté');
-    } catch (e) {
-      console.error('Failed to create event:', e);
-      Alert.alert('Erreur', 'Échec de la création');
-    }
+  // ============ HELPERS ============
+
+  const formatDate = (dateStr: string) => {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const date = new Date(y, m - 1, d);
+    return date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
   };
 
-  // ============ RENDER HELPERS ============
-
-  const renderTournamentWeekCard = (week: TournamentWeek) => {
-    if (!week?.tournaments) return null;
+  const formatRelativeTime = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
     
-    const visibleTournaments = getVisibleTournaments(week);
-    const registeredTournaments = week.tournaments.filter(t => t?.registration);
-    const firstTournament = visibleTournaments[0];
-    
-    if (!firstTournament) return null;
-    
-    return (
-      <TouchableOpacity
-        key={week.weekNumber}
-        style={styles.weekCard}
-        onPress={() => {
-          setSelectedWeekNumber(week.weekNumber);
-          setShowTournamentModal(true);
-        }}
-        activeOpacity={0.7}
-      >
-        <View style={styles.weekCardHeader}>
-          <Text style={styles.weekNumber}>S{week.weekNumber}</Text>
-          <Text style={styles.weekDates}>
-            {firstTournament.startDate ? new Date(firstTournament.startDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : ''}
-          </Text>
-        </View>
-        
-        {/* Category/Level badge */}
-        <View style={[styles.categoryBadge, { backgroundColor: getCategoryColor(firstTournament.category) + '18' }]}>
-          <Text style={[styles.categoryText, { color: getCategoryColor(firstTournament.category) }]}>
-            {getCategoryLabel(firstTournament.category)}
-          </Text>
-        </View>
-        
-        <Text style={styles.tournamentName} numberOfLines={1}>
-          {firstTournament.name}
-        </Text>
-        
-        <View style={styles.tournamentMeta}>
-          <View style={[styles.surfaceBadge, { backgroundColor: (SURFACE_COLORS[firstTournament.surface] || '#666') + '20' }]}>
-            <Text style={[styles.surfaceText, { color: SURFACE_COLORS[firstTournament.surface] || '#666' }]}>
-              {firstTournament.surface}
-            </Text>
-          </View>
-          <Text style={styles.tournamentLocation}>
-            {getFlagEmoji(firstTournament.country)} {firstTournament.city}
-          </Text>
-        </View>
-        
-        {firstTournament.prizeMoney > 0 && (
-          <View style={styles.prizeRow}>
-            <Ionicons name="cash-outline" size={14} color="#1e3c72" />
-            <Text style={styles.weekPrizeText}>
-              {firstTournament.prizeMoney >= 1000000
-                ? `${(firstTournament.prizeMoney / 1000000).toFixed(1)}M`
-                : `${(firstTournament.prizeMoney / 1000).toFixed(0)}K`} {firstTournament.currency}
-            </Text>
-          </View>
-        )}
-        
-        {registeredTournaments.length > 0 && (
-          <View style={styles.registrationBadge}>
-            <Ionicons name="checkmark-circle" size={14} color="#4CAF50" />
-            <Text style={styles.registrationText}>
-              {registeredTournaments[0]?.registration?.status === 'participating' ? 'Participant' : 'Inscrit'}
-            </Text>
-          </View>
-        )}
-      </TouchableOpacity>
-    );
+    if (diffMins < 1) return 'À l\'instant';
+    if (diffMins < 60) return `Il y a ${diffMins}min`;
+    if (diffHours < 24) return `Il y a ${diffHours}h`;
+    if (diffDays < 7) return `Il y a ${diffDays}j`;
+    return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
   };
 
-  const renderDayEvents = () => {
-    if (!selectedDate) return null;
-    
-    const dayEvents = getEventsForDate(selectedDate);
-    const week = getWeekForDate(selectedDate);
-    
-    const tournamentsForDay = week?.tournaments?.filter(t => {
-      if (!t?.registration || !t?.startDate || !t?.endDate) return false;
-      // Compare as strings (YYYY-MM-DD) to avoid timezone issues
-      const sd = selectedDate;
-      const tStart = typeof t.startDate === 'string' ? t.startDate.slice(0, 10) : '';
-      const tEnd = typeof t.endDate === 'string' ? t.endDate.slice(0, 10) : '';
-      return sd >= tStart && sd <= tEnd;
-    }) || [];
-    
-    // Parse date parts without timezone offset
-    const [y, m, d] = selectedDate.split('-').map(Number);
-    const displayDate = new Date(y, m - 1, d);
-    
-    return (
-      <View style={styles.dayEventsContainer}>
-        <View style={styles.dayEventsHeader}>
-          <Text style={styles.dayEventsTitle}>
-            {displayDate.toLocaleDateString('fr-FR', { 
-              weekday: 'long', 
-              day: 'numeric', 
-              month: 'long' 
-            })}
-          </Text>
-          <TouchableOpacity
-            style={styles.addEventBtn}
-            onPress={() => setShowAddEventModal(true)}
-          >
-            <Ionicons name="add" size={20} color="#fff" />
-          </TouchableOpacity>
-        </View>
-        
-        {/* Tournaments for the day */}
-        {tournamentsForDay.map(tournament => (
-          <View key={tournament.id} style={styles.dayEventCard}>
-            <View style={[styles.eventIcon, { backgroundColor: EVENT_CATEGORIES.tournament.color + '20' }]}>
-              <Ionicons name="trophy" size={18} color={EVENT_CATEGORIES.tournament.color} />
-            </View>
-            <View style={styles.eventInfo}>
-              <Text style={styles.eventTitle}>{tournament.name}</Text>
-              <Text style={styles.eventMeta}>{tournament.city} • {tournament.surface}</Text>
-            </View>
-          </View>
-        ))}
-        
-        {/* Regular events */}
-        {dayEvents.map(event => {
-          const category = EVENT_CATEGORIES[event.type] || EVENT_CATEGORIES.other;
-          return (
-            <View key={event.id} style={styles.dayEventCard}>
-              <View style={[styles.eventIcon, { backgroundColor: category.color + '20' }]}>
-                <Ionicons name={category.icon as any} size={18} color={category.color} />
-              </View>
-              <View style={styles.eventInfo}>
-                <Text style={styles.eventTitle}>{event.title}</Text>
-                {event.time && <Text style={styles.eventMeta}>{event.time}</Text>}
-              </View>
-            </View>
-          );
-        })}
-        
-        {tournamentsForDay.length === 0 && dayEvents.length === 0 && (
-          <Text style={styles.noEventsText}>Aucun événement</Text>
-        )}
-      </View>
-    );
-  };
+  const getCategoryColor = (category: string) => CATEGORY_COLORS[category] || '#607D8B';
+  const getSurfaceColor = (surface: string) => SURFACE_COLORS[surface] || SURFACE_COLORS[surface?.toLowerCase()] || '#666';
 
-  // ============ MAIN RENDER ============
+  // Event type options for picker
+  const eventTypeOptions = Object.entries(EVENT_TYPES).map(([key, config]) => ({
+    label: config.label,
+    value: key,
+  }));
+
+  // Future tournament weeks
+  const futureTournamentWeeks = useMemo(() => {
+    const todayDate = new Date();
+    todayDate.setHours(0, 0, 0, 0);
+    
+    return tournamentWeeks.filter(week => {
+      if (!week?.tournaments?.length) return false;
+      return week.tournaments.some(t => {
+        if (!t?.endDate) return true;
+        return new Date(t.endDate) >= todayDate;
+      });
+    });
+  }, [tournamentWeeks]);
+
+  // ============ RENDER ============
 
   if (loading) {
     return (
@@ -725,6 +582,7 @@ export default function CalendarScreen() {
           <TouchableOpacity 
             style={styles.alertBtn}
             onPress={() => router.push('/notifications')}
+            data-testid="notifications-btn"
           >
             <Ionicons name="notifications-outline" size={24} color="#fff" />
             {unreadAlertCount > 0 && (
@@ -735,7 +593,6 @@ export default function CalendarScreen() {
           </TouchableOpacity>
         </View>
         
-        {/* Circuit badges */}
         <View style={styles.circuitRow}>
           {userCircuits.map(circuit => (
             <View key={circuit} style={styles.circuitBadge}>
@@ -760,7 +617,7 @@ export default function CalendarScreen() {
               textSectionTitleColor: '#666',
               selectedDayBackgroundColor: '#1e3c72',
               selectedDayTextColor: '#fff',
-              todayTextColor: '#1e3c72',
+              todayTextColor: '#10B981',
               dayTextColor: '#1a1a1a',
               textDisabledColor: '#d9e1e8',
               arrowColor: '#1e3c72',
@@ -772,130 +629,460 @@ export default function CalendarScreen() {
           />
         </View>
 
-        {/* Selected date events */}
-        {selectedDate && renderDayEvents()}
-
-        {/* Tournament weeks */}
-        <View style={styles.tournamentsSection}>
-          <View style={styles.tournamentsSectionHeader}>
-            <Text style={styles.sectionTitle}>Prochains tournois</Text>
-            <TouchableOpacity
-              style={[styles.filterToggle, activeFilterCount > 0 && styles.filterToggleActive]}
-              onPress={() => setShowFilters(!showFilters)}
-              data-testid="filter-toggle"
-            >
-              <Ionicons name="filter" size={16} color={activeFilterCount > 0 ? '#fff' : '#1e3c72'} />
-              <Text style={{ fontSize: 13, fontWeight: '600', color: activeFilterCount > 0 ? '#fff' : '#1e3c72' }}>
-                Filtres{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
-              </Text>
-            </TouchableOpacity>
+        {/* Day Events Section */}
+        <View style={styles.dayEventsSection}>
+          <View style={styles.dayEventsHeader}>
+            <Text style={styles.dayEventsTitle}>
+              {formatDate(selectedDate)}
+            </Text>
           </View>
 
-          {/* Filter bar */}
-          {showFilters && (
-            <View style={styles.filtersContainer}>
-              {/* Surface filter */}
-              <Text style={styles.filterLabel}>Surface</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow}>
-                <TouchableOpacity
-                  style={[styles.filterChip, !filterSurface && styles.filterChipActive]}
-                  onPress={() => setFilterSurface(null)}
-                >
-                  <Text style={[styles.filterChipText, !filterSurface && styles.filterChipTextActive]}>Toutes</Text>
-                </TouchableOpacity>
-                {FILTER_SURFACES.map(s => (
-                  <TouchableOpacity
-                    key={s}
-                    style={[styles.filterChip, filterSurface === s && styles.filterChipActive, filterSurface === s && { backgroundColor: getSurfaceColor(s) }]}
-                    onPress={() => setFilterSurface(filterSurface === s ? null : s)}
-                  >
-                    <Text style={[styles.filterChipText, filterSurface === s && styles.filterChipTextActive]}>{s}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-
-              {/* Level filter */}
-              <Text style={styles.filterLabel}>Niveau</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow}>
-                <TouchableOpacity
-                  style={[styles.filterChip, !filterLevel && styles.filterChipActive]}
-                  onPress={() => setFilterLevel(null)}
-                >
-                  <Text style={[styles.filterChipText, !filterLevel && styles.filterChipTextActive]}>Tous</Text>
-                </TouchableOpacity>
-                {FILTER_LEVELS.map(l => (
-                  <TouchableOpacity
-                    key={l}
-                    style={[styles.filterChip, filterLevel === l && styles.filterChipActive, filterLevel === l && { backgroundColor: CATEGORY_COLORS[l] || '#607D8B' }]}
-                    onPress={() => setFilterLevel(filterLevel === l ? null : l)}
-                  >
-                    <Text style={[styles.filterChipText, filterLevel === l && styles.filterChipTextActive]}>{l}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-
-              {/* Prize money filter */}
-              <Text style={styles.filterLabel}>Prize Money</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow}>
-                {PRIZE_RANGES.map((pr, i) => (
-                  <TouchableOpacity
-                    key={pr.label}
-                    style={[styles.filterChip, filterPrizeRange === i && styles.filterChipActive]}
-                    onPress={() => setFilterPrizeRange(filterPrizeRange === i ? 0 : i)}
-                  >
-                    <Text style={[styles.filterChipText, filterPrizeRange === i && styles.filterChipTextActive]}>{pr.label}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-
-              {/* Country filter */}
-              <Text style={styles.filterLabel}>Pays</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow}>
-                <TouchableOpacity
-                  style={[styles.filterChip, !filterCountry && styles.filterChipActive]}
-                  onPress={() => setFilterCountry(null)}
-                >
-                  <Text style={[styles.filterChipText, !filterCountry && styles.filterChipTextActive]}>Tous</Text>
-                </TouchableOpacity>
-                {availableCountries.map(c => (
-                  <TouchableOpacity
-                    key={c}
-                    style={[styles.filterChip, filterCountry === c && styles.filterChipActive]}
-                    onPress={() => setFilterCountry(filterCountry === c ? null : c)}
-                  >
-                    <Text style={[styles.filterChipText, filterCountry === c && styles.filterChipTextActive]}>
-                      {getFlagEmoji(c)} {c}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-
-              {/* Reset all filters */}
-              {activeFilterCount > 0 && (
-                <TouchableOpacity
-                  style={styles.resetFiltersBtn}
-                  onPress={() => { setFilterSurface(null); setFilterLevel(null); setFilterCountry(null); setFilterPrizeRange(0); }}
-                >
-                  <Ionicons name="close-circle" size={16} color="#E53935" />
-                  <Text style={styles.resetFiltersText}>Réinitialiser les filtres</Text>
-                </TouchableOpacity>
-              )}
+          {dayEvents.length === 0 ? (
+            <View style={styles.emptyDay}>
+              <Ionicons name="calendar-outline" size={48} color="#ccc" />
+              <Text style={styles.emptyText}>Aucun événement ce jour</Text>
+              <TouchableOpacity 
+                style={styles.addEventInlineBtn}
+                onPress={openAddEventModal}
+              >
+                <Ionicons name="add-circle-outline" size={20} color="#1e3c72" />
+                <Text style={styles.addEventInlineText}>Ajouter un événement</Text>
+              </TouchableOpacity>
             </View>
+          ) : (
+            dayEvents.map(event => {
+              const eventConfig = EVENT_TYPES[event.type] || EVENT_TYPES.other;
+              return (
+                <TouchableOpacity
+                  key={event.id}
+                  style={styles.eventCard}
+                  onPress={() => {
+                    setSelectedEvent(event);
+                    setShowEventDetailModal(true);
+                  }}
+                  data-testid={`event-card-${event.id}`}
+                >
+                  <View style={[styles.eventColorBar, { backgroundColor: eventConfig.color }]} />
+                  <View style={styles.eventContent}>
+                    <View style={styles.eventHeader}>
+                      <Text style={styles.eventTime}>{event.time || '--:--'}</Text>
+                      <View style={styles.eventBadge}>
+                        <Ionicons name={eventConfig.icon as any} size={16} color={eventConfig.color} />
+                        <Text style={[styles.eventType, { color: eventConfig.color }]}>
+                          {eventConfig.label.replace(/^[^\s]+\s/, '')}
+                        </Text>
+                      </View>
+                    </View>
+                    {event.description && (
+                      <Text style={styles.eventNotes} numberOfLines={2}>
+                        {event.description}
+                      </Text>
+                    )}
+                    {event.observations && event.observations.length > 0 && (
+                      <View style={styles.observationBadge}>
+                        <Ionicons name="chatbubble" size={12} color="#10B981" />
+                        <Text style={styles.observationCount}>
+                          {event.observations.length} commentaire{event.observations.length > 1 ? 's' : ''}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                </TouchableOpacity>
+              );
+            })
           )}
+        </View>
 
+        {/* Tournament Weeks */}
+        <View style={styles.tournamentsSection}>
+          <Text style={styles.sectionTitle}>Prochains tournois</Text>
+          
           {futureTournamentWeeks.length === 0 ? (
-            <Text style={styles.noTournamentsText}>
-              {activeFilterCount > 0 ? 'Aucun tournoi ne correspond aux filtres' : 'Aucun tournoi à venir'}
-            </Text>
+            <Text style={styles.noTournamentsText}>Aucun tournoi à venir</Text>
           ) : (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.weeksScroll}>
-              {futureTournamentWeeks.slice(0, 20).map(week => renderTournamentWeekCard(week))}
+              {futureTournamentWeeks.slice(0, 20).map(week => {
+                const visibleTournaments = week.tournaments.filter(t => !t.hidden);
+                const firstTournament = visibleTournaments[0];
+                if (!firstTournament) return null;
+                
+                return (
+                  <TouchableOpacity
+                    key={week.weekNumber}
+                    style={styles.weekCard}
+                    onPress={() => {
+                      setSelectedWeekNumber(week.weekNumber);
+                      setShowTournamentModal(true);
+                    }}
+                    data-testid={`week-card-${week.weekNumber}`}
+                  >
+                    <View style={styles.weekCardHeader}>
+                      <Text style={styles.weekNumber}>S{week.weekNumber}</Text>
+                      <Text style={styles.weekDates}>
+                        {firstTournament.startDate ? new Date(firstTournament.startDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : ''}
+                      </Text>
+                    </View>
+                    
+                    <View style={[styles.categoryBadge, { backgroundColor: getCategoryColor(firstTournament.category) + '18' }]}>
+                      <Text style={[styles.categoryText, { color: getCategoryColor(firstTournament.category) }]}>
+                        {firstTournament.category}
+                      </Text>
+                    </View>
+                    
+                    <Text style={styles.tournamentName} numberOfLines={1}>
+                      {firstTournament.name}
+                    </Text>
+                    
+                    <View style={styles.tournamentMeta}>
+                      <View style={[styles.surfaceBadge, { backgroundColor: getSurfaceColor(firstTournament.surface) + '20' }]}>
+                        <Text style={[styles.surfaceText, { color: getSurfaceColor(firstTournament.surface) }]}>
+                          {firstTournament.surface}
+                        </Text>
+                      </View>
+                      <Text style={styles.tournamentLocation}>
+                        {firstTournament.flag || getFlagEmoji(firstTournament.country)} {firstTournament.city}
+                      </Text>
+                    </View>
+                    
+                    {firstTournament.prizeMoney > 0 && (
+                      <View style={styles.prizeRow}>
+                        <Ionicons name="cash-outline" size={14} color="#1e3c72" />
+                        <Text style={styles.weekPrizeText}>
+                          {firstTournament.prizeMoney >= 1000000
+                            ? `${(firstTournament.prizeMoney / 1000000).toFixed(1)}M`
+                            : `${(firstTournament.prizeMoney / 1000).toFixed(0)}K`} {firstTournament.currency}
+                        </Text>
+                      </View>
+                    )}
+                    
+                    {week.tournaments.some(t => t.registration) && (
+                      <View style={styles.registrationBadge}>
+                        <Ionicons name="checkmark-circle" size={14} color="#4CAF50" />
+                        <Text style={styles.registrationText}>Inscrit</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
             </ScrollView>
           )}
         </View>
         
-        <View style={{ height: 100 }} />
+        <View style={{ height: 120 }} />
       </ScrollView>
+
+      {/* FAB Button */}
+      <TouchableOpacity
+        style={[styles.fab, { bottom: insets.bottom + 90 }]}
+        onPress={openAddEventModal}
+        activeOpacity={0.8}
+        data-testid="fab-add-event"
+      >
+        <Ionicons name="add" size={32} color="#FFF" />
+      </TouchableOpacity>
+
+      {/* ===================== MODALS ===================== */}
+
+      {/* Add Event Modal */}
+      <Modal visible={showAddEventModal} animationType="slide" transparent>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Nouvel événement</Text>
+              <TouchableOpacity onPress={() => setShowAddEventModal(false)}>
+                <Ionicons name="close" size={28} color="#666" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {/* Type Picker */}
+              <AppleOptionPicker
+                options={eventTypeOptions}
+                selectedValue={eventType}
+                onValueChange={setEventType}
+                label="TYPE D'ÉVÉNEMENT"
+              />
+
+              <View style={styles.pickerSpacer} />
+
+              {/* Date Picker */}
+              <AppleDatePicker
+                value={eventDate}
+                onChange={setEventDate}
+                label="DATE"
+              />
+
+              <View style={styles.pickerSpacer} />
+
+              {/* Time Picker */}
+              <AppleTimePicker
+                value={eventTime}
+                onChange={setEventTime}
+                minuteStep={5}
+                label="HEURE"
+              />
+
+              {/* Location */}
+              <Text style={styles.fieldLabel}>LIEU (optionnel)</Text>
+              <TextInput
+                style={styles.textInput}
+                value={eventLocation}
+                onChangeText={setEventLocation}
+                placeholder="Ex: Court Central"
+                placeholderTextColor="#999"
+              />
+
+              {/* Notes */}
+              <Text style={styles.fieldLabel}>NOTES (optionnel)</Text>
+              <TextInput
+                style={[styles.textInput, styles.notesInput]}
+                value={eventNotes}
+                onChangeText={setEventNotes}
+                placeholder="Détails de l'événement..."
+                placeholderTextColor="#999"
+                multiline
+                numberOfLines={4}
+              />
+
+              {/* Buttons */}
+              <TouchableOpacity style={styles.saveButton} onPress={handleSaveEvent}>
+                <Ionicons name="checkmark-circle" size={22} color="#fff" />
+                <Text style={styles.saveButtonText}>Enregistrer</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => setShowAddEventModal(false)}
+              >
+                <Text style={styles.cancelButtonText}>Annuler</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Edit Event Modal */}
+      <Modal visible={showEditEventModal} animationType="slide" transparent>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Modifier l'événement</Text>
+              <TouchableOpacity onPress={() => setShowEditEventModal(false)}>
+                <Ionicons name="close" size={28} color="#666" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <AppleOptionPicker
+                options={eventTypeOptions}
+                selectedValue={eventType}
+                onValueChange={setEventType}
+                label="TYPE D'ÉVÉNEMENT"
+              />
+
+              <View style={styles.pickerSpacer} />
+
+              <AppleDatePicker
+                value={eventDate}
+                onChange={setEventDate}
+                label="DATE"
+              />
+
+              <View style={styles.pickerSpacer} />
+
+              <AppleTimePicker
+                value={eventTime}
+                onChange={setEventTime}
+                minuteStep={5}
+                label="HEURE"
+              />
+
+              <Text style={styles.fieldLabel}>LIEU (optionnel)</Text>
+              <TextInput
+                style={styles.textInput}
+                value={eventLocation}
+                onChangeText={setEventLocation}
+                placeholder="Ex: Court Central"
+                placeholderTextColor="#999"
+              />
+
+              <Text style={styles.fieldLabel}>NOTES (optionnel)</Text>
+              <TextInput
+                style={[styles.textInput, styles.notesInput]}
+                value={eventNotes}
+                onChangeText={setEventNotes}
+                placeholder="Détails de l'événement..."
+                placeholderTextColor="#999"
+                multiline
+                numberOfLines={4}
+              />
+
+              <TouchableOpacity style={styles.saveButton} onPress={handleUpdateEvent}>
+                <Ionicons name="checkmark-circle" size={22} color="#fff" />
+                <Text style={styles.saveButtonText}>Enregistrer les modifications</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => setShowEditEventModal(false)}
+              >
+                <Text style={styles.cancelButtonText}>Annuler</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Event Detail Modal */}
+      <Modal visible={showEventDetailModal} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.detailModal}>
+            {selectedEvent && (
+              <>
+                {/* Header with type */}
+                <View style={[styles.eventDetailHeader, { backgroundColor: (EVENT_TYPES[selectedEvent.type]?.color || '#607D8B') + '20' }]}>
+                  <Ionicons
+                    name={(EVENT_TYPES[selectedEvent.type]?.icon || 'ellipsis-horizontal-outline') as any}
+                    size={32}
+                    color={EVENT_TYPES[selectedEvent.type]?.color || '#607D8B'}
+                  />
+                  <View style={styles.eventDetailHeaderText}>
+                    <Text style={styles.eventDetailTitle}>
+                      {EVENT_TYPES[selectedEvent.type]?.label || 'Événement'}
+                    </Text>
+                    <Text style={styles.eventDetailDateTime}>
+                      {formatDate(selectedEvent.date)} à {selectedEvent.time || '--:--'}
+                    </Text>
+                  </View>
+                  <TouchableOpacity onPress={() => setShowEventDetailModal(false)}>
+                    <Ionicons name="close" size={28} color="#666" />
+                  </TouchableOpacity>
+                </View>
+
+                <ScrollView style={styles.detailScroll} showsVerticalScrollIndicator={false}>
+                  {/* Location */}
+                  {selectedEvent.location && (
+                    <View style={styles.detailSection}>
+                      <Text style={styles.sectionLabel}>Lieu</Text>
+                      <Text style={styles.detailText}>{selectedEvent.location}</Text>
+                    </View>
+                  )}
+
+                  {/* Notes */}
+                  {selectedEvent.description && (
+                    <View style={styles.detailSection}>
+                      <Text style={styles.sectionLabel}>Notes</Text>
+                      <Text style={styles.detailText}>{selectedEvent.description}</Text>
+                    </View>
+                  )}
+
+                  {/* Observations section */}
+                  <View style={styles.observationsSection}>
+                    <View style={styles.observationsHeader}>
+                      <Text style={styles.sectionLabel}>
+                        Observations de l'équipe ({selectedEvent.observations?.length || 0})
+                      </Text>
+                      <TouchableOpacity
+                        style={styles.addObservationBtn}
+                        onPress={() => setShowAddObservationModal(true)}
+                      >
+                        <Ionicons name="add-circle" size={24} color="#10B981" />
+                      </TouchableOpacity>
+                    </View>
+
+                    {selectedEvent.observations && selectedEvent.observations.length > 0 ? (
+                      selectedEvent.observations.map(obs => (
+                        <View key={obs.id} style={styles.observationCard}>
+                          <View style={styles.observationCardHeader}>
+                            <Text style={styles.staffName}>{obs.author}</Text>
+                            <Text style={styles.staffRole}>{obs.role}</Text>
+                          </View>
+                          <Text style={styles.observationText}>{obs.text}</Text>
+                          <Text style={styles.observationDate}>
+                            {formatRelativeTime(obs.createdAt)}
+                          </Text>
+                        </View>
+                      ))
+                    ) : (
+                      <View style={styles.emptyObservations}>
+                        <Ionicons name="chatbubble-outline" size={48} color="#ccc" />
+                        <Text style={styles.emptyObsText}>Aucune observation</Text>
+                        <Text style={styles.emptyObsSubtext}>
+                          Votre équipe peut ajouter des commentaires ici
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Actions */}
+                  <View style={styles.actionButtons}>
+                    <TouchableOpacity
+                      style={styles.editButton}
+                      onPress={() => openEditEventModal(selectedEvent)}
+                    >
+                      <Ionicons name="pencil" size={20} color="#FFF" />
+                      <Text style={styles.editButtonText}>Modifier</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.deleteButton}
+                      onPress={handleDeleteEvent}
+                    >
+                      <Ionicons name="trash-outline" size={20} color="#EF4444" />
+                      <Text style={styles.deleteButtonText}>Supprimer</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <TouchableOpacity
+                    style={styles.closeDetailButton}
+                    onPress={() => setShowEventDetailModal(false)}
+                  >
+                    <Text style={styles.closeDetailButtonText}>Fermer</Text>
+                  </TouchableOpacity>
+                </ScrollView>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Add Observation Modal */}
+      <Modal visible={showAddObservationModal} animationType="slide" transparent>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
+          <View style={styles.observationModal}>
+            <Text style={styles.modalTitle}>Ajouter une observation</Text>
+
+            <TextInput
+              style={styles.observationInput}
+              value={observationText}
+              onChangeText={setObservationText}
+              placeholder="Votre commentaire..."
+              placeholderTextColor="#999"
+              multiline
+              numberOfLines={6}
+              autoFocus
+            />
+
+            <TouchableOpacity
+              style={[styles.saveObservationButton, !observationText.trim() && styles.disabledButton]}
+              onPress={handleSaveObservation}
+              disabled={!observationText.trim()}
+            >
+              <Text style={styles.saveObservationButtonText}>Publier</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={() => {
+                setShowAddObservationModal(false);
+                setObservationText('');
+              }}
+            >
+              <Text style={styles.cancelButtonText}>Annuler</Text>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
 
       {/* Tournament Detail Modal */}
       <Modal visible={showTournamentModal} animationType="slide" transparent>
@@ -915,7 +1102,7 @@ export default function CalendarScreen() {
                 <View key={tournament.id} style={[styles.tournamentDetail, tournament.hidden && styles.tournamentHidden]}>
                   <View style={styles.tournamentDetailHeader}>
                     <Text style={styles.tournamentDetailFlag}>
-                      {getFlagEmoji(tournament.countryCode || tournament.country)}
+                      {tournament.flag || getFlagEmoji(tournament.countryCode || tournament.country)}
                     </Text>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.tournamentDetailName}>{tournament.name}</Text>
@@ -923,18 +1110,15 @@ export default function CalendarScreen() {
                         {tournament.city}, {tournament.country}
                       </Text>
                     </View>
-                    <View style={[styles.categoryBadgeModal, { backgroundColor: getCategoryColor(tournament.category) + '18' }]}>
-                      <Text style={[styles.categoryTextModal, { color: getCategoryColor(tournament.category) }]}>
-                        {getCategoryLabel(tournament.category)}
-                      </Text>
-                    </View>
                   </View>
+                  
                   <Text style={styles.tournamentDetailMeta}>
                     {tournament.startDate ? new Date(tournament.startDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' }) : ''} - {tournament.endDate ? new Date(tournament.endDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : ''}
                   </Text>
+                  
                   <View style={styles.tournamentDetailRow}>
-                    <View style={[styles.surfaceBadge, { backgroundColor: (SURFACE_COLORS[tournament.surface] || '#666') + '20' }]}>
-                      <Text style={[styles.surfaceText, { color: SURFACE_COLORS[tournament.surface] || '#666' }]}>
+                    <View style={[styles.surfaceBadge, { backgroundColor: getSurfaceColor(tournament.surface) + '20' }]}>
+                      <Text style={[styles.surfaceText, { color: getSurfaceColor(tournament.surface) }]}>
                         {tournament.surface}
                       </Text>
                     </View>
@@ -943,26 +1127,20 @@ export default function CalendarScreen() {
                     </Text>
                   </View>
                   
-                  {/* "Not interested" toggle */}
                   {tournament.hidden ? (
                     <TouchableOpacity
                       style={styles.unhideBtn}
                       onPress={() => handleUnhideTournament(tournament.id)}
-                      data-testid={`btn-unhide-${tournament.id}`}
                     >
                       <Ionicons name="eye-outline" size={16} color="#1e3c72" />
                       <Text style={styles.unhideBtnText}>Rétablir</Text>
                     </TouchableOpacity>
                   ) : (
                     <>
-                      {/* Current status indicator */}
                       {tournament.registration?.status && (
                         <View style={styles.currentStatusRow}>
                           <Ionicons name="checkmark-circle" size={16} color={
-                            tournament.registration.status === 'participating' ? '#4CAF50' :
-                            tournament.registration.status === 'declined' ? '#F44336' :
-                            tournament.registration.status === 'pending' ? '#FF9800' :
-                            '#1e3c72'
+                            TOURNAMENT_STATUS_LABELS[tournament.registration.status]?.color || '#1e3c72'
                           } />
                           <Text style={styles.currentStatusText}>
                             {TOURNAMENT_STATUS_LABELS[tournament.registration.status]?.label || tournament.registration.status}
@@ -970,58 +1148,29 @@ export default function CalendarScreen() {
                         </View>
                       )}
                       
-                      {/* Registration buttons - simplified state machine */}
                       <View style={styles.registrationButtons}>
-                        {tournament.registration?.status === 'pending' ? (
-                          // From pending: only "Participant" or "Décliné"
-                          <>
-                            <TouchableOpacity
-                              style={[styles.statusBtn, { backgroundColor: '#4CAF50' + '20', borderWidth: 1, borderColor: '#4CAF50' }]}
-                              onPress={() => handleRegisterTournament(tournament.id, 'participating')}
-                            >
-                              <Text style={[styles.statusBtnText, { color: '#4CAF50' }]}>Participant</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                              style={[styles.statusBtn, { backgroundColor: '#F44336' + '20', borderWidth: 1, borderColor: '#F44336' }]}
-                              onPress={() => handleRegisterTournament(tournament.id, 'declined')}
-                            >
-                              <Text style={[styles.statusBtnText, { color: '#F44336' }]}>Décliné</Text>
-                            </TouchableOpacity>
-                          </>
-                        ) : tournament.registration?.status === 'participating' || tournament.registration?.status === 'declined' ? (
-                          // Terminal states: show reset option
+                        {['interested', 'pending', 'participating'].map(status => (
                           <TouchableOpacity
-                            style={[styles.statusBtn, { backgroundColor: '#f0f0f0' }]}
-                            onPress={() => handleRegisterTournament(tournament.id, 'interested')}
+                            key={status}
+                            style={[
+                              styles.statusBtn,
+                              tournament.registration?.status === status && styles.statusBtnActive
+                            ]}
+                            onPress={() => handleRegisterTournament(tournament.id, status)}
                           >
-                            <Text style={[styles.statusBtnText, { color: '#666' }]}>Réinitialiser le statut</Text>
+                            <Text style={[
+                              styles.statusBtnText,
+                              tournament.registration?.status === status && styles.statusBtnTextActive
+                            ]}>
+                              {TOURNAMENT_STATUS_LABELS[status]?.label || status}
+                            </Text>
                           </TouchableOpacity>
-                        ) : (
-                          // Default: interested / pending / participating
-                          ['interested', 'pending', 'participating'].map(status => (
-                            <TouchableOpacity
-                              key={status}
-                              style={[
-                                styles.statusBtn,
-                                tournament.registration?.status === status && styles.statusBtnActive
-                              ]}
-                              onPress={() => handleRegisterTournament(tournament.id, status)}
-                            >
-                              <Text style={[
-                                styles.statusBtnText,
-                                tournament.registration?.status === status && styles.statusBtnTextActive
-                              ]}>
-                                {TOURNAMENT_STATUS_LABELS[status]?.label || status}
-                              </Text>
-                            </TouchableOpacity>
-                          ))
-                        )}
+                        ))}
                       </View>
                       
                       <TouchableOpacity
                         style={styles.notInterestedBtn}
                         onPress={() => handleHideTournament(tournament.id)}
-                        data-testid={`btn-hide-${tournament.id}`}
                       >
                         <Ionicons name="eye-off-outline" size={14} color="#999" />
                         <Text style={styles.notInterestedText}>Pas intéressé</Text>
@@ -1035,78 +1184,7 @@ export default function CalendarScreen() {
         </View>
       </Modal>
 
-      {/* Add Event Modal */}
-      <Modal visible={showAddEventModal} animationType="slide" transparent>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Ajouter un événement</Text>
-              <TouchableOpacity onPress={() => setShowAddEventModal(false)}>
-                <Ionicons name="close" size={24} color="#1a1a1a" />
-              </TouchableOpacity>
-            </View>
-            
-            <ScrollView showsVerticalScrollIndicator={false}>
-              {/* Event type */}
-              <Text style={styles.inputLabel}>Type</Text>
-              <View style={styles.typeGrid}>
-                {Object.entries(EVENT_CATEGORIES).map(([key, cat]) => (
-                  <TouchableOpacity
-                    key={key}
-                    style={[
-                      styles.typeOption,
-                      newEventType === key && { backgroundColor: cat.color + '20', borderColor: cat.color }
-                    ]}
-                    onPress={() => setNewEventType(key)}
-                  >
-                    <Ionicons name={cat.icon as any} size={20} color={newEventType === key ? cat.color : '#666'} />
-                    <Text style={[styles.typeLabel, newEventType === key && { color: cat.color }]}>
-                      {cat.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              
-              {/* Title */}
-              <Text style={styles.inputLabel}>Titre</Text>
-              <TextInput
-                style={styles.input}
-                value={newEventTitle}
-                onChangeText={setNewEventTitle}
-                placeholder="Ex: Entraînement avec coach"
-                placeholderTextColor="#999"
-              />
-              
-              {/* Time */}
-              <Text style={styles.inputLabel}>Heure (optionnel)</Text>
-              <TextInput
-                style={styles.input}
-                value={newEventTime}
-                onChangeText={setNewEventTime}
-                placeholder="Ex: 10:00"
-                placeholderTextColor="#999"
-              />
-              
-              {/* Location */}
-              <Text style={styles.inputLabel}>Lieu (optionnel)</Text>
-              <TextInput
-                style={styles.input}
-                value={newEventLocation}
-                onChangeText={setNewEventLocation}
-                placeholder="Ex: Court central"
-                placeholderTextColor="#999"
-              />
-              
-              <TouchableOpacity style={styles.saveBtn} onPress={handleAddEvent}>
-                <Ionicons name="checkmark-circle" size={22} color="#fff" />
-                <Text style={styles.saveBtnText}>Ajouter</Text>
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
-
-      {/* Conflict Detection Modal */}
+      {/* Conflict Modal */}
       <Modal visible={showConflictModal} animationType="fade" transparent>
         <View style={styles.conflictOverlay}>
           <View style={styles.conflictCard}>
@@ -1128,19 +1206,6 @@ export default function CalendarScreen() {
                     <Text style={styles.conflictItemMeta}>
                       {ct.startDate ? new Date(ct.startDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : ''} - 
                       {ct.endDate ? new Date(ct.endDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : ''}
-                      {ct.status ? ` (${TOURNAMENT_STATUS_LABELS[ct.status]?.label || ct.status})` : ''}
-                    </Text>
-                  </View>
-                </View>
-              ))}
-              
-              {conflictData?.calendarEvents?.map((ev: any, i: number) => (
-                <View key={ev.id || i} style={styles.conflictItem}>
-                  <Ionicons name="calendar-outline" size={18} color="#2196F3" />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.conflictItemName}>{ev.title}</Text>
-                    <Text style={styles.conflictItemMeta}>
-                      {ev.date} {ev.time ? `à ${ev.time}` : ''}
                     </Text>
                   </View>
                 </View>
@@ -1148,10 +1213,27 @@ export default function CalendarScreen() {
             </ScrollView>
             
             <View style={styles.conflictActions}>
-              <TouchableOpacity style={styles.conflictProceedBtn} onPress={handleConflictProceed}>
+              <TouchableOpacity 
+                style={styles.conflictProceedBtn} 
+                onPress={() => {
+                  if (pendingRegistration) {
+                    executeRegistration(pendingRegistration.tournamentId, pendingRegistration.status);
+                  }
+                  setShowConflictModal(false);
+                  setConflictData(null);
+                  setPendingRegistration(null);
+                }}
+              >
                 <Text style={styles.conflictProceedText}>Continuer quand même</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.conflictCancelBtn} onPress={handleConflictCancel}>
+              <TouchableOpacity 
+                style={styles.conflictCancelBtn} 
+                onPress={() => {
+                  setShowConflictModal(false);
+                  setConflictData(null);
+                  setPendingRegistration(null);
+                }}
+              >
                 <Text style={styles.conflictCancelText}>Annuler</Text>
               </TouchableOpacity>
             </View>
@@ -1168,6 +1250,8 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8f9fa' },
   centered: { justifyContent: 'center', alignItems: 'center' },
   loadingText: { marginTop: 12, fontSize: 16, color: '#666' },
+  
+  // Header
   header: { paddingHorizontal: 20, paddingBottom: 16 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   headerTitle: { fontSize: 28, fontWeight: '700', color: '#fff' },
@@ -1177,73 +1261,134 @@ const styles = StyleSheet.create({
   circuitRow: { flexDirection: 'row', marginTop: 12, gap: 8 },
   circuitBadge: { backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12 },
   circuitText: { fontSize: 12, fontWeight: '600', color: '#fff' },
+  
   content: { flex: 1 },
   calendarContainer: { backgroundColor: '#fff', margin: 16, borderRadius: 16, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
-  dayEventsContainer: { marginHorizontal: 16, marginBottom: 16 },
+  
+  // Day Events Section
+  dayEventsSection: { marginHorizontal: 16, marginBottom: 16 },
   dayEventsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   dayEventsTitle: { fontSize: 16, fontWeight: '600', color: '#1a1a1a', textTransform: 'capitalize' },
-  addEventBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#1e3c72', alignItems: 'center', justifyContent: 'center' },
-  dayEventCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', padding: 12, borderRadius: 12, marginBottom: 8 },
-  eventIcon: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-  eventInfo: { flex: 1 },
-  eventTitle: { fontSize: 15, fontWeight: '600', color: '#1a1a1a' },
-  eventMeta: { fontSize: 13, color: '#666', marginTop: 2 },
-  noEventsText: { fontSize: 14, color: '#999', textAlign: 'center', paddingVertical: 20 },
+  emptyDay: { alignItems: 'center', paddingVertical: 30, backgroundColor: '#fff', borderRadius: 16 },
+  emptyText: { fontSize: 15, color: '#999', marginTop: 12 },
+  addEventInlineBtn: { flexDirection: 'row', alignItems: 'center', marginTop: 16, gap: 6 },
+  addEventInlineText: { fontSize: 14, color: '#1e3c72', fontWeight: '600' },
+  
+  // Event Cards
+  eventCard: { flexDirection: 'row', backgroundColor: '#fff', borderRadius: 12, marginBottom: 10, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 1 },
+  eventColorBar: { width: 4 },
+  eventContent: { flex: 1, padding: 14 },
+  eventHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  eventTime: { fontSize: 14, fontWeight: '700', color: '#1a1a1a' },
+  eventBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  eventType: { fontSize: 12, fontWeight: '600' },
+  eventNotes: { fontSize: 13, color: '#666', marginTop: 6 },
+  observationBadge: { flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 4 },
+  observationCount: { fontSize: 12, color: '#10B981', fontWeight: '500' },
+  
+  // Tournaments Section
   tournamentsSection: { marginHorizontal: 16, marginTop: 8 },
-  tournamentsSectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  sectionTitle: { fontSize: 18, fontWeight: '700', color: '#1a1a1a' },
-  filterToggle: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#f0f0f0', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
-  filterToggleActive: { backgroundColor: '#1e3c72' },
-  filterCount: { fontSize: 12, fontWeight: '700', color: '#fff' },
-  filtersContainer: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
-  filterLabel: { fontSize: 13, fontWeight: '600', color: '#666', marginBottom: 6, marginTop: 10 },
-  filterRow: { flexDirection: 'row', marginBottom: 2 },
-  filterChip: { backgroundColor: '#f0f0f0', paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, marginRight: 8 },
-  filterChipActive: { backgroundColor: '#1e3c72' },
-  filterChipText: { fontSize: 13, fontWeight: '500', color: '#666' },
-  filterChipTextActive: { color: '#fff' },
-  resetFiltersBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 12, paddingVertical: 8 },
-  resetFiltersText: { fontSize: 13, color: '#E53935', fontWeight: '500' },
-  categoryBadge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, marginBottom: 6 },
-  categoryText: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
-  categoryBadgeModal: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
-  categoryTextModal: { fontSize: 11, fontWeight: '700' },
+  sectionTitle: { fontSize: 18, fontWeight: '700', color: '#1a1a1a', marginBottom: 12 },
   noTournamentsText: { fontSize: 14, color: '#999', textAlign: 'center', paddingVertical: 20 },
   weeksScroll: { marginLeft: -4 },
   weekCard: { width: 180, backgroundColor: '#fff', borderRadius: 16, padding: 16, marginRight: 12, marginLeft: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
   weekCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   weekNumber: { fontSize: 14, fontWeight: '700', color: '#1e3c72' },
   weekDates: { fontSize: 12, color: '#666' },
+  categoryBadge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, marginBottom: 6 },
+  categoryText: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
   tournamentName: { fontSize: 15, fontWeight: '600', color: '#1a1a1a', marginBottom: 8 },
   tournamentMeta: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   surfaceBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
   surfaceText: { fontSize: 11, fontWeight: '600' },
   tournamentLocation: { fontSize: 12, color: '#666', flex: 1 },
-  registrationBadge: { flexDirection: 'row', alignItems: 'center', marginTop: 10, gap: 4 },
-  registrationText: { fontSize: 12, color: '#4CAF50', fontWeight: '500' },
   prizeRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 4 },
   weekPrizeText: { fontSize: 13, fontWeight: '600', color: '#1e3c72' },
+  registrationBadge: { flexDirection: 'row', alignItems: 'center', marginTop: 10, gap: 4 },
+  registrationText: { fontSize: 12, color: '#4CAF50', fontWeight: '500' },
+  
+  // FAB
+  fab: { position: 'absolute', right: 20, width: 60, height: 60, borderRadius: 30, backgroundColor: '#1e3c72', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 8 },
+  
+  // Modals
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 40, maxHeight: '80%' },
+  modalContent: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 40, maxHeight: '85%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  modalTitle: { fontSize: 18, fontWeight: '700', color: '#1a1a1a' },
+  modalTitle: { fontSize: 20, fontWeight: '700', color: '#1a1a1a' },
+  
+  // Form elements
+  pickerSpacer: { height: 20 },
+  fieldLabel: { fontSize: 13, fontWeight: '600', color: '#6B7280', marginTop: 20, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
+  textInput: { backgroundColor: '#F9FAFB', borderRadius: 12, padding: 14, fontSize: 16, color: '#1a1a1a' },
+  notesInput: { height: 100, textAlignVertical: 'top' },
+  saveButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#1e3c72', padding: 16, borderRadius: 12, marginTop: 24, gap: 8 },
+  saveButtonText: { fontSize: 16, fontWeight: '600', color: '#fff' },
+  cancelButton: { padding: 16, alignItems: 'center', marginTop: 12 },
+  cancelButtonText: { fontSize: 16, fontWeight: '600', color: '#666' },
+  
+  // Detail Modal
+  detailModal: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '90%', overflow: 'hidden' },
+  eventDetailHeader: { flexDirection: 'row', alignItems: 'center', padding: 20, gap: 16 },
+  eventDetailHeaderText: { flex: 1 },
+  eventDetailTitle: { fontSize: 18, fontWeight: '700', color: '#1a1a1a' },
+  eventDetailDateTime: { fontSize: 14, color: '#666', marginTop: 4 },
+  detailScroll: { paddingHorizontal: 20, paddingBottom: 40 },
+  detailSection: { marginBottom: 20 },
+  sectionLabel: { fontSize: 13, fontWeight: '600', color: '#6B7280', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
+  detailText: { fontSize: 15, color: '#1a1a1a', lineHeight: 22 },
+  
+  // Observations
+  observationsSection: { marginTop: 10, marginBottom: 20 },
+  observationsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  addObservationBtn: { padding: 4 },
+  observationCard: { backgroundColor: '#F9FAFB', borderRadius: 12, padding: 14, marginBottom: 10 },
+  observationCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  staffName: { fontSize: 14, fontWeight: '600', color: '#1a1a1a' },
+  staffRole: { fontSize: 12, color: '#10B981', fontWeight: '500' },
+  observationText: { fontSize: 14, color: '#333', lineHeight: 20 },
+  observationDate: { fontSize: 11, color: '#999', marginTop: 8 },
+  emptyObservations: { alignItems: 'center', paddingVertical: 30 },
+  emptyObsText: { fontSize: 15, color: '#999', marginTop: 12 },
+  emptyObsSubtext: { fontSize: 13, color: '#ccc', marginTop: 4, textAlign: 'center' },
+  
+  // Action buttons
+  actionButtons: { flexDirection: 'row', gap: 12, marginTop: 10 },
+  editButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#1e3c72', padding: 14, borderRadius: 12, gap: 8 },
+  editButtonText: { fontSize: 15, fontWeight: '600', color: '#fff' },
+  deleteButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#FEE2E2', padding: 14, borderRadius: 12, gap: 8 },
+  deleteButtonText: { fontSize: 15, fontWeight: '600', color: '#EF4444' },
+  closeDetailButton: { padding: 16, alignItems: 'center', marginTop: 16 },
+  closeDetailButtonText: { fontSize: 16, fontWeight: '600', color: '#666' },
+  
+  // Observation Modal
+  observationModal: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 40 },
+  observationInput: { backgroundColor: '#F9FAFB', borderRadius: 12, padding: 14, fontSize: 16, color: '#1a1a1a', height: 150, textAlignVertical: 'top', marginTop: 16 },
+  saveObservationButton: { backgroundColor: '#10B981', padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 20 },
+  saveObservationButtonText: { fontSize: 16, fontWeight: '600', color: '#fff' },
+  disabledButton: { opacity: 0.5 },
+  
+  // Tournament Detail Modal
   tournamentDetail: { backgroundColor: '#f8f9fa', borderRadius: 12, padding: 16, marginBottom: 12 },
+  tournamentHidden: { opacity: 0.5, backgroundColor: '#f0f0f0' },
+  tournamentDetailHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 },
+  tournamentDetailFlag: { fontSize: 28 },
   tournamentDetailName: { fontSize: 16, fontWeight: '600', color: '#1a1a1a', marginBottom: 4 },
   tournamentDetailMeta: { fontSize: 13, color: '#666', marginBottom: 2 },
   tournamentDetailRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 },
   prizeText: { fontSize: 14, fontWeight: '600', color: '#1e3c72' },
+  currentStatusRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, marginBottom: 2 },
+  currentStatusText: { fontSize: 13, fontWeight: '600', color: '#333' },
   registrationButtons: { flexDirection: 'row', gap: 8, marginTop: 12 },
   statusBtn: { flex: 1, padding: 10, borderRadius: 8, backgroundColor: '#f0f0f0', alignItems: 'center' },
   statusBtnActive: { backgroundColor: '#1e3c72' },
-  tournamentHidden: { opacity: 0.5, backgroundColor: '#f0f0f0' },
-  tournamentDetailHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 },
-  tournamentDetailFlag: { fontSize: 28 },
+  statusBtnText: { fontSize: 12, fontWeight: '600', color: '#666' },
+  statusBtnTextActive: { color: '#fff' },
   notInterestedBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 10, paddingVertical: 8 },
   notInterestedText: { fontSize: 13, color: '#999' },
-  currentStatusRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, marginBottom: 2 },
-  currentStatusText: { fontSize: 13, fontWeight: '600', color: '#333' },
   unhideBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 12, paddingVertical: 10, backgroundColor: '#e8f0fe', borderRadius: 8 },
   unhideBtnText: { fontSize: 14, color: '#1e3c72', fontWeight: '600' },
+  
+  // Conflict Modal
   conflictOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   conflictCard: { backgroundColor: '#fff', borderRadius: 20, padding: 24, width: '100%', maxWidth: 400, maxHeight: '80%' },
   conflictHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 8 },
@@ -1258,13 +1403,4 @@ const styles = StyleSheet.create({
   conflictProceedText: { fontSize: 15, fontWeight: '600', color: '#fff' },
   conflictCancelBtn: { padding: 14, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: '#ddd' },
   conflictCancelText: { fontSize: 15, fontWeight: '600', color: '#666' },
-  statusBtnText: { fontSize: 12, fontWeight: '600', color: '#666' },
-  statusBtnTextActive: { color: '#fff' },
-  inputLabel: { fontSize: 14, fontWeight: '600', color: '#666', marginBottom: 8, marginTop: 16 },
-  input: { backgroundColor: '#f5f5f5', borderRadius: 12, padding: 14, fontSize: 16, color: '#1a1a1a' },
-  typeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  typeOption: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 20, backgroundColor: '#f5f5f5', borderWidth: 2, borderColor: 'transparent', gap: 6 },
-  typeLabel: { fontSize: 13, fontWeight: '500', color: '#666' },
-  saveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#1e3c72', padding: 16, borderRadius: 12, marginTop: 24, gap: 8 },
-  saveBtnText: { fontSize: 16, fontWeight: '600', color: '#fff' },
 });
