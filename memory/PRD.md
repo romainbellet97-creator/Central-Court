@@ -8,6 +8,38 @@ Application professionnelle de tennis: FastAPI + MongoDB + React Native (Expo)
 ### Core
 - User onboarding (7 steps), profile edit, logout, staff invitations, OCR
 
+### Tournois - Base de données restaurée (Feb 18, 2026) ✅ NEW
+- **137 tournois importés** avec données complètes:
+  - 70 tournois ATP (Grand Chelem, Masters 1000, ATP 500, ATP 250, ATP Finals)
+  - 40 tournois WTA (Grand Chelem, WTA 1000, WTA 500, WTA 250, WTA Finals)
+  - 12 tournois ITF (M25, M15, W25, W15)
+  - 15 tournois ITF Wheelchair
+- **Données enrichies** : Prize money, drapeaux 🇫🇷, surface, dates, villes, catégories
+- Script d'import: `/app/backend/scripts/import_user_tournaments.py`
+
+### Calendrier & Événements - RESTAURATION COMPLÈTE (Feb 18, 2026) ✅ NEW
+- **Calendrier avec dots colorés** par type d'événement:
+  - 🎾 Entraînement Tennis (vert #10B981)
+  - 💪 Préparation Physique (orange #F59E0B)
+  - 🏆 Match (rouge #EF4444)
+  - 🎯 Tournoi (violet #8B5CF6)
+  - 🧘 Récupération (cyan #06B6D4)
+  - 📋 Réunion (gris #6B7280)
+  - 🏥 Médical (rose #E91E63)
+  - ✈️ Voyage (violet #9C27B0)
+- **CRUD complet** : Créer, modifier, supprimer événements
+- **Apple-style wheel pickers** pour type, date et heure
+- **Système de commentaires/observations staff**:
+  - Ajout d'observations avec auteur et rôle
+  - Affichage temps relatif (Il y a 2h, Hier, etc.)
+  - Badge compteur d'observations sur les cartes événements
+- **FAB button** flottant pour ajout rapide
+- **Modal détail événement** avec :
+  - Header coloré par type
+  - Section notes
+  - Liste observations staff avec nom/rôle
+  - Boutons Modifier / Supprimer
+
 ### Tournaments (Phase 1-3)
 - Country flags, future-only filtering, "Pas intéressé" hide/unhide
 - Multi-filter: surface, level, prize money, country
