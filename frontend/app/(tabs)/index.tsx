@@ -1666,6 +1666,16 @@ const styles = StyleSheet.create({
   observationBadge: { flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 4 },
   observationCount: { fontSize: 12, color: '#10B981', fontWeight: '500' },
   
+  // Tournament Event Cards (BUG #2 FIX)
+  tournamentEventCard: { flexDirection: 'row', backgroundColor: '#fff', borderRadius: 12, marginBottom: 10, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 1, borderWidth: 1, borderColor: '#8B5CF620' },
+  tournamentEventBadge: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  tournamentEventFlag: { fontSize: 18 },
+  tournamentEventLabel: { fontSize: 12, fontWeight: '600', color: '#8B5CF6', backgroundColor: '#8B5CF615', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
+  tournamentEventName: { fontSize: 15, fontWeight: '600', color: '#1a1a1a', marginTop: 8, marginBottom: 4 },
+  tournamentEventLocation: { fontSize: 13, color: '#666', marginBottom: 4 },
+  tournamentEventDates: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
+  tournamentEventDatesText: { fontSize: 12, color: '#8B5CF6', fontWeight: '500' },
+  
   // Tournaments Section
   tournamentsSection: { marginHorizontal: 16, marginTop: 8 },
   sectionTitle: { fontSize: 18, fontWeight: '700', color: '#1a1a1a', marginBottom: 12 },
