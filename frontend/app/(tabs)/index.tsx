@@ -1047,9 +1047,14 @@ export default function CalendarScreen() {
                       </Text>
                       <TouchableOpacity
                         style={styles.addObservationBtn}
-                        onPress={() => setShowAddObservationModal(true)}
+                        onPress={() => {
+                          console.log('🟢 Add observation button pressed');
+                          setShowAddObservationModal(true);
+                        }}
+                        hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+                        activeOpacity={0.6}
                       >
-                        <Ionicons name="add-circle" size={24} color="#10B981" />
+                        <Ionicons name="add-circle" size={28} color="#10B981" />
                       </TouchableOpacity>
                     </View>
 
