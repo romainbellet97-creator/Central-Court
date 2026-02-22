@@ -24,6 +24,7 @@ import { getFlagEmoji } from '../../src/utils/countryFlags';
 import AppleDatePicker from '../../src/components/inputs/AppleDatePicker';
 import AppleTimePicker from '../../src/components/inputs/AppleTimePicker';
 import AppleOptionPicker from '../../src/components/inputs/AppleOptionPicker';
+import { useAuth } from '../../src/context/AuthContext';
 import {
   fetchEvents,
   fetchTournamentWeeks,
