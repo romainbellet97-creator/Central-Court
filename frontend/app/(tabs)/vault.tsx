@@ -530,7 +530,7 @@ export default function DocumentsScreen() {
         userId: 'default-user',
         name: editedFournisseur || pendingDocName,
         fournisseur: editedFournisseur,
-        dateFacture: editedDate,
+        dateFacture: editedDate, // BUG #1 FIX: Utiliser la date extraite par l'IA, PAS new Date()
         category: editedCategorie,
         montantTotal: parsedMontant,
         montantHT: parsedHT,
@@ -543,17 +543,32 @@ export default function DocumentsScreen() {
       console.log('✅ Document saved:', response.data.id);
 
       const saved = response.data;
+      const savedDate = saved.dateFacture || editedDate;
+      
+      // BUG #1 FIX: Ajouter le document à la liste locale
       setDocuments(prev => [{
         id: saved.id,
         name: saved.name,
         category: saved.category,
         type: pendingDocType,
-        date: saved.dateFacture || editedDate,
+        date: savedDate,
         amount: saved.montantTotal,
         currency: saved.currency || editedCurrency,
         fournisseur: saved.fournisseur,
         createdAt: saved.createdAt,
       }, ...prev]);
+
+      // ============================================================
+      // BUG #1 FIX: Naviguer vers le mois de la facture sauvegardée
+      // ============================================================
+      if (savedDate && savedDate !== '--') {
+        const [year, month] = savedDate.split('-').map(Number);
+        if (year && month) {
+          console.log(`📅 Navigating to invoice month: ${year}-${month}`);
+          setCurrentYear(year);
+          setCurrentMonth(month - 1); // Month is 0-indexed
+        }
+      }
 
       // CRITIQUE: Reset complet après succès
       setShowVerificationModal(false);
