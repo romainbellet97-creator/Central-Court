@@ -847,12 +847,29 @@ export default function CalendarScreen() {
                       </View>
                     )}
                     
-                    {week.tournaments.some(t => t.registration) && (
-                      <View style={styles.registrationBadge}>
-                        <Ionicons name="checkmark-circle" size={14} color="#4CAF50" />
-                        <Text style={styles.registrationText}>Inscrit</Text>
-                      </View>
-                    )}
+                    {/* FEATURE #1: Afficher le statut correct (Intéressé vs Participant) */}
+                    {(() => {
+                      const registeredTournament = week.tournaments.find(t => t.registration);
+                      if (!registeredTournament?.registration) return null;
+                      
+                      const status = registeredTournament.registration.status;
+                      const statusConfig = TOURNAMENT_STATUS_LABELS[status];
+                      
+                      if (!statusConfig) return null;
+                      
+                      return (
+                        <View style={[styles.registrationBadge, { backgroundColor: statusConfig.color + '15' }]}>
+                          <Ionicons 
+                            name={status === 'participating' ? 'checkmark-circle' : status === 'interested' ? 'star' : 'time'} 
+                            size={14} 
+                            color={statusConfig.color} 
+                          />
+                          <Text style={[styles.registrationText, { color: statusConfig.color }]}>
+                            {statusConfig.label}
+                          </Text>
+                        </View>
+                      );
+                    })()}
                   </TouchableOpacity>
                 );
               })}
