@@ -452,6 +452,8 @@ export default function CalendarScreen() {
   const handleDeleteEvent = () => {
     if (!selectedEvent) return;
     
+    const eventIdToDelete = selectedEvent.id;
+    
     Alert.alert(
       'Supprimer l\'événement',
       'Êtes-vous sûr de vouloir supprimer cet événement ?',
@@ -461,13 +463,24 @@ export default function CalendarScreen() {
           text: 'Supprimer',
           style: 'destructive',
           onPress: async () => {
+            console.log('🗑️ === DELETE EVENT ===', eventIdToDelete);
             try {
-              await apiDeleteEvent(selectedEvent.id);
-              setEvents(prev => prev.filter(e => e.id !== selectedEvent.id));
+              await apiDeleteEvent(eventIdToDelete);
+              
+              // CRITIQUE: Fermer les modals AVANT de modifier l'état
               setShowEventDetailModal(false);
               setSelectedEvent(null);
+              
+              // CRITIQUE: Mise à jour immutable
+              setEvents(prevEvents => {
+                const newEvents = prevEvents.filter(e => e.id !== eventIdToDelete);
+                console.log('✅ Event deleted, remaining:', newEvents.length);
+                return newEvents;
+              });
+              
               Alert.alert('Succès', 'Événement supprimé');
             } catch (error) {
+              console.error('Delete error:', error);
               Alert.alert('Erreur', 'Impossible de supprimer');
             }
           },
@@ -479,25 +492,45 @@ export default function CalendarScreen() {
   const handleSaveObservation = async () => {
     if (!selectedEvent || !observationText.trim()) return;
     
+    console.log('💬 === SAVE OBSERVATION ===');
+    const eventId = selectedEvent.id;
+    const observationContent = observationText.trim();
+    
     try {
-      const newObservation = await apiAddObservation(selectedEvent.id, {
+      const newObservation = await apiAddObservation(eventId, {
         author: 'Coach Martin', // TODO: Get from user context
         role: 'Entraîneur principal',
-        text: observationText.trim(),
+        text: observationContent,
       });
 
-      // Update local state
-      const updatedEvent = {
-        ...selectedEvent,
-        observations: [...(selectedEvent.observations || []), newObservation]
-      };
+      // CRITIQUE: Mise à jour immutable avec copie profonde
+      setEvents(prevEvents => {
+        return prevEvents.map(e => {
+          if (e.id === eventId) {
+            const updatedObservations = [...(e.observations || []), newObservation];
+            return {
+              ...e,
+              observations: updatedObservations,
+            };
+          }
+          return e;
+        });
+      });
       
-      setSelectedEvent(updatedEvent);
-      setEvents(prev => prev.map(e => e.id === selectedEvent.id ? updatedEvent : e));
+      // Mettre à jour aussi l'événement sélectionné pour le modal
+      setSelectedEvent(prev => {
+        if (!prev || prev.id !== eventId) return prev;
+        return {
+          ...prev,
+          observations: [...(prev.observations || []), newObservation],
+        };
+      });
 
+      // Fermer le modal d'observation
       setShowAddObservationModal(false);
       setObservationText('');
       
+      console.log('✅ Observation added successfully');
       Alert.alert('Succès', 'Observation ajoutée !');
     } catch (error) {
       console.error('Error adding observation:', error);
