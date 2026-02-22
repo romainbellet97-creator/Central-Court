@@ -643,16 +643,14 @@ export default function CalendarScreen() {
   };
 
   // FEATURE #1: Handler pour le nouveau composant EventObservationSection
-  // BUG #1 FIX: Utiliser le vrai nom de l'utilisateur connecté
+  // BUG #1 FIX: Utiliser le vrai nom de l'utilisateur connecté depuis le contexte Auth
   const getCurrentUser = useCallback(() => {
-    // TODO: Récupérer depuis le contexte Auth réel
-    // Pour l'instant, utiliser les données de l'utilisateur stockées localement
     return {
-      id: 'current-user-id',
-      name: 'Joueur', // Sera remplacé par le vrai nom de l'utilisateur
-      role: 'Joueur',
+      id: authUser?.user_id || 'current-user-id',
+      name: authUser?.name || 'Joueur', // Utilise le nom du contexte Auth
+      role: authUser?.role || 'player',
     };
-  }, []);
+  }, [authUser]);
 
   const handleObservationAdded = useCallback((observation: Observation | null, removeId?: string) => {
     if (!selectedEvent) return;
