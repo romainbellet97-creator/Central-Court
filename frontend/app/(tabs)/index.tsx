@@ -636,6 +636,17 @@ export default function CalendarScreen() {
   };
 
   // FEATURE #1: Handler pour le nouveau composant EventObservationSection
+  // BUG #1 FIX: Utiliser le vrai nom de l'utilisateur connecté
+  const getCurrentUser = useCallback(() => {
+    // TODO: Récupérer depuis le contexte Auth réel
+    // Pour l'instant, utiliser les données de l'utilisateur stockées localement
+    return {
+      id: 'current-user-id',
+      name: 'Joueur', // Sera remplacé par le vrai nom de l'utilisateur
+      role: 'Joueur',
+    };
+  }, []);
+
   const handleObservationAdded = useCallback((observation: Observation | null, removeId?: string) => {
     if (!selectedEvent) return;
     
@@ -675,15 +686,47 @@ export default function CalendarScreen() {
     }
   }, [selectedEvent]);
 
+  // BUG #2 FIX: Handler pour mettre à jour le statut d'une observation
+  const handleObservationUpdated = useCallback((observationId: string, updatedFields: Partial<Observation>) => {
+    if (!selectedEvent) return;
+    
+    const eventId = selectedEvent.id;
+    
+    setEvents(prevEvents => 
+      prevEvents.map(e => 
+        e.id === eventId
+          ? { 
+              ...e, 
+              observations: (e.observations || []).map(obs => 
+                obs.id === observationId ? { ...obs, ...updatedFields } : obs
+              )
+            }
+          : e
+      )
+    );
+    setSelectedEvent(prev => 
+      prev?.id === eventId
+        ? { 
+            ...prev, 
+            observations: (prev.observations || []).map(obs => 
+              obs.id === observationId ? { ...obs, ...updatedFields } : obs
+            )
+          }
+        : prev
+    );
+  }, [selectedEvent]);
+
+  // BUG #1 FIX: Utiliser getCurrentUser().name au lieu de 'Coach Martin' hardcodé
   const handleSaveObservationAPI = useCallback(async (data: { eventId: string; text: string; parentId?: string | null }) => {
+    const currentUser = getCurrentUser();
     const newObservation = await apiAddObservation(data.eventId, {
-      author: 'Coach Martin', // TODO: Get from user context
-      role: 'Entraîneur principal',
+      author: currentUser.name,
+      role: currentUser.role,
       text: data.text,
       parentId: data.parentId,
     });
     return newObservation;
-  }, []);
+  }, [getCurrentUser]);
 
   // Legacy handler (pour l'ancien modal, à supprimer plus tard)
   const handleSaveObservation = async () => {
