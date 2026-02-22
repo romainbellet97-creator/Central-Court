@@ -8,7 +8,18 @@ Application professionnelle de tennis: FastAPI + MongoDB + React Native (Expo)
 ### Core
 - User onboarding (7 steps), profile edit, logout, staff invitations, OCR
 
-### Tournois - Base de données restaurée (Feb 18, 2026) ✅ NEW
+### 🆕 Sprint Technique - Bugs & Features (Feb 22, 2026) ✅ 
+#### Bugs corrigés:
+- **Bug #1 - Bouton + observation**: Corrigé - Le bouton ouvre maintenant le modal d'observation
+- **Bug #2 - Calendrier après modification**: Corrigé - Gestion immutable de l'état, nettoyage complet des modals
+- **Bug #3 - Upload Camera/Gallery**: Validé - Le modal d'upload fonctionne correctement
+
+#### Features implémentées:
+- **Feature #1 - Label Intéressé/Participant**: Le badge affiche le bon statut (Intéressé, Participant, En attente)
+- **Feature #2 - "X tournois" badge**: Badge violet affiché quand plusieurs tournois dans la même semaine
+- **Feature #3 - Auto-grisage tournois**: Les autres tournois de la semaine sont automatiquement grisés quand on participe
+
+### Tournois - Base de données restaurée (Feb 18, 2026) ✅
 - **137 tournois importés** avec données complètes:
   - 70 tournois ATP (Grand Chelem, Masters 1000, ATP 500, ATP 250, ATP Finals)
   - 40 tournois WTA (Grand Chelem, WTA 1000, WTA 500, WTA 250, WTA Finals)
@@ -17,7 +28,7 @@ Application professionnelle de tennis: FastAPI + MongoDB + React Native (Expo)
 - **Données enrichies** : Prize money, drapeaux 🇫🇷, surface, dates, villes, catégories
 - Script d'import: `/app/backend/scripts/import_user_tournaments.py`
 
-### Calendrier & Événements - RESTAURATION COMPLÈTE (Feb 18, 2026) ✅ NEW
+### Calendrier & Événements - RESTAURATION COMPLÈTE (Feb 18, 2026) ✅
 - **Calendrier avec dots colorés** par type d'événement:
   - 🎾 Entraînement Tennis (vert #10B981)
   - 💪 Préparation Physique (orange #F59E0B)
@@ -63,7 +74,7 @@ Application professionnelle de tennis: FastAPI + MongoDB + React Native (Expo)
 - API Backend complète pour CRUD des jours de présence
 - Calcul automatique des pourcentages de seuil (183 jours)
 
-### Résidence Fiscale - Phase 2 (Feb 12, 2026) ✅ NEW
+### Résidence Fiscale - Phase 2 (Feb 12, 2026) ✅
 - **GPS Tracking automatique** :
   - Détection du pays actuel via expo-location
   - Bouton "Aujourd'hui" pour enregistrer la présence GPS en 1 clic
@@ -78,32 +89,13 @@ Application professionnelle de tennis: FastAPI + MongoDB + React Native (Expo)
   - Affichage du statut de permission
   - Message de confidentialité des données
 
-### Bug Fix P1 - Modification des périodes (Feb 13, 2026) ✅ NEW
+### Bug Fix P1 - Modification des périodes (Feb 13, 2026) ✅
 - **Backend** : Nouvel endpoint PUT /api/residence/days/{date}
-  - Modification du pays, notes, statut d'un jour existant
-  - Validation d'existence (404 si jour non trouvé)
-  - Mise à jour automatique du timestamp updatedAt
 - **Frontend** : Modal d'édition dans residence.tsx
-  - Bouton édition (crayon) à côté de chaque jour
-  - Sélecteur de pays avec drapeaux
-  - Champ notes modifiable
-  - Affichage de la date (non modifiable)
-- **API** : updateDayPresence() dans api.ts
 
-### OCR Module - Correction (Feb 13, 2026) ✅ NEW
-- **Problème** : Clé OpenAI invalide causait des erreurs d'authentification
-- **Solution** : Migration vers Emergent LLM Key (clé universelle)
-  - Utilise `sk-emergent-xxx` au lieu de `sk-proj-xxx`
-  - GPT-4o Vision pour analyse d'images de factures
-  - Logs détaillés pour debug
-- **Fonctionnalités** :
-  - Extraction du montant total TTC (priorité absolue)
-  - Date de facture en format JJ/MM/AAAA
-  - Montants HT et TVA avec validation
-  - Détection automatique de catégorie
-  - Lignes de facture détaillées
-  - Score de confiance 0-1
-- **Test** : 100% succès avec ticket restaurant test (29.50€, confidence 0.95)
+### OCR Module - Correction (Feb 13, 2026) ✅
+- Migration vers Emergent LLM Key (clé universelle)
+- GPT-4o Vision pour analyse d'images de factures
 
 ## Key API Endpoints
 - POST /api/users/onboarding, PUT /api/users/profile/{user_id}
@@ -115,9 +107,8 @@ Application professionnelle de tennis: FastAPI + MongoDB + React Native (Expo)
 - POST /api/residence/days, /days/bulk
 - PUT /api/residence/days/{date}
 - DELETE /api/residence/days/{date}
-- **Events API (Feb 18, 2026)**:
+- **Events API**:
   - GET /api/events?month=YYYY-MM - Liste événements
-  - GET /api/events?date=YYYY-MM-DD - Événements d'un jour
   - POST /api/events - Créer événement
   - PUT /api/events/{id} - Modifier événement
   - DELETE /api/events/{id} - Supprimer événement
@@ -126,12 +117,12 @@ Application professionnelle de tennis: FastAPI + MongoDB + React Native (Expo)
 ## Backlog
 
 ### P0 - En cours
-- **Phase 3 - Résidence Fiscale**: Alertes push + génération de rapports PDF
-- **Bug P0 - Upload documents**: Boutons Caméra/Galerie non réactifs après première utilisation
+- **Phase 3 - Résidence Fiscale**: Tracking GPS background + alertes push + génération de rapports PDF
+  - Dépendances installées: expo-location, expo-task-manager, expo-background-fetch
+  - À créer: frontend/services/geolocationService.ts, backend/routes/tax_residency_routes.py
 
 ### P1
 - PDF export of documents
-- Bug modal tournoi non réactif après changement de statut (récurrent)
 - Élargir les cartes tournois + homogénéité visuelle
 
 ### P2
@@ -164,4 +155,5 @@ Application professionnelle de tennis: FastAPI + MongoDB + React Native (Expo)
 ## Test Reports
 - /app/test_reports/iteration_16.json - Phase 1 (20/20 tests)
 - /app/test_reports/iteration_17.json - Phase 2 (23/23 tests)
-- /app/test_reports/iteration_18.json - Bug Fix P1 (62/62 tests) ✅ NEW
+- /app/test_reports/iteration_18.json - Bug Fix P1 (62/62 tests)
+- /app/test_reports/iteration_19.json - Sprint Bugs & Features (6/6 - 100%) ✅ NEW
