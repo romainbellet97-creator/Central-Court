@@ -1412,7 +1412,7 @@ const styles = StyleSheet.create({
   // Observations
   observationsSection: { marginTop: 10, marginBottom: 20 },
   observationsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  addObservationBtn: { padding: 4 },
+  addObservationBtn: { padding: 8, borderRadius: 20, backgroundColor: '#E8F5E9' },
   observationCard: { backgroundColor: '#F9FAFB', borderRadius: 12, padding: 14, marginBottom: 10 },
   observationCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   staffName: { fontSize: 14, fontWeight: '600', color: '#1a1a1a' },
