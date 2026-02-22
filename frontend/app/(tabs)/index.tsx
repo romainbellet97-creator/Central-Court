@@ -1617,8 +1617,16 @@ export default function CalendarScreen() {
                       {EVENT_TYPES[selectedEvent.type]?.label || 'Événement'}
                     </Text>
                     <Text style={styles.eventDetailDateTime}>
-                      {formatDate(selectedEvent.date)} à {selectedEvent.time || '--:--'}
+                      {formatDate(selectedEvent.date)} • {selectedEvent.time || '--:--'}
+                      {selectedEvent.endTime ? ` → ${selectedEvent.endTime}` : ''}
                     </Text>
+                    {/* FEATURE #2: Badge en attente de validation */}
+                    {selectedEvent.pendingValidation && (
+                      <View style={styles.pendingValidationBadge}>
+                        <Ionicons name="time" size={12} color="#D97706" />
+                        <Text style={styles.pendingValidationText}>En attente de validation</Text>
+                      </View>
+                    )}
                   </View>
                   <TouchableOpacity onPress={() => {
                     setShowEventDetailModal(false);
