@@ -1,0 +1,103 @@
+{
+  "summary": "Sprint 3 Bug Fixes code review completed. 8/8 backend API tests PASSED. Fixed missing `useRef` import. All 3 bugs structurally fixed in frontend code.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Observations - getCurrentUser()",
+        "issues": [
+          "BUG #1 PARTIAL: getCurrentUser() at line 643-650 in index.tsx returns hardcoded 'Joueur' name instead of actual authenticated user's name. The TODO comment indicates this should come from Auth context."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_sprint3_observations.py",
+    "/app/test_reports/pytest/pytest_sprint3_observations.xml"
+  ],
+  "action_items": [
+    "IMPORTANT: Replace hardcoded 'Joueur' in getCurrentUser() (index.tsx line 647) with actual authenticated user's name from Auth context. Current code: `name: 'Joueur'` should be `name: user?.name || 'Joueur'`"
+  ],
+  "critical_code_review_comments": [
+    "BUG #1 FIX - Author Name: PARTIALLY VERIFIED ✅",
+    "  - EventObservationSection.tsx correctly uses currentUser.name (line 286)",
+    "  - handleSaveObservationAPI correctly calls getCurrentUser().name (line 726)",
+    "  - ISSUE: getCurrentUser() returns hardcoded 'Joueur' (line 647). Should get from Auth context.",
+    "",
+    "BUG #2 FIX - Send Status Badge: FULLY VERIFIED ✅",
+    "  - SEND_STATUS enum: sending/sent/error (lines 17-22)",
+    "  - SendStatusBadge component: orange/green/red badges (lines 56-86)",
+    "  - handleSubmit flow: SENDING → success: SENT (2s) → null, or error: ERROR (lines 290-318)",
+    "  - handleObservationUpdated in index.tsx updates state correctly (lines 693-720)",
+    "",
+    "BUG #3 FIX - Auto Scroll: FULLY VERIFIED ✅ (after fix)",
+    "  - FIXED: Added missing useRef import to index.tsx line 1",
+    "  - detailScrollRef properly created and attached (lines 163, 1736)",
+    "  - onComposerOpen callback triggers scrollToEnd (lines 1767-1772)",
+    "  - EventObservationSection passes callback on composer open AND TextInput focus",
+    "",
+    "LEGACY CODE: handleSaveObservation (line 735) with hardcoded 'Coach Martin' is DEAD CODE (modal never shown)"
+  ],
+  "updated_files": [
+    "/app/frontend/app/(tabs)/index.tsx",
+    "/app/backend/tests/test_sprint3_observations.py"
+  ],
+  "success_rate": {
+    "backend": "100% (8/8 tests passed)",
+    "frontend": "Code review verified - Expo/React Native app requires mobile device testing"
+  },
+  "test_credentials": {
+    "API Base URL": "https://event-management-9.preview.emergentagent.com"
+  },
+  "seed_data_creation": "Test events created for observations testing (cleaned up after tests)",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Sprint 3 bugs: BUG #2 (send status) and BUG #3 (scroll) are fully fixed. BUG #1 (author name) is structurally correct but getCurrentUser() returns placeholder value. Mobile testing needed via Expo Go.",
+  "fixes_applied_by_testing_agent": {
+    "file": "/app/frontend/app/(tabs)/index.tsx",
+    "line": 1,
+    "fix": "Added missing `useRef` to React imports",
+    "before": "import React, { useState, useMemo, useCallback, useEffect } from 'react';",
+    "after": "import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';"
+  },
+  "features_tested": {
+    "BUG #1 - Nom auteur (currentUser.name)": {
+      "status": "PARTIAL ⚠️",
+      "location": "index.tsx getCurrentUser() line 643-650, EventObservationSection.tsx handleSubmit line 286",
+      "verification": "Code structure correct but getCurrentUser() returns hardcoded 'Joueur' placeholder",
+      "api_test": "test_add_observation_with_author_name - PASSED (API accepts any author name)"
+    },
+    "BUG #2 - Badge 'Envoi...' → 'Envoyé'": {
+      "status": "CODE VERIFIED ✅",
+      "location": "EventObservationSection.tsx lines 17-86, 290-318",
+      "verification": "SEND_STATUS enum, SendStatusBadge component, and status transition flow all correct"
+    },
+    "BUG #3 - TextInput masqué par clavier": {
+      "status": "CODE VERIFIED ✅ (after fix)",
+      "location": "index.tsx lines 163, 1736, 1767-1772",
+      "verification": "detailScrollRef + scrollToEnd implemented, useRef import was missing (now fixed)"
+    },
+    "Observations API Tests": {
+      "status": "PASS 8/8",
+      "tests": [
+        "test_add_observation_with_author_name",
+        "test_observation_persisted_in_event",
+        "test_observation_supports_parentId_for_replies",
+        "test_observation_not_found_event",
+        "test_different_authors_stored_correctly",
+        "test_observation_created_immediately",
+        "test_create_event_with_endTime",
+        "test_api_health"
+      ]
+    }
+  },
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  }
+}
