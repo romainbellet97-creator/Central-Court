@@ -50,7 +50,7 @@ export const updateEvent = (id: string, data: any) =>
 export const deleteEvent = (id: string) =>
   apiFetch<any>(`/api/events/${id}`, { method: 'DELETE' });
 
-export const addObservation = (eventId: string, data: { author: string; role: string; text: string }) =>
+export const addObservation = (eventId: string, data: { author: string; role: string; text: string; parentId?: string | null }) =>
   apiFetch<any>(`/api/events/${eventId}/observations`, { method: 'POST', body: JSON.stringify(data) });
 
 // ── Tournaments ──
