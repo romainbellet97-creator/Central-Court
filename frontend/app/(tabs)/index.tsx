@@ -798,10 +798,21 @@ export default function CalendarScreen() {
                 const firstTournament = visibleTournaments[0];
                 if (!firstTournament) return null;
                 
+                // FEATURE #2: Vérifier s'il y a plusieurs tournois dans la semaine
+                const tournamentCount = visibleTournaments.length;
+                const hasMultipleTournaments = tournamentCount >= 2;
+                
+                // FEATURE #3: Vérifier si un tournoi de cette semaine est en "participating"
+                const participatingTournament = visibleTournaments.find(t => t.registration?.status === 'participating');
+                const isWeekBlocked = !!participatingTournament;
+                
                 return (
                   <TouchableOpacity
                     key={week.weekNumber}
-                    style={styles.weekCard}
+                    style={[
+                      styles.weekCard,
+                      isWeekBlocked && styles.weekCardBlocked
+                    ]}
                     onPress={() => {
                       setSelectedWeekNumber(week.weekNumber);
                       setShowTournamentModal(true);
@@ -815,6 +826,16 @@ export default function CalendarScreen() {
                       </Text>
                     </View>
                     
+                    {/* FEATURE #2: Badge "X tournois disponibles" si plusieurs */}
+                    {hasMultipleTournaments && (
+                      <View style={styles.multiTournamentBadge}>
+                        <Ionicons name="tennisball" size={12} color="#8B5CF6" />
+                        <Text style={styles.multiTournamentText}>
+                          {tournamentCount} tournois
+                        </Text>
+                      </View>
+                    )}
+                    
                     <View style={[styles.categoryBadge, { backgroundColor: getCategoryColor(firstTournament.category) + '18' }]}>
                       <Text style={[styles.categoryText, { color: getCategoryColor(firstTournament.category) }]}>
                         {firstTournament.category}
@@ -822,7 +843,7 @@ export default function CalendarScreen() {
                     </View>
                     
                     <Text style={styles.tournamentName} numberOfLines={1}>
-                      {firstTournament.name}
+                      {hasMultipleTournaments ? `${firstTournament.name} +${tournamentCount - 1}` : firstTournament.name}
                     </Text>
                     
                     <View style={styles.tournamentMeta}>
