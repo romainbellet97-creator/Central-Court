@@ -222,35 +222,13 @@ export default function CalendarScreen() {
     const [selectedYear, selectedMonth, selectedDay] = selectedDate.split('-').map(Number);
     const selectedDateNum = selectedYear * 10000 + selectedMonth * 100 + selectedDay;
     
-    // Debug: Log tournamentWeeks structure
-    if (__DEV__ || true) {
-      console.log('🏆 dayEvents calculation:');
-      console.log('  selectedDate:', selectedDate, 'num:', selectedDateNum);
-      console.log('  tournamentWeeks count:', tournamentWeeks.length);
-      
-      let participatingCount = 0;
-      tournamentWeeks.forEach(week => {
-        if (!week?.tournaments) return;
-        week.tournaments.forEach(t => {
-          if (t.registration?.status === 'participating') {
-            participatingCount++;
-            console.log(`  📌 Participating: ${t.name}, dates: ${t.startDate} to ${t.endDate}`);
-          }
-        });
-      });
-      console.log('  Total participating tournaments:', participatingCount);
-    }
-    
     tournamentWeeks.forEach(week => {
       if (!week?.tournaments) return;
       
       week.tournaments
         .filter(t => t.registration?.status === 'participating')
         .forEach(tournament => {
-          if (!tournament?.startDate || !tournament?.endDate) {
-            console.log(`⚠️ Tournament ${tournament?.name} missing dates`);
-            return;
-          }
+          if (!tournament?.startDate || !tournament?.endDate) return;
           
           try {
             // Parse dates without timezone issues
@@ -263,12 +241,8 @@ export default function CalendarScreen() {
             const startDateNum = startYear * 10000 + startMonth * 100 + startDay;
             const endDateNum = endYear * 10000 + endMonth * 100 + endDay;
             
-            console.log(`🎾 Checking ${tournament.name}: ${startDateNum} <= ${selectedDateNum} <= ${endDateNum}`);
-            
             // Vérifier si le jour sélectionné est dans la période du tournoi
             if (selectedDateNum >= startDateNum && selectedDateNum <= endDateNum) {
-              console.log(`✅ Match! Adding ${tournament.name} to events`);
-              
               // Créer un événement "virtuel" pour ce tournoi
               tournamentEvents.push({
                 id: `tournament-${tournament.id}-${selectedDate}`,
@@ -291,14 +265,12 @@ export default function CalendarScreen() {
               });
             }
           } catch (e) {
-            console.warn('Error processing tournament dates:', e);
+            // Silent error handling
           }
         });
     });
     
-    console.log(`📊 dayEvents result: ${manualEvents.length} manual, ${tournamentEvents.length} tournament`);
-    
-    // Fusionner et trier par heure (tournois en premier car ils n'ont pas d'heure)
+    // Fusionner et trier (tournois en premier car ils n'ont pas d'heure)
     return [...tournamentEvents, ...manualEvents].sort((a, b) => 
       (a.time || '00:00').localeCompare(b.time || '00:00')
     );
