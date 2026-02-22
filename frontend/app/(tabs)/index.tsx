@@ -1264,13 +1264,48 @@ export default function CalendarScreen() {
 
               <View style={styles.pickerSpacer} />
 
-              {/* Time Picker */}
-              <AppleTimePicker
-                value={eventTime}
-                onChange={setEventTime}
-                minuteStep={5}
-                label="HEURE"
-              />
+              {/* FEATURE #3: Time Pickers - Début et Fin */}
+              <Text style={styles.timeRangeLabel}>HORAIRES</Text>
+              <View style={styles.timeRangeContainer}>
+                <View style={styles.timePickerHalf}>
+                  <AppleTimePicker
+                    value={eventTime}
+                    onChange={(time) => {
+                      setEventTime(time);
+                      // Auto-update endTime si pas manuellement modifié
+                      if (!endTimeManuallySet) {
+                        setEventEndTime(getDefaultEndTime(time));
+                      }
+                    }}
+                    minuteStep={5}
+                    label="DÉBUT"
+                  />
+                </View>
+                <View style={styles.timeRangeSeparator}>
+                  <Ionicons name="arrow-forward" size={20} color="#9CA3AF" />
+                </View>
+                <View style={styles.timePickerHalf}>
+                  <AppleTimePicker
+                    value={eventEndTime}
+                    onChange={(time) => {
+                      setEventEndTime(time);
+                      setEndTimeManuallySet(true);
+                    }}
+                    minuteStep={5}
+                    label="FIN"
+                  />
+                </View>
+              </View>
+
+              {/* Validation: fin >= début */}
+              {eventEndTime <= eventTime && (
+                <View style={styles.validationError}>
+                  <Ionicons name="warning" size={16} color="#D97706" />
+                  <Text style={styles.validationErrorText}>
+                    L'heure de fin doit être après l'heure de début
+                  </Text>
+                </View>
+              )}
 
               {/* Location */}
               <Text style={styles.fieldLabel}>LIEU (optionnel)</Text>
@@ -1295,7 +1330,11 @@ export default function CalendarScreen() {
               />
 
               {/* Buttons */}
-              <TouchableOpacity style={styles.saveButton} onPress={handleSaveEvent}>
+              <TouchableOpacity 
+                style={[styles.saveButton, eventEndTime <= eventTime && styles.saveButtonDisabled]} 
+                onPress={handleSaveEvent}
+                disabled={eventEndTime <= eventTime}
+              >
                 <Ionicons name="checkmark-circle" size={22} color="#fff" />
                 <Text style={styles.saveButtonText}>Enregistrer</Text>
               </TouchableOpacity>
