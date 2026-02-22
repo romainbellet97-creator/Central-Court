@@ -370,6 +370,7 @@ export default function CalendarScreen() {
   };
 
   const handleSaveEvent = async () => {
+    console.log('💾 === SAVE NEW EVENT ===');
     try {
       const newEvent = {
         type: eventType,
@@ -381,7 +382,15 @@ export default function CalendarScreen() {
       };
 
       const savedEvent = await apiCreateEvent(newEvent);
-      setEvents(prev => [...prev, savedEvent]);
+      
+      // CRITIQUE: Mise à jour immutable de l'état
+      setEvents(prevEvents => {
+        const newEvents = [...prevEvents, savedEvent];
+        console.log('✅ Events updated, new count:', newEvents.length);
+        return newEvents;
+      });
+      
+      // Fermer proprement
       setShowAddEventModal(false);
       resetEventForm();
       
@@ -395,6 +404,8 @@ export default function CalendarScreen() {
   const handleUpdateEvent = async () => {
     if (!selectedEvent) return;
     
+    console.log('💾 === UPDATE EVENT ===', selectedEvent.id);
+    
     try {
       const updatedData = {
         type: eventType,
@@ -406,10 +417,28 @@ export default function CalendarScreen() {
       };
 
       const updatedEvent = await apiUpdateEvent(selectedEvent.id, updatedData);
-      setEvents(prev => prev.map(e => e.id === selectedEvent.id ? { ...e, ...updatedEvent } : e));
       
-      // Clean up state
+      // CRITIQUE: Mise à jour immutable avec copie profonde
+      const eventId = selectedEvent.id;
+      setEvents(prevEvents => {
+        const newEvents = prevEvents.map(e => {
+          if (e.id === eventId) {
+            // Créer un nouvel objet complètement
+            return {
+              ...e,
+              ...updatedEvent,
+              id: eventId, // S'assurer que l'ID reste le même
+            };
+          }
+          return e;
+        });
+        console.log('✅ Event updated successfully');
+        return newEvents;
+      });
+      
+      // CRITIQUE: Fermer tous les modals et nettoyer l'état
       setShowEditEventModal(false);
+      setShowEventDetailModal(false);
       setSelectedEvent(null);
       resetEventForm();
       
