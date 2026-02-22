@@ -160,6 +160,9 @@ export default function CalendarScreen() {
   const router = useRouter();
   const today = new Date().toISOString().split('T')[0];
   
+  // BUG #1 FIX: Utiliser le contexte Auth pour le nom de l'utilisateur
+  const { user: authUser } = useAuth();
+  
   // BUG #3 FIX: Ref pour le scroll automatique du modal détail
   const detailScrollRef = useRef<ScrollView>(null);
   
