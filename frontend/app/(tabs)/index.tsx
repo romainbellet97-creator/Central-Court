@@ -37,6 +37,7 @@ import {
   unhideTournament as apiUnhideTournament,
   checkTournamentConflicts,
 } from '../../src/services/api';
+import EventObservationSection from '../../src/components/EventObservationSection';
 
 // ============ CONSTANTS ============
 
