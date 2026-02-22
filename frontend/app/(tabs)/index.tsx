@@ -1039,6 +1039,9 @@ export default function CalendarScreen() {
               }
               
               // Rendu normal pour les événements manuels
+              // FEATURE #3: Afficher heure début → fin + nom complet
+              const hasTimeRange = event.time && event.endTime;
+              
               return (
                 <TouchableOpacity
                   key={event.id}
@@ -1051,20 +1054,49 @@ export default function CalendarScreen() {
                 >
                   <View style={[styles.eventColorBar, { backgroundColor: eventConfig.color }]} />
                   <View style={styles.eventContent}>
-                    <View style={styles.eventHeader}>
-                      <Text style={styles.eventTime}>{event.time || '--:--'}</Text>
-                      <View style={styles.eventBadge}>
-                        <Ionicons name={eventConfig.icon as any} size={16} color={eventConfig.color} />
-                        <Text style={[styles.eventType, { color: eventConfig.color }]}>
-                          {eventConfig.label.replace(/^[^\s]+\s/, '')}
-                        </Text>
-                      </View>
+                    {/* FEATURE #3: Ligne 1 - Icône + nom COMPLET (pas de numberOfLines) */}
+                    <View style={styles.eventTitleRow}>
+                      <Text style={styles.eventIcon}>
+                        {eventConfig.label.split(' ')[0]}
+                      </Text>
+                      <Text style={styles.eventTitle}>
+                        {event.title || eventConfig.label.replace(/^[^\s]+\s/, '')}
+                      </Text>
                     </View>
+                    
+                    {/* FEATURE #3: Ligne 2 - Plage horaire avec durée */}
+                    <View style={styles.eventTimeRow}>
+                      {hasTimeRange ? (
+                        <>
+                          <Text style={[styles.eventTimeRange, { color: eventConfig.color }]}>
+                            {event.time} → {event.endTime}
+                          </Text>
+                          <Text style={styles.eventDuration}>
+                            ({calculateDuration(event.time, event.endTime)})
+                          </Text>
+                        </>
+                      ) : event.time ? (
+                        <Text style={[styles.eventTimeRange, { color: eventConfig.color }]}>
+                          {event.time}
+                        </Text>
+                      ) : null}
+                    </View>
+                    
+                    {/* Lieu si disponible */}
+                    {event.location && (
+                      <Text style={styles.eventLocation} numberOfLines={1}>
+                        📍 {event.location}
+                      </Text>
+                    )}
+                    
+                    {/* Notes si disponibles */}
                     {event.description && (
                       <Text style={styles.eventNotes} numberOfLines={2}>
                         {event.description}
                       </Text>
                     )}
+                    
+                    {/* Badge observations */}
                     {event.observations && event.observations.length > 0 && (
                       <View style={styles.observationBadge}>
                         <Ionicons name="chatbubble" size={12} color="#10B981" />
