@@ -59,12 +59,26 @@ export default function Step3Circuits() {
   
   const [selectedCircuits, setSelectedCircuits] = useState<string[]>([]);
   
+  // ============================================================
+  // BUG #3 FIX: ATP et WTA mutuellement exclusifs
+  // ============================================================
+  const MUTUALLY_EXCLUSIVE = ['ATP', 'WTA'];
+  
   const toggleCircuit = (circuitId: string) => {
-    setSelectedCircuits(prev =>
-      prev.includes(circuitId)
-        ? prev.filter(c => c !== circuitId)
-        : [...prev, circuitId]
-    );
+    if (MUTUALLY_EXCLUSIVE.includes(circuitId)) {
+      // Désélectionner l'autre circuit exclusif avant de sélectionner
+      setSelectedCircuits(prev => {
+        const filtered = prev.filter(c => !MUTUALLY_EXCLUSIVE.includes(c));
+        return [...filtered, circuitId];
+      });
+    } else {
+      // Toggle normal pour ITF, Challenger, etc.
+      setSelectedCircuits(prev =>
+        prev.includes(circuitId)
+          ? prev.filter(c => c !== circuitId)
+          : [...prev, circuitId]
+      );
+    }
   };
   
   const saveAndContinue = async () => {
