@@ -181,13 +181,13 @@ class TestTournamentRegistration:
         if not tournament_id:
             pytest.skip("No available tournament found for testing")
         
-        # Register as 'interested' first
-        response = requests.post(f"{BASE_URL}/api/tournaments/{tournament_id}/register", json={"status": "interested"})
+        # Register as 'interested' first - correct endpoint: POST /api/tournaments/register
+        response = requests.post(f"{BASE_URL}/api/tournaments/register", json={"tournamentId": tournament_id, "status": "interested"})
         # Accept 200, 201 or similar success
         assert response.status_code in [200, 201], f"Registration failed: {response.status_code}"
         
         # Change to 'participating'
-        response = requests.post(f"{BASE_URL}/api/tournaments/{tournament_id}/register", json={"status": "participating"})
+        response = requests.post(f"{BASE_URL}/api/tournaments/register", json={"tournamentId": tournament_id, "status": "participating"})
         assert response.status_code in [200, 201], f"Status change failed: {response.status_code}"
         
         print(f"PASS: Tournament status change Intéressé → Participant completed without freeze")
