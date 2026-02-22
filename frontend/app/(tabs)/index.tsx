@@ -1752,12 +1752,20 @@ export default function CalendarScreen() {
                   )}
 
                   {/* FEATURE #1: Nouveau composant observations inline */}
+                  {/* BUG #1, #2, #3 FIX: currentUser dynamique + handlers mis à jour */}
                   <EventObservationSection
                     eventId={selectedEvent.id}
                     observations={selectedEvent.observations || []}
-                    currentUser={{ id: 'current-user', name: 'Coach Martin', role: 'Entraîneur' }}
+                    currentUser={getCurrentUser()}
                     onObservationAdded={handleObservationAdded}
+                    onObservationUpdated={handleObservationUpdated}
                     onSaveObservation={handleSaveObservationAPI}
+                    onComposerOpen={() => {
+                      // BUG #3 FIX: Scroll vers le bas quand le composer s'ouvre
+                      setTimeout(() => {
+                        detailScrollRef.current?.scrollToEnd({ animated: true });
+                      }, 350);
+                    }}
                   />
 
                   {/* Actions */}
