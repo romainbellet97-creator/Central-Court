@@ -539,6 +539,62 @@ export default function CalendarScreen() {
     }
   };
 
+  // FEATURE #2: Mise à jour avec option de notification du staff
+  const handleUpdateEventWithNotification = async (notifyStaff: boolean) => {
+    if (!selectedEvent) return;
+    
+    console.log('💾 === UPDATE EVENT WITH NOTIFICATION ===', selectedEvent.id, 'notify:', notifyStaff);
+    
+    try {
+      const updatedData = {
+        type: eventType,
+        title: EVENT_TYPES[eventType]?.label || 'Événement',
+        date: eventDate,
+        time: eventTime,
+        endTime: eventEndTime,
+        location: eventLocation.trim() || undefined,
+        description: eventNotes.trim() || undefined,
+        notify_staff: notifyStaff,
+        pending_validation: notifyStaff, // Si on notifie, passe en attente de validation
+      };
+
+      const updatedEvent = await apiUpdateEvent(selectedEvent.id, updatedData);
+      
+      const eventId = selectedEvent.id;
+      setEvents(prevEvents => {
+        return prevEvents.map(e => {
+          if (e.id === eventId) {
+            return {
+              ...e,
+              ...updatedEvent,
+              id: eventId,
+              pendingValidation: notifyStaff,
+            };
+          }
+          return e;
+        });
+      });
+      
+      setShowEditEventModal(false);
+      setShowEventDetailModal(false);
+      setSelectedEvent(null);
+      resetEventForm();
+      
+      if (notifyStaff) {
+        Alert.alert(
+          '📤 Proposition envoyée',
+          'Le staff a été notifié du nouveau créneau proposé. L\'événement est en attente de validation.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert('Succès', 'Événement modifié !');
+      }
+    } catch (error) {
+      console.error('Error updating event with notification:', error);
+      Alert.alert('Erreur', 'Impossible de modifier l\'événement');
+    }
+  };
+
   const handleDeleteEvent = () => {
     if (!selectedEvent) return;
     
