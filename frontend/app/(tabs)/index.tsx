@@ -1144,6 +1144,7 @@ export default function CalendarScreen() {
                         Observations de l'équipe ({selectedEvent.observations?.length || 0})
                       </Text>
                       <TouchableOpacity
+                        testID="add-observation-btn"
                         style={styles.addObservationBtn}
                         onPress={() => {
                           console.log('🟢 Add observation button pressed');
