@@ -211,12 +211,60 @@ export default function CalendarScreen() {
     return tournamentWeeks.find(w => w.weekNumber === selectedWeekNumber) || null;
   }, [selectedWeekNumber, tournamentWeeks]);
 
-  // Day events
+  // Day events - FUSIONNÉ avec les tournois "Participant" (BUG #2 FIX)
   const dayEvents = useMemo(() => {
-    return events.filter(e => e.date === selectedDate).sort((a, b) => 
+    const manualEvents = events.filter(e => e.date === selectedDate);
+    
+    // Fusionner avec les tournois où le joueur est "Participant"
+    const tournamentEvents: CalendarEvent[] = [];
+    const selectedDateObj = new Date(selectedDate);
+    
+    tournamentWeeks.forEach(week => {
+      if (!week?.tournaments) return;
+      
+      week.tournaments
+        .filter(t => t.registration?.status === 'participating')
+        .forEach(tournament => {
+          if (!tournament?.startDate || !tournament?.endDate) return;
+          
+          try {
+            const startDate = new Date(tournament.startDate);
+            const endDate = new Date(tournament.endDate);
+            
+            // Vérifier si le jour sélectionné est dans la période du tournoi
+            if (selectedDateObj >= startDate && selectedDateObj <= endDate) {
+              // Créer un événement "virtuel" pour ce tournoi
+              tournamentEvents.push({
+                id: `tournament-${tournament.id}-${selectedDate}`,
+                type: 'tournament',
+                title: tournament.name,
+                date: selectedDate,
+                time: undefined,
+                location: `${tournament.city}, ${tournament.country}`,
+                description: `${tournament.category} • ${tournament.surface}`,
+                observations: [],
+                // Ajouter des métadonnées supplémentaires
+                ...({
+                  _isTournamentEvent: true,
+                  _tournament: tournament,
+                  _level: tournament.category,
+                  _flag: tournament.flag || getFlagEmoji(tournament.country),
+                  _startDate: tournament.startDate,
+                  _endDate: tournament.endDate,
+                } as any),
+              });
+            }
+          } catch (e) {
+            console.warn('Error processing tournament dates:', e);
+          }
+        });
+    });
+    
+    // Fusionner et trier par heure
+    return [...manualEvents, ...tournamentEvents].sort((a, b) => 
       (a.time || '00:00').localeCompare(b.time || '00:00')
     );
-  }, [events, selectedDate]);
+  }, [events, tournamentWeeks, selectedDate]);
 
   // ============ DATA LOADING ============
 
