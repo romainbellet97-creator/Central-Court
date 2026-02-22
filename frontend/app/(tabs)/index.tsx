@@ -2033,8 +2033,29 @@ const styles = StyleSheet.create({
   notesInput: { height: 100, textAlignVertical: 'top' },
   saveButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#1e3c72', padding: 16, borderRadius: 12, marginTop: 24, gap: 8 },
   saveButtonText: { fontSize: 16, fontWeight: '600', color: '#fff' },
+  saveButtonDisabled: { opacity: 0.5 },
   cancelButton: { padding: 16, alignItems: 'center', marginTop: 12 },
   cancelButtonText: { fontSize: 16, fontWeight: '600', color: '#666' },
+  
+  // FEATURE #2: Staff notification banner
+  staffNotificationBanner: { backgroundColor: '#EBF5FB', borderRadius: 12, padding: 16, marginTop: 16, borderWidth: 1, borderColor: '#AED6F1' },
+  staffBannerHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  staffBannerTitle: { fontSize: 14, fontWeight: '600', color: '#1e3c72' },
+  staffBannerText: { fontSize: 13, color: '#34495E', lineHeight: 18, marginBottom: 10 },
+  staffBannerNames: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  staffBadge: { backgroundColor: '#fff', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: '#1e3c72' },
+  staffBadgeText: { fontSize: 12, color: '#1e3c72', fontWeight: '500' },
+  suggestButton: { backgroundColor: '#10B981' },
+  secondaryButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F3F4F6', padding: 16, borderRadius: 12, marginTop: 12, gap: 8, borderWidth: 1, borderColor: '#1e3c72' },
+  secondaryButtonText: { fontSize: 16, fontWeight: '600', color: '#1e3c72' },
+  
+  // FEATURE #3: Time range picker
+  timeRangeLabel: { fontSize: 13, fontWeight: '600', color: '#6B7280', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
+  timeRangeContainer: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  timePickerHalf: { flex: 1 },
+  timeRangeSeparator: { paddingHorizontal: 4, paddingTop: 24 },
+  validationError: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#FEF3C7', padding: 10, borderRadius: 8, marginTop: 8 },
+  validationErrorText: { fontSize: 13, color: '#D97706', flex: 1 },
   
   // Detail Modal
   detailModal: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '90%', overflow: 'hidden' },
