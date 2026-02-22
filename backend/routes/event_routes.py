@@ -47,6 +47,7 @@ class AddObservationRequest(BaseModel):
     author: str
     role: str
     text: str
+    parentId: Optional[str] = None  # FEATURE #1: Support des réponses
 
 
 @router.get("")
