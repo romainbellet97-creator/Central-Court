@@ -2031,9 +2031,18 @@ const styles = StyleSheet.create({
   eventTime: { fontSize: 14, fontWeight: '700', color: '#1a1a1a' },
   eventBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   eventType: { fontSize: 12, fontWeight: '600' },
-  eventNotes: { fontSize: 13, color: '#666', marginTop: 6 },
+  eventNotes: { fontSize: 13, color: '#666', marginTop: 6, lineHeight: 18 },
   observationBadge: { flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 4 },
   observationCount: { fontSize: 12, color: '#10B981', fontWeight: '500' },
+  
+  // FEATURE #3: Nouveaux styles pour affichage événement amélioré
+  eventTitleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
+  eventIcon: { fontSize: 16, lineHeight: 22, width: 22 },
+  eventTitle: { flex: 1, fontSize: 14, fontWeight: '600', color: '#1F2937', lineHeight: 20 },
+  eventTimeRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, marginLeft: 28 },
+  eventTimeRange: { fontSize: 13, fontWeight: '600' },
+  eventDuration: { fontSize: 11, color: '#9CA3AF' },
+  eventLocation: { fontSize: 12, color: '#6B7280', marginTop: 4, marginLeft: 28 },
   
   // Tournament Event Cards (BUG #2 FIX)
   tournamentEventCard: { flexDirection: 'row', backgroundColor: '#fff', borderRadius: 12, marginBottom: 10, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 1, borderWidth: 1, borderColor: '#8B5CF620' },
