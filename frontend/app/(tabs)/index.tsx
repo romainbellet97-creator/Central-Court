@@ -1464,49 +1464,14 @@ export default function CalendarScreen() {
                     </View>
                   )}
 
-                  {/* Observations section */}
-                  <View style={styles.observationsSection}>
-                    <View style={styles.observationsHeader}>
-                      <Text style={styles.sectionLabel}>
-                        Observations de l'équipe ({selectedEvent.observations?.length || 0})
-                      </Text>
-                      <TouchableOpacity
-                        testID="add-observation-btn"
-                        style={styles.addObservationBtn}
-                        onPress={() => {
-                          console.log('🟢 Add observation button pressed');
-                          setShowAddObservationModal(true);
-                        }}
-                        hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
-                        activeOpacity={0.6}
-                      >
-                        <Ionicons name="add-circle" size={28} color="#10B981" />
-                      </TouchableOpacity>
-                    </View>
-
-                    {selectedEvent.observations && selectedEvent.observations.length > 0 ? (
-                      selectedEvent.observations.map(obs => (
-                        <View key={obs.id} style={styles.observationCard}>
-                          <View style={styles.observationCardHeader}>
-                            <Text style={styles.staffName}>{obs.author}</Text>
-                            <Text style={styles.staffRole}>{obs.role}</Text>
-                          </View>
-                          <Text style={styles.observationText}>{obs.text}</Text>
-                          <Text style={styles.observationDate}>
-                            {formatRelativeTime(obs.createdAt)}
-                          </Text>
-                        </View>
-                      ))
-                    ) : (
-                      <View style={styles.emptyObservations}>
-                        <Ionicons name="chatbubble-outline" size={48} color="#ccc" />
-                        <Text style={styles.emptyObsText}>Aucune observation</Text>
-                        <Text style={styles.emptyObsSubtext}>
-                          Votre équipe peut ajouter des commentaires ici
-                        </Text>
-                      </View>
-                    )}
-                  </View>
+                  {/* FEATURE #1: Nouveau composant observations inline */}
+                  <EventObservationSection
+                    eventId={selectedEvent.id}
+                    observations={selectedEvent.observations || []}
+                    currentUser={{ id: 'current-user', name: 'Coach Martin', role: 'Entraîneur' }}
+                    onObservationAdded={handleObservationAdded}
+                    onSaveObservation={handleSaveObservationAPI}
+                  />
 
                   {/* Actions */}
                   <View style={styles.actionButtons}>
