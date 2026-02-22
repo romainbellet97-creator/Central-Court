@@ -1413,87 +1413,104 @@ export default function CalendarScreen() {
             </View>
             
             <ScrollView showsVerticalScrollIndicator={false}>
-              {selectedWeek?.tournaments?.map(tournament => (
-                <View key={tournament.id} style={[styles.tournamentDetail, tournament.hidden && styles.tournamentHidden]}>
-                  <View style={styles.tournamentDetailHeader}>
-                    <Text style={styles.tournamentDetailFlag}>
-                      {tournament.flag || getFlagEmoji(tournament.countryCode || tournament.country)}
-                    </Text>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.tournamentDetailName}>{tournament.name}</Text>
-                      <Text style={styles.tournamentDetailMeta}>
-                        {tournament.city}, {tournament.country}
+              {selectedWeek?.tournaments?.map(tournament => {
+                // BUG #3 FIX: Unifier le rendu pour not_interested
+                const isNotInterested = tournament.hidden || tournament.registration?.status === 'not_interested';
+                
+                return (
+                  <View key={tournament.id} style={[styles.tournamentDetail, isNotInterested && styles.tournamentHidden]}>
+                    <View style={styles.tournamentDetailHeader}>
+                      <Text style={styles.tournamentDetailFlag}>
+                        {tournament.flag || getFlagEmoji(tournament.countryCode || tournament.country)}
                       </Text>
-                    </View>
-                  </View>
-                  
-                  <Text style={styles.tournamentDetailMeta}>
-                    {tournament.startDate ? new Date(tournament.startDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' }) : ''} - {tournament.endDate ? new Date(tournament.endDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : ''}
-                  </Text>
-                  
-                  <View style={styles.tournamentDetailRow}>
-                    <View style={[styles.surfaceBadge, { backgroundColor: getSurfaceColor(tournament.surface) + '20' }]}>
-                      <Text style={[styles.surfaceText, { color: getSurfaceColor(tournament.surface) }]}>
-                        {tournament.surface}
-                      </Text>
-                    </View>
-                    <Text style={styles.prizeText}>
-                      {tournament.prizeMoney?.toLocaleString()} {tournament.currency}
-                    </Text>
-                  </View>
-                  
-                  {tournament.hidden ? (
-                    <TouchableOpacity
-                      style={styles.unhideBtn}
-                      onPress={() => handleUnhideTournament(tournament.id)}
-                    >
-                      <Ionicons name="eye-outline" size={16} color="#1e3c72" />
-                      <Text style={styles.unhideBtnText}>Rétablir</Text>
-                    </TouchableOpacity>
-                  ) : (
-                    <>
-                      {tournament.registration?.status && (
-                        <View style={styles.currentStatusRow}>
-                          <Ionicons name="checkmark-circle" size={16} color={
-                            TOURNAMENT_STATUS_LABELS[tournament.registration.status]?.color || '#1e3c72'
-                          } />
-                          <Text style={styles.currentStatusText}>
-                            {TOURNAMENT_STATUS_LABELS[tournament.registration.status]?.label || tournament.registration.status}
-                          </Text>
-                        </View>
-                      )}
-                      
-                      <View style={styles.registrationButtons}>
-                        {['interested', 'pending', 'participating'].map(status => (
-                          <TouchableOpacity
-                            key={status}
-                            style={[
-                              styles.statusBtn,
-                              tournament.registration?.status === status && styles.statusBtnActive
-                            ]}
-                            onPress={() => handleRegisterTournament(tournament.id, status)}
-                          >
-                            <Text style={[
-                              styles.statusBtnText,
-                              tournament.registration?.status === status && styles.statusBtnTextActive
-                            ]}>
-                              {TOURNAMENT_STATUS_LABELS[status]?.label || status}
-                            </Text>
-                          </TouchableOpacity>
-                        ))}
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.tournamentDetailName}>{tournament.name}</Text>
+                        <Text style={styles.tournamentDetailMeta}>
+                          {tournament.city}, {tournament.country}
+                        </Text>
                       </View>
-                      
+                    </View>
+                    
+                    <Text style={styles.tournamentDetailMeta}>
+                      {tournament.startDate ? new Date(tournament.startDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' }) : ''} - {tournament.endDate ? new Date(tournament.endDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : ''}
+                    </Text>
+                    
+                    <View style={styles.tournamentDetailRow}>
+                      <View style={[styles.surfaceBadge, { backgroundColor: getSurfaceColor(tournament.surface) + '20' }]}>
+                        <Text style={[styles.surfaceText, { color: getSurfaceColor(tournament.surface) }]}>
+                          {tournament.surface}
+                        </Text>
+                      </View>
+                      <Text style={styles.prizeText}>
+                        {tournament.prizeMoney?.toLocaleString()} {tournament.currency}
+                      </Text>
+                    </View>
+                    
+                    {/* BUG #3 FIX: Rendu unifié pour not_interested */}
+                    {isNotInterested ? (
+                      // Afficher UNIQUEMENT le bouton Rétablir, rien d'autre
                       <TouchableOpacity
-                        style={styles.notInterestedBtn}
-                        onPress={() => handleHideTournament(tournament.id)}
+                        style={styles.unhideBtn}
+                        onPress={() => {
+                          if (tournament.hidden) {
+                            handleUnhideTournament(tournament.id);
+                          } else {
+                            // Réinitialiser le statut
+                            handleRegisterTournament(tournament.id, 'interested');
+                          }
+                        }}
                       >
-                        <Ionicons name="eye-off-outline" size={14} color="#999" />
-                        <Text style={styles.notInterestedText}>Pas intéressé</Text>
+                        <Ionicons name="eye-outline" size={16} color="#1e3c72" />
+                        <Text style={styles.unhideBtnText}>Rétablir</Text>
                       </TouchableOpacity>
-                    </>
-                  )}
-                </View>
-              ))}
+                    ) : (
+                      <>
+                        {/* Afficher le statut actuel s'il existe */}
+                        {tournament.registration?.status && (
+                          <View style={styles.currentStatusRow}>
+                            <Ionicons name="checkmark-circle" size={16} color={
+                              TOURNAMENT_STATUS_LABELS[tournament.registration.status]?.color || '#1e3c72'
+                            } />
+                            <Text style={styles.currentStatusText}>
+                              {TOURNAMENT_STATUS_LABELS[tournament.registration.status]?.label || tournament.registration.status}
+                            </Text>
+                          </View>
+                        )}
+                        
+                        {/* Boutons de statut */}
+                        <View style={styles.registrationButtons}>
+                          {['interested', 'pending', 'participating'].map(status => (
+                            <TouchableOpacity
+                              key={status}
+                              style={[
+                                styles.statusBtn,
+                                tournament.registration?.status === status && styles.statusBtnActive
+                              ]}
+                              onPress={() => handleRegisterTournament(tournament.id, status)}
+                            >
+                              <Text style={[
+                                styles.statusBtnText,
+                                tournament.registration?.status === status && styles.statusBtnTextActive
+                              ]}>
+                                {TOURNAMENT_STATUS_LABELS[status]?.label || status}
+                              </Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                        
+                        {/* Lien "Pas intéressé" */}
+                        <TouchableOpacity
+                          style={styles.notInterestedBtn}
+                          onPress={() => handleHideTournament(tournament.id)}
+                        >
+                          <Ionicons name="eye-off-outline" size={14} color="#999" />
+                          <Text style={styles.notInterestedText}>Pas intéressé</Text>
+                        </TouchableOpacity>
+                      </>
+                    )}
+                  </View>
+                );
+              })}
             </ScrollView>
           </View>
         </View>
