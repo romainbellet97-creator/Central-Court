@@ -465,6 +465,7 @@ export default function CalendarScreen() {
         title: EVENT_TYPES[eventType]?.label || 'Événement',
         date: eventDate,
         time: eventTime,
+        endTime: eventEndTime,  // FEATURE #3: Heure de fin
         location: eventLocation.trim() || undefined,
         description: eventNotes.trim() || undefined,
       };
@@ -500,6 +501,7 @@ export default function CalendarScreen() {
         title: EVENT_TYPES[eventType]?.label || 'Événement',
         date: eventDate,
         time: eventTime,
+        endTime: eventEndTime,  // FEATURE #3: Heure de fin
         location: eventLocation.trim() || undefined,
         description: eventNotes.trim() || undefined,
       };
