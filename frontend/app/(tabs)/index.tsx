@@ -217,7 +217,12 @@ export default function CalendarScreen() {
     
     // Fusionner avec les tournois où le joueur est "Participant"
     const tournamentEvents: CalendarEvent[] = [];
-    const selectedDateObj = new Date(selectedDate);
+    
+    // Parse selectedDate to get year, month, day without timezone issues
+    const [selectedYear, selectedMonth, selectedDay] = selectedDate.split('-').map(Number);
+    const selectedDateNum = selectedYear * 10000 + selectedMonth * 100 + selectedDay;
+    
+    console.log('🏆 dayEvents calculation - selectedDate:', selectedDate, 'selectedDateNum:', selectedDateNum);
     
     tournamentWeeks.forEach(week => {
       if (!week?.tournaments) return;
@@ -228,11 +233,19 @@ export default function CalendarScreen() {
           if (!tournament?.startDate || !tournament?.endDate) return;
           
           try {
-            const startDate = new Date(tournament.startDate);
-            const endDate = new Date(tournament.endDate);
+            // Parse dates without timezone issues
+            const [startYear, startMonth, startDay] = tournament.startDate.split('T')[0].split('-').map(Number);
+            const [endYear, endMonth, endDay] = tournament.endDate.split('T')[0].split('-').map(Number);
+            
+            const startDateNum = startYear * 10000 + startMonth * 100 + startDay;
+            const endDateNum = endYear * 10000 + endMonth * 100 + endDay;
+            
+            console.log(`🎾 Tournament ${tournament.name}: start=${startDateNum}, end=${endDateNum}, selected=${selectedDateNum}`);
             
             // Vérifier si le jour sélectionné est dans la période du tournoi
-            if (selectedDateObj >= startDate && selectedDateObj <= endDate) {
+            if (selectedDateNum >= startDateNum && selectedDateNum <= endDateNum) {
+              console.log(`✅ Tournament ${tournament.name} matches selected date!`);
+              
               // Créer un événement "virtuel" pour ce tournoi
               tournamentEvents.push({
                 id: `tournament-${tournament.id}-${selectedDate}`,
@@ -260,8 +273,10 @@ export default function CalendarScreen() {
         });
     });
     
-    // Fusionner et trier par heure
-    return [...manualEvents, ...tournamentEvents].sort((a, b) => 
+    console.log(`📊 dayEvents result: ${manualEvents.length} manual, ${tournamentEvents.length} tournament`);
+    
+    // Fusionner et trier par heure (tournois en premier car ils n'ont pas d'heure)
+    return [...tournamentEvents, ...manualEvents].sort((a, b) => 
       (a.time || '00:00').localeCompare(b.time || '00:00')
     );
   }, [events, tournamentWeeks, selectedDate]);
