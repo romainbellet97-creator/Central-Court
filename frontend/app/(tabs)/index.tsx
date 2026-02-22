@@ -1335,11 +1335,37 @@ export default function CalendarScreen() {
         </View>
       </Modal>
 
-      {/* Add Observation Modal */}
-      <Modal visible={showAddObservationModal} animationType="slide" transparent>
+      {/* Add Observation Modal - BUG #1 FIX: Ajout backdrop et onRequestClose */}
+      <Modal 
+        visible={showAddObservationModal} 
+        animationType="slide" 
+        transparent
+        onRequestClose={() => {
+          console.log('🔙 Observation modal closed via back button');
+          setShowAddObservationModal(false);
+          setObservationText('');
+        }}
+      >
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
+          <TouchableOpacity 
+            style={styles.modalBackdrop} 
+            activeOpacity={1} 
+            onPress={() => {
+              console.log('🔙 Observation modal closed via backdrop');
+              setShowAddObservationModal(false);
+              setObservationText('');
+            }}
+          />
           <View style={styles.observationModal}>
-            <Text style={styles.modalTitle}>Ajouter une observation</Text>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Ajouter une observation</Text>
+              <TouchableOpacity onPress={() => {
+                setShowAddObservationModal(false);
+                setObservationText('');
+              }}>
+                <Ionicons name="close" size={28} color="#666" />
+              </TouchableOpacity>
+            </View>
 
             <TextInput
               style={styles.observationInput}
