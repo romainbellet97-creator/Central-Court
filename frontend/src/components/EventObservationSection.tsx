@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -34,70 +34,118 @@ interface Props {
   onSaveObservation: (data: { eventId: string; text: string; parentId?: string | null }) => Promise<Observation>;
 }
 
-const EventObservationSection: React.FC<Props> = ({
-  eventId,
-  observations = [],
-  currentUser,
-  onObservationAdded,
-  onSaveObservation,
+// ============================================================
+// BUG #1 FIX: ComposerBox est maintenant un composant SÉPARÉ
+// avec son propre state local pour éviter les re-renders du parent
+// ============================================================
+interface ComposerBoxProps {
+  replyingTo: { id: string; authorName: string } | null;
+  onSubmit: (content: string, parentId: string | null) => Promise<void>;
+  onCancel: () => void;
+  onClearReply: () => void;
+}
+
+const ComposerBox = React.memo<ComposerBoxProps>(({ 
+  replyingTo, 
+  onSubmit,
+  onCancel,
+  onClearReply,
 }) => {
-  const [isComposing, setIsComposing] = useState(false);
-  const [replyingTo, setReplyingTo] = useState<{ id: string; authorName: string } | null>(null);
+  // ✅ State LOCAL au ComposerBox — ne propage PAS vers le parent
   const [text, setText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const inputRef = useRef<TextInput>(null);
 
-  const hasObservations = observations.length > 0;
-
-  // Ouvre la boîte de saisie
-  const openComposer = useCallback((replyTarget: { id: string; authorName: string } | null = null) => {
-    setReplyingTo(replyTarget);
-    setIsComposing(true);
-    setTimeout(() => inputRef.current?.focus(), 100);
-  }, []);
-
-  const closeComposer = useCallback(() => {
-    setIsComposing(false);
-    setReplyingTo(null);
-    setText('');
+  // Focus automatique à l'ouverture
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      inputRef.current?.focus();
+    }, 150);
+    return () => clearTimeout(timer);
   }, []);
 
   const handleSubmit = useCallback(async () => {
     if (!text.trim() || isSubmitting) return;
-
-    const optimisticObservation: Observation = {
-      id: `temp-${Date.now()}`,
-      text: text.trim(),
-      author: currentUser.name,
-      role: currentUser.role || 'Staff',
-      createdAt: new Date().toISOString(),
-      parentId: replyingTo?.id || null,
-      isPending: true,
-    };
-
-    // Optimistic update immédiat
-    onObservationAdded(optimisticObservation);
-    const savedText = text;
-    const savedReplyTarget = replyingTo;
-    closeComposer();
-
+    const content = text.trim();
+    setText(''); // Reset immédiat
+    setIsSubmitting(true);
     try {
-      setIsSubmitting(true);
-      await onSaveObservation({
-        eventId,
-        text: savedText.trim(),
-        parentId: savedReplyTarget?.id || null,
-      });
-    } catch (error) {
-      // Rollback
-      onObservationAdded(null, optimisticObservation.id);
-      Alert.alert('Erreur', "Impossible d'enregistrer l'observation.");
-      openComposer(savedReplyTarget);
-      setText(savedText);
+      await onSubmit(content, replyingTo?.id || null);
     } finally {
       setIsSubmitting(false);
     }
-  }, [text, isSubmitting, currentUser, replyingTo, onObservationAdded, onSaveObservation, eventId, closeComposer, openComposer]);
+  }, [text, isSubmitting, onSubmit, replyingTo]);
+
+  return (
+    <View style={styles.composerContainer}>
+      {replyingTo && (
+        <View style={styles.replyBanner}>
+          <Text style={styles.replyBannerText}>
+            ↩ Réponse à {replyingTo.authorName}
+          </Text>
+          <TouchableOpacity 
+            onPress={onClearReply} 
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="close" size={18} color="#6B7280" />
+          </TouchableOpacity>
+        </View>
+      )}
+
+      <TextInput
+        ref={inputRef}
+        style={styles.textInput}
+        placeholder={replyingTo ? `Répondre à ${replyingTo.authorName}...` : 'Ajouter une observation...'}
+        placeholderTextColor="#9CA3AF"
+        value={text}
+        onChangeText={setText}  // ✅ setState LOCAL — pas de remontée vers parent
+        multiline={true}
+        scrollEnabled={true}
+        maxLength={1000}
+        
+        // ✅ CRITIQUE : empêche le dismiss du clavier
+        blurOnSubmit={false}
+        returnKeyType="default"
+        
+        // ✅ Empêche la perte de focus sur interaction externe
+        autoCorrect={true}
+        autoCapitalize="sentences"
+      />
+
+      <Text style={styles.charCount}>{text.length}/1000</Text>
+
+      <View style={styles.composerActions}>
+        <TouchableOpacity style={styles.cancelButton} onPress={onCancel}>
+          <Text style={styles.cancelText}>Annuler</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.submitButton, (!text.trim() || isSubmitting) && styles.submitButtonDisabled]}
+          onPress={handleSubmit}
+          disabled={!text.trim() || isSubmitting}
+        >
+          <Text style={styles.submitText}>
+            {isSubmitting ? 'Envoi...' : 'Enregistrer'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+});
+
+// Composant carte observation
+const ObservationCard = React.memo(({ 
+  observation, 
+  allObservations,
+  onReply,
+  isReply = false,
+}: { 
+  observation: Observation; 
+  allObservations: Observation[];
+  onReply: (target: { id: string; authorName: string }) => void;
+  isReply?: boolean;
+}) => {
+  const replies = allObservations.filter(o => o.parentId === observation.id);
 
   // Format date relative
   const formatRelativeDate = (dateString: string) => {
@@ -116,93 +164,104 @@ const EventObservationSection: React.FC<Props> = ({
     return date.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
   };
 
-  // Composant boîte de saisie
-  const ComposerBox = () => (
-    <View style={styles.composerContainer}>
-      {replyingTo && (
-        <View style={styles.replyBanner}>
-          <Text style={styles.replyBannerText}>
-            ↩ Réponse à {replyingTo.authorName}
+  return (
+    <View style={[styles.observationCard, isReply && styles.observationReply]}>
+      <View style={styles.observationHeader}>
+        <View style={styles.authorAvatar}>
+          <Text style={styles.authorInitial}>
+            {observation.author?.charAt(0).toUpperCase() || '?'}
           </Text>
-          <TouchableOpacity onPress={() => setReplyingTo(null)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <Ionicons name="close" size={18} color="#6B7280" />
-          </TouchableOpacity>
         </View>
-      )}
-      <TextInput
-        ref={inputRef}
-        style={styles.textInput}
-        placeholder={replyingTo ? `Répondre à ${replyingTo.authorName}...` : 'Ajouter une observation...'}
-        placeholderTextColor="#9CA3AF"
-        value={text}
-        onChangeText={setText}
-        multiline
-        scrollEnabled={false}
-        maxLength={1000}
-        returnKeyType="default"
-        blurOnSubmit={false}
-      />
-      <Text style={styles.charCount}>{text.length}/1000</Text>
-      <View style={styles.composerActions}>
-        <TouchableOpacity style={styles.cancelButton} onPress={closeComposer}>
-          <Text style={styles.cancelText}>Annuler</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.submitButton, !text.trim() && styles.submitButtonDisabled]}
-          onPress={handleSubmit}
-          disabled={!text.trim() || isSubmitting}
-        >
-          <Text style={styles.submitText}>
-            {isSubmitting ? 'Envoi...' : 'Enregistrer'}
-          </Text>
-        </TouchableOpacity>
+        <View style={styles.observationMeta}>
+          <Text style={styles.authorName}>{observation.author}</Text>
+          <Text style={styles.observationDate}>{formatRelativeDate(observation.createdAt)}</Text>
+        </View>
+        {observation.isPending && (
+          <View style={styles.pendingBadge}>
+            <Text style={styles.pendingText}>Envoi...</Text>
+          </View>
+        )}
       </View>
+
+      <Text style={styles.observationText}>{observation.text}</Text>
+
+      {!isReply && (
+        <TouchableOpacity
+          style={styles.replyButton}
+          onPress={() => onReply({ id: observation.id, authorName: observation.author })}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Ionicons name="arrow-undo-outline" size={14} color="#1a5276" />
+          <Text style={styles.replyButtonText}>Répondre</Text>
+        </TouchableOpacity>
+      )}
+
+      {/* Réponses imbriquées */}
+      {replies.map(reply => (
+        <ObservationCard 
+          key={reply.id} 
+          observation={reply} 
+          allObservations={allObservations}
+          onReply={onReply}
+          isReply 
+        />
+      ))}
     </View>
   );
+});
 
-  // Composant carte observation
-  const ObservationCard = ({ observation, isReply = false }: { observation: Observation; isReply?: boolean }) => {
-    const replies = observations.filter(o => o.parentId === observation.id);
+// ============================================================
+// Composant principal EventObservationSection
+// ============================================================
+const EventObservationSection: React.FC<Props> = ({
+  eventId,
+  observations = [],
+  currentUser,
+  onObservationAdded,
+  onSaveObservation,
+}) => {
+  const [isComposing, setIsComposing] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<{ id: string; authorName: string } | null>(null);
 
-    return (
-      <View style={[styles.observationCard, isReply && styles.observationReply]}>
-        <View style={styles.observationHeader}>
-          <View style={styles.authorAvatar}>
-            <Text style={styles.authorInitial}>
-              {observation.author?.charAt(0).toUpperCase() || '?'}
-            </Text>
-          </View>
-          <View style={styles.observationMeta}>
-            <Text style={styles.authorName}>{observation.author}</Text>
-            <Text style={styles.observationDate}>{formatRelativeDate(observation.createdAt)}</Text>
-          </View>
-          {observation.isPending && (
-            <View style={styles.pendingBadge}>
-              <Text style={styles.pendingText}>Envoi...</Text>
-            </View>
-          )}
-        </View>
+  const hasObservations = observations.length > 0;
 
-        <Text style={styles.observationText}>{observation.text}</Text>
+  // ✅ useCallback OBLIGATOIRE pour stabiliser les références
+  const handleSubmit = useCallback(async (content: string, parentId: string | null) => {
+    const optimisticObs: Observation = {
+      id: `temp-${Date.now()}`,
+      text: content,
+      author: currentUser.name,
+      role: currentUser.role || 'Staff',
+      createdAt: new Date().toISOString(),
+      parentId: parentId,
+      isPending: true,
+    };
+    
+    onObservationAdded(optimisticObs);
+    setIsComposing(false);
+    setReplyingTo(null);
 
-        {!isReply && (
-          <TouchableOpacity
-            style={styles.replyButton}
-            onPress={() => openComposer({ id: observation.id, authorName: observation.author })}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Ionicons name="arrow-undo-outline" size={14} color="#1a5276" />
-            <Text style={styles.replyButtonText}>Répondre</Text>
-          </TouchableOpacity>
-        )}
+    try {
+      await onSaveObservation({ eventId, text: content, parentId });
+    } catch (error) {
+      onObservationAdded(null, optimisticObs.id);
+      Alert.alert('Erreur', "Impossible d'enregistrer l'observation.");
+    }
+  }, [eventId, currentUser, onObservationAdded, onSaveObservation]);
 
-        {/* Réponses imbriquées */}
-        {replies.map(reply => (
-          <ObservationCard key={reply.id} observation={reply} isReply />
-        ))}
-      </View>
-    );
-  };
+  const handleCancel = useCallback(() => {
+    setIsComposing(false);
+    setReplyingTo(null);
+  }, []);
+
+  const handleOpenComposer = useCallback((replyTarget: { id: string; authorName: string } | null = null) => {
+    setReplyingTo(replyTarget);
+    setIsComposing(true);
+  }, []);
+
+  const handleClearReply = useCallback(() => {
+    setReplyingTo(null);
+  }, []);
 
   // Observations racines uniquement (pas les réponses)
   const rootObservations = observations.filter(o => !o.parentId);
@@ -220,7 +279,7 @@ const EventObservationSection: React.FC<Props> = ({
       {!hasObservations && !isComposing && (
         <TouchableOpacity
           style={styles.emptyState}
-          onPress={() => openComposer()}
+          onPress={() => handleOpenComposer()}
           activeOpacity={0.7}
         >
           <Ionicons name="create-outline" size={20} color="#6B7280" />
@@ -232,12 +291,17 @@ const EventObservationSection: React.FC<Props> = ({
       {hasObservations && (
         <>
           {rootObservations.map(obs => (
-            <ObservationCard key={obs.id} observation={obs} />
+            <ObservationCard 
+              key={obs.id} 
+              observation={obs} 
+              allObservations={observations}
+              onReply={handleOpenComposer}
+            />
           ))}
           {!isComposing && (
             <TouchableOpacity
               style={styles.addObservationButton}
-              onPress={() => openComposer()}
+              onPress={() => handleOpenComposer()}
             >
               <Ionicons name="add-circle-outline" size={18} color="#1a5276" />
               <Text style={styles.addObservationText}>Ajouter une observation</Text>
@@ -246,8 +310,16 @@ const EventObservationSection: React.FC<Props> = ({
         </>
       )}
 
-      {/* Boîte de saisie (cas A ou B) */}
-      {isComposing && <ComposerBox />}
+      {/* Boîte de saisie - key FIXE et STABLE */}
+      {isComposing && (
+        <ComposerBox
+          key="observation-composer"
+          replyingTo={replyingTo}
+          onSubmit={handleSubmit}
+          onCancel={handleCancel}
+          onClearReply={handleClearReply}
+        />
+      )}
     </View>
   );
 };
