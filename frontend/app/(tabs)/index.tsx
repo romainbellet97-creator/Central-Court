@@ -2090,6 +2090,10 @@ const styles = StyleSheet.create({
   emptyObsText: { fontSize: 15, color: '#999', marginTop: 12 },
   emptyObsSubtext: { fontSize: 13, color: '#ccc', marginTop: 4, textAlign: 'center' },
   
+  // FEATURE #2: Pending validation badge
+  pendingValidationBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FEF3C7', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, marginTop: 6, alignSelf: 'flex-start' },
+  pendingValidationText: { fontSize: 11, fontWeight: '600', color: '#D97706' },
+  
   // Action buttons
   actionButtons: { flexDirection: 'row', gap: 12, marginTop: 10 },
   editButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#1e3c72', padding: 14, borderRadius: 12, gap: 8 },
