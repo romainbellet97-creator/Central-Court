@@ -301,8 +301,6 @@ export default function CalendarScreen() {
       try {
         const circuitsParam = userCircuits.join(',');
         
-        console.log('📡 Loading data with circuits:', circuitsParam);
-        
         const [eventsData, weeksData, alertsData] = await Promise.all([
           fetchEvents(currentMonth).catch(() => []),
           fetchTournamentWeeks(circuitsParam).catch(() => ({ weeks: [] })),
@@ -311,16 +309,7 @@ export default function CalendarScreen() {
         
         setEvents(Array.isArray(eventsData) ? eventsData : []);
         
-        // Debug: Log weeksData structure
-        console.log('📦 weeksData received:', weeksData ? 'has data' : 'no data');
-        
         if (weeksData && weeksData.weeks && Array.isArray(weeksData.weeks)) {
-          // Count participating tournaments
-          const participatingCount = weeksData.weeks.reduce((count: number, week: any) => {
-            return count + (week?.tournaments?.filter((t: any) => t.registration?.status === 'participating').length || 0);
-          }, 0);
-          console.log('🏆 Participating tournaments in API response:', participatingCount);
-          
           setTournamentWeeks(weeksData.weeks);
         } else if (Array.isArray(weeksData)) {
           setTournamentWeeks(weeksData);
