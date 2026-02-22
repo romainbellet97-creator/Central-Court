@@ -178,12 +178,14 @@ export default function CalendarScreen() {
   const [showAddObservationModal, setShowAddObservationModal] = useState(false);
   const [observationText, setObservationText] = useState('');
   
-  // Event form state
+  // Event form state - FEATURE #3: Ajout endTime
   const [eventType, setEventType] = useState('training');
   const [eventDate, setEventDate] = useState(today);
   const [eventTime, setEventTime] = useState('09:00');
+  const [eventEndTime, setEventEndTime] = useState('10:00');  // FEATURE #3: Heure de fin par défaut +1h
   const [eventNotes, setEventNotes] = useState('');
   const [eventLocation, setEventLocation] = useState('');
+  const [endTimeManuallySet, setEndTimeManuallySet] = useState(false);  // Pour auto-update
 
   // Tournament Modal
   const [showTournamentModal, setShowTournamentModal] = useState(false);
