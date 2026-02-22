@@ -559,14 +559,64 @@ export default function CalendarScreen() {
   const executeRegistration = async (tournamentId: string, status: string) => {
     try {
       await apiRegisterTournament(tournamentId, status);
-      setTournamentWeeks(prev =>
-        prev.map(week => ({
-          ...week,
-          tournaments: (week.tournaments || []).map(t => 
-            t.id === tournamentId ? { ...t, registration: { status } } : t
-          )
-        }))
-      );
+      
+      // FEATURE #3: Si on devient "participating", griser les autres tournois de la même semaine
+      setTournamentWeeks(prev => {
+        // Trouver la semaine contenant ce tournoi
+        const targetWeek = prev.find(week => 
+          week.tournaments.some(t => t.id === tournamentId)
+        );
+        
+        return prev.map(week => {
+          // Si ce n'est pas la semaine du tournoi, ne rien changer
+          if (week.weekNumber !== targetWeek?.weekNumber) {
+            return week;
+          }
+          
+          return {
+            ...week,
+            tournaments: (week.tournaments || []).map(t => {
+              // Le tournoi sélectionné : mettre à jour son statut
+              if (t.id === tournamentId) {
+                return { ...t, registration: { status } };
+              }
+              
+              // FEATURE #3: Si on participe à un tournoi, bloquer les autres de la semaine
+              if (status === 'participating') {
+                // Griser automatiquement les autres tournois (sauf si déjà "participating")
+                if (t.registration?.status !== 'participating') {
+                  return { 
+                    ...t, 
+                    registration: { status: 'not_interested' },
+                    isBlocked: true 
+                  };
+                }
+              }
+              
+              // FEATURE #3: Si on repasse en "interested" ou "not_interested", débloquer les autres
+              if (status === 'interested' || status === 'not_interested') {
+                if (t.isBlocked) {
+                  return { 
+                    ...t, 
+                    registration: undefined,
+                    isBlocked: false 
+                  };
+                }
+              }
+              
+              return t;
+            })
+          };
+        });
+      });
+      
+      // Message de confirmation
+      if (status === 'participating') {
+        Alert.alert(
+          '✅ Inscription confirmée',
+          'Les autres tournois de cette semaine ont été automatiquement marqués comme non intéressés.'
+        );
+      }
     } catch (e) {
       console.error('Registration failed:', e);
       Alert.alert('Erreur', 'Échec de l\'inscription');
