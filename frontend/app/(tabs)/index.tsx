@@ -222,7 +222,24 @@ export default function CalendarScreen() {
     const [selectedYear, selectedMonth, selectedDay] = selectedDate.split('-').map(Number);
     const selectedDateNum = selectedYear * 10000 + selectedMonth * 100 + selectedDay;
     
-    console.log('🏆 dayEvents calculation - selectedDate:', selectedDate, 'selectedDateNum:', selectedDateNum);
+    // Debug: Log tournamentWeeks structure
+    if (__DEV__ || true) {
+      console.log('🏆 dayEvents calculation:');
+      console.log('  selectedDate:', selectedDate, 'num:', selectedDateNum);
+      console.log('  tournamentWeeks count:', tournamentWeeks.length);
+      
+      let participatingCount = 0;
+      tournamentWeeks.forEach(week => {
+        if (!week?.tournaments) return;
+        week.tournaments.forEach(t => {
+          if (t.registration?.status === 'participating') {
+            participatingCount++;
+            console.log(`  📌 Participating: ${t.name}, dates: ${t.startDate} to ${t.endDate}`);
+          }
+        });
+      });
+      console.log('  Total participating tournaments:', participatingCount);
+    }
     
     tournamentWeeks.forEach(week => {
       if (!week?.tournaments) return;
@@ -230,21 +247,27 @@ export default function CalendarScreen() {
       week.tournaments
         .filter(t => t.registration?.status === 'participating')
         .forEach(tournament => {
-          if (!tournament?.startDate || !tournament?.endDate) return;
+          if (!tournament?.startDate || !tournament?.endDate) {
+            console.log(`⚠️ Tournament ${tournament?.name} missing dates`);
+            return;
+          }
           
           try {
             // Parse dates without timezone issues
-            const [startYear, startMonth, startDay] = tournament.startDate.split('T')[0].split('-').map(Number);
-            const [endYear, endMonth, endDay] = tournament.endDate.split('T')[0].split('-').map(Number);
+            const startDateStr = String(tournament.startDate).split('T')[0];
+            const endDateStr = String(tournament.endDate).split('T')[0];
+            
+            const [startYear, startMonth, startDay] = startDateStr.split('-').map(Number);
+            const [endYear, endMonth, endDay] = endDateStr.split('-').map(Number);
             
             const startDateNum = startYear * 10000 + startMonth * 100 + startDay;
             const endDateNum = endYear * 10000 + endMonth * 100 + endDay;
             
-            console.log(`🎾 Tournament ${tournament.name}: start=${startDateNum}, end=${endDateNum}, selected=${selectedDateNum}`);
+            console.log(`🎾 Checking ${tournament.name}: ${startDateNum} <= ${selectedDateNum} <= ${endDateNum}`);
             
             // Vérifier si le jour sélectionné est dans la période du tournoi
             if (selectedDateNum >= startDateNum && selectedDateNum <= endDateNum) {
-              console.log(`✅ Tournament ${tournament.name} matches selected date!`);
+              console.log(`✅ Match! Adding ${tournament.name} to events`);
               
               // Créer un événement "virtuel" pour ce tournoi
               tournamentEvents.push({
