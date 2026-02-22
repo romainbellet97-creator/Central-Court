@@ -579,6 +579,57 @@ export default function CalendarScreen() {
     );
   };
 
+  // FEATURE #1: Handler pour le nouveau composant EventObservationSection
+  const handleObservationAdded = useCallback((observation: Observation | null, removeId?: string) => {
+    if (!selectedEvent) return;
+    
+    const eventId = selectedEvent.id;
+    
+    if (removeId) {
+      // Rollback: supprimer l'observation optimiste
+      setEvents(prevEvents => 
+        prevEvents.map(e => 
+          e.id === eventId
+            ? { ...e, observations: (e.observations || []).filter(o => o.id !== removeId) }
+            : e
+        )
+      );
+      setSelectedEvent(prev => 
+        prev?.id === eventId
+          ? { ...prev, observations: (prev.observations || []).filter(o => o.id !== removeId) }
+          : prev
+      );
+      return;
+    }
+    
+    if (observation) {
+      // Ajouter l'observation (optimistic update)
+      setEvents(prevEvents => 
+        prevEvents.map(e => 
+          e.id === eventId
+            ? { ...e, observations: [...(e.observations || []), observation] }
+            : e
+        )
+      );
+      setSelectedEvent(prev => 
+        prev?.id === eventId
+          ? { ...prev, observations: [...(prev.observations || []), observation] }
+          : prev
+      );
+    }
+  }, [selectedEvent]);
+
+  const handleSaveObservationAPI = useCallback(async (data: { eventId: string; text: string; parentId?: string | null }) => {
+    const newObservation = await apiAddObservation(data.eventId, {
+      author: 'Coach Martin', // TODO: Get from user context
+      role: 'Entraîneur principal',
+      text: data.text,
+      parentId: data.parentId,
+    });
+    return newObservation;
+  }, []);
+
+  // Legacy handler (pour l'ancien modal, à supprimer plus tard)
   const handleSaveObservation = async () => {
     if (!selectedEvent || !observationText.trim()) return;
     
