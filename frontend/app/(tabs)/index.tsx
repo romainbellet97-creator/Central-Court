@@ -1473,8 +1473,8 @@ const styles = StyleSheet.create({
   tournamentLocation: { fontSize: 12, color: '#666', flex: 1 },
   prizeRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 4 },
   weekPrizeText: { fontSize: 13, fontWeight: '600', color: '#1e3c72' },
-  registrationBadge: { flexDirection: 'row', alignItems: 'center', marginTop: 10, gap: 4 },
-  registrationText: { fontSize: 12, color: '#4CAF50', fontWeight: '500' },
+  registrationBadge: { flexDirection: 'row', alignItems: 'center', marginTop: 10, gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  registrationText: { fontSize: 12, fontWeight: '600' },
   
   // FAB
   fab: { position: 'absolute', right: 20, width: 60, height: 60, borderRadius: 30, backgroundColor: '#1e3c72', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 8 },
