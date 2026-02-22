@@ -102,9 +102,11 @@ LocaleConfig.defaultLocale = 'fr';
 interface Observation {
   id: string;
   author: string;
-  role: string;
+  role?: string;
   text: string;
   createdAt: string;
+  parentId?: string | null;
+  isPending?: boolean;
 }
 
 interface CalendarEvent {
@@ -113,10 +115,15 @@ interface CalendarEvent {
   title: string;
   date: string;
   time?: string;
+  endDate?: string;      // FEATURE #3: Date de fin
+  endTime?: string;      // FEATURE #3: Heure de fin
   location?: string;
   description?: string;
   observations?: Observation[];
   createdAt?: string;
+  pendingValidation?: boolean;  // FEATURE #2: En attente de validation
+  validationStatus?: 'accepted' | 'refused' | null;
+  staffMembers?: { id: string; name: string; role: string }[];
 }
 
 interface Tournament {
