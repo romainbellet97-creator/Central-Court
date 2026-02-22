@@ -211,9 +211,25 @@ export default function CalendarScreen() {
     setEventType('training');
     setEventDate(today);
     setEventTime('09:00');
+    setEventEndTime('10:00');
+    setEndTimeManuallySet(false);
     setEventNotes('');
     setEventLocation('');
   }, [today]);
+
+  // Helper: Calculer l'heure de fin par défaut (+1h)
+  const getDefaultEndTime = useCallback((startTime: string): string => {
+    const [hours, minutes] = startTime.split(':').map(Number);
+    const endHours = (hours + 1) % 24;
+    return `${endHours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+  }, []);
+
+  // FEATURE #3: Auto-update endTime quand startTime change (si pas manuellement modifié)
+  useEffect(() => {
+    if (!endTimeManuallySet) {
+      setEventEndTime(getDefaultEndTime(eventTime));
+    }
+  }, [eventTime, endTimeManuallySet, getDefaultEndTime]);
 
   // Derive selectedWeek from reactive state
   const selectedWeek = useMemo(() => {
