@@ -6,10 +6,23 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-// Types
+// ============================================================
+// TYPES
+// ============================================================
+
+// BUG #2 FIX: Statuts d'envoi pour le badge
+const SEND_STATUS = {
+  SENDING: 'sending',    // badge orange "Envoi..."
+  SENT: 'sent',          // badge vert "Envoyé ✓"  → disparaît après 2s
+  ERROR: 'error',        // badge rouge "Échec"
+} as const;
+
+type SendStatusType = typeof SEND_STATUS[keyof typeof SEND_STATUS] | null;
+
 interface Observation {
   id: string;
   author: string;
@@ -18,6 +31,7 @@ interface Observation {
   createdAt: string;
   parentId?: string | null;
   isPending?: boolean;
+  sendStatus?: SendStatusType;
 }
 
 interface CurrentUser {
@@ -31,18 +45,55 @@ interface Props {
   observations: Observation[];
   currentUser: CurrentUser;
   onObservationAdded: (observation: Observation | null, removeId?: string) => void;
+  onObservationUpdated?: (observationId: string, updatedFields: Partial<Observation>) => void;
   onSaveObservation: (data: { eventId: string; text: string; parentId?: string | null }) => Promise<Observation>;
+  onComposerOpen?: () => void; // BUG #3 FIX: Callback pour scroll
 }
 
 // ============================================================
-// BUG #1 FIX: ComposerBox est maintenant un composant SÉPARÉ
-// avec son propre state local pour éviter les re-renders du parent
+// BUG #2 FIX: Badge de statut d'envoi
+// ============================================================
+const SendStatusBadge = React.memo(({ status }: { status?: SendStatusType }) => {
+  if (!status) return null;
+
+  const config = {
+    [SEND_STATUS.SENDING]: {
+      label: 'Envoi...',
+      backgroundColor: '#FEF3C7',
+      color: '#D97706',
+    },
+    [SEND_STATUS.SENT]: {
+      label: 'Envoyé ✓',
+      backgroundColor: '#D1FAE5',
+      color: '#059669',
+    },
+    [SEND_STATUS.ERROR]: {
+      label: 'Échec ✕',
+      backgroundColor: '#FEE2E2',
+      color: '#DC2626',
+    },
+  }[status];
+
+  if (!config) return null;
+
+  return (
+    <View style={[styles.sendBadge, { backgroundColor: config.backgroundColor }]}>
+      <Text style={[styles.sendBadgeText, { color: config.color }]}>
+        {config.label}
+      </Text>
+    </View>
+  );
+});
+
+// ============================================================
+// ComposerBox - Composant isolé avec state local
 // ============================================================
 interface ComposerBoxProps {
   replyingTo: { id: string; authorName: string } | null;
   onSubmit: (content: string, parentId: string | null) => Promise<void>;
   onCancel: () => void;
   onClearReply: () => void;
+  onFocus?: () => void; // BUG #3 FIX: Callback au focus
 }
 
 const ComposerBox = React.memo<ComposerBoxProps>(({ 
@@ -50,13 +101,12 @@ const ComposerBox = React.memo<ComposerBoxProps>(({
   onSubmit,
   onCancel,
   onClearReply,
+  onFocus,
 }) => {
-  // ✅ State LOCAL au ComposerBox — ne propage PAS vers le parent
   const [text, setText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const inputRef = useRef<TextInput>(null);
 
-  // Focus automatique à l'ouverture
   useEffect(() => {
     const timer = setTimeout(() => {
       inputRef.current?.focus();
@@ -67,7 +117,7 @@ const ComposerBox = React.memo<ComposerBoxProps>(({
   const handleSubmit = useCallback(async () => {
     if (!text.trim() || isSubmitting) return;
     const content = text.trim();
-    setText(''); // Reset immédiat
+    setText('');
     setIsSubmitting(true);
     try {
       await onSubmit(content, replyingTo?.id || null);
@@ -98,18 +148,16 @@ const ComposerBox = React.memo<ComposerBoxProps>(({
         placeholder={replyingTo ? `Répondre à ${replyingTo.authorName}...` : 'Ajouter une observation...'}
         placeholderTextColor="#9CA3AF"
         value={text}
-        onChangeText={setText}  // ✅ setState LOCAL — pas de remontée vers parent
+        onChangeText={setText}
         multiline={true}
         scrollEnabled={true}
         maxLength={1000}
-        
-        // ✅ CRITIQUE : empêche le dismiss du clavier
         blurOnSubmit={false}
         returnKeyType="default"
-        
-        // ✅ Empêche la perte de focus sur interaction externe
         autoCorrect={true}
         autoCapitalize="sentences"
+        // BUG #3 FIX: Callback au focus pour scroller
+        onFocus={onFocus}
       />
 
       <Text style={styles.charCount}>{text.length}/1000</Text>
@@ -133,7 +181,9 @@ const ComposerBox = React.memo<ComposerBoxProps>(({
   );
 });
 
-// Composant carte observation
+// ============================================================
+// ObservationCard - Carte d'observation avec badge statut
+// ============================================================
 const ObservationCard = React.memo(({ 
   observation, 
   allObservations,
@@ -147,7 +197,6 @@ const ObservationCard = React.memo(({
 }) => {
   const replies = allObservations.filter(o => o.parentId === observation.id);
 
-  // Format date relative
   const formatRelativeDate = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
@@ -176,11 +225,8 @@ const ObservationCard = React.memo(({
           <Text style={styles.authorName}>{observation.author}</Text>
           <Text style={styles.observationDate}>{formatRelativeDate(observation.createdAt)}</Text>
         </View>
-        {observation.isPending && (
-          <View style={styles.pendingBadge}>
-            <Text style={styles.pendingText}>Envoi...</Text>
-          </View>
-        )}
+        {/* BUG #2 FIX: Utiliser SendStatusBadge au lieu de isPending */}
+        <SendStatusBadge status={observation.sendStatus} />
       </View>
 
       <Text style={styles.observationText}>{observation.text}</Text>
@@ -196,7 +242,6 @@ const ObservationCard = React.memo(({
         </TouchableOpacity>
       )}
 
-      {/* Réponses imbriquées */}
       {replies.map(reply => (
         <ObservationCard 
           key={reply.id} 
@@ -218,52 +263,84 @@ const EventObservationSection: React.FC<Props> = ({
   observations = [],
   currentUser,
   onObservationAdded,
+  onObservationUpdated,
   onSaveObservation,
+  onComposerOpen,
 }) => {
   const [isComposing, setIsComposing] = useState(false);
   const [replyingTo, setReplyingTo] = useState<{ id: string; authorName: string } | null>(null);
 
   const hasObservations = observations.length > 0;
 
-  // ✅ useCallback OBLIGATOIRE pour stabiliser les références
+  // ============================================================
+  // BUG #1 FIX: Utiliser currentUser.name (pas replyingTo.authorName)
+  // BUG #2 FIX: Gestion complète des statuts d'envoi
+  // ============================================================
   const handleSubmit = useCallback(async (content: string, parentId: string | null) => {
+    const tempId = `temp-${Date.now()}`;
+
+    // BUG #1 FIX: TOUJOURS utiliser currentUser.name, PAS replyingTo.authorName
     const optimisticObs: Observation = {
-      id: `temp-${Date.now()}`,
+      id: tempId,
       text: content,
-      author: currentUser.name,
+      author: currentUser.name,      // ✅ Nom de l'utilisateur connecté
       role: currentUser.role || 'Staff',
       createdAt: new Date().toISOString(),
       parentId: parentId,
-      isPending: true,
+      sendStatus: SEND_STATUS.SENDING,  // BUG #2 FIX: Statut initial
     };
     
+    // 1. Affichage immédiat avec "Envoi..."
     onObservationAdded(optimisticObs);
     setIsComposing(false);
     setReplyingTo(null);
 
     try {
-      await onSaveObservation({ eventId, text: content, parentId });
+      // 2. Appel API
+      const savedObs = await onSaveObservation({ eventId, text: content, parentId });
+      
+      // 3. BUG #2 FIX: Passer à "Envoyé ✓" (remplacer tempId par ID réel)
+      if (onObservationUpdated) {
+        onObservationUpdated(tempId, {
+          id: savedObs.id,
+          sendStatus: SEND_STATUS.SENT,
+        });
+
+        // 4. BUG #2 FIX: Faire disparaître le badge après 2 secondes
+        setTimeout(() => {
+          onObservationUpdated(savedObs.id, { sendStatus: null });
+        }, 2000);
+      }
     } catch (error) {
-      onObservationAdded(null, optimisticObs.id);
-      Alert.alert('Erreur', "Impossible d'enregistrer l'observation.");
+      // 5. BUG #2 FIX: Passer à "Échec" en cas d'erreur
+      if (onObservationUpdated) {
+        onObservationUpdated(tempId, { sendStatus: SEND_STATUS.ERROR });
+      }
+      Alert.alert('Erreur', "L'observation n'a pas pu être enregistrée.");
     }
-  }, [eventId, currentUser, onObservationAdded, onSaveObservation]);
+  }, [eventId, currentUser, onObservationAdded, onObservationUpdated, onSaveObservation]);
 
   const handleCancel = useCallback(() => {
     setIsComposing(false);
     setReplyingTo(null);
   }, []);
 
+  // BUG #3 FIX: Déclencher le scroll dès l'ouverture du composer
   const handleOpenComposer = useCallback((replyTarget: { id: string; authorName: string } | null = null) => {
     setReplyingTo(replyTarget);
     setIsComposing(true);
-  }, []);
+    onComposerOpen?.();
+  }, [onComposerOpen]);
 
   const handleClearReply = useCallback(() => {
     setReplyingTo(null);
   }, []);
 
-  // Observations racines uniquement (pas les réponses)
+  // BUG #3 FIX: Callback supplémentaire au focus du TextInput
+  const handleComposerFocus = useCallback(() => {
+    onComposerOpen?.();
+  }, [onComposerOpen]);
+
   const rootObservations = observations.filter(o => !o.parentId);
 
   return (
@@ -275,7 +352,6 @@ const EventObservationSection: React.FC<Props> = ({
         </Text>
       </View>
 
-      {/* CAS A : Pas de commentaire → afficher zone de saisie */}
       {!hasObservations && !isComposing && (
         <TouchableOpacity
           style={styles.emptyState}
@@ -287,7 +363,6 @@ const EventObservationSection: React.FC<Props> = ({
         </TouchableOpacity>
       )}
 
-      {/* CAS B : Commentaires existants */}
       {hasObservations && (
         <>
           {rootObservations.map(obs => (
@@ -310,7 +385,6 @@ const EventObservationSection: React.FC<Props> = ({
         </>
       )}
 
-      {/* Boîte de saisie - key FIXE et STABLE */}
       {isComposing && (
         <ComposerBox
           key="observation-composer"
@@ -318,6 +392,7 @@ const EventObservationSection: React.FC<Props> = ({
           onSubmit={handleSubmit}
           onCancel={handleCancel}
           onClearReply={handleClearReply}
+          onFocus={handleComposerFocus}
         />
       )}
     </View>
@@ -343,7 +418,6 @@ const styles = StyleSheet.create({
     color: '#1F2937' 
   },
 
-  // Empty state
   emptyState: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -361,7 +435,6 @@ const styles = StyleSheet.create({
     fontStyle: 'italic' 
   },
 
-  // Observation card
   observationCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
@@ -428,19 +501,18 @@ const styles = StyleSheet.create({
     color: '#1a5276', 
     fontWeight: '500' 
   },
-  pendingBadge: {
-    backgroundColor: '#FEF3C7',
+
+  // BUG #2 FIX: Styles pour les badges de statut
+  sendBadge: {
     borderRadius: 6,
     paddingHorizontal: 8,
     paddingVertical: 3,
   },
-  pendingText: { 
+  sendBadgeText: { 
     fontSize: 11, 
-    color: '#D97706', 
     fontWeight: '500' 
   },
 
-  // Composer
   composerContainer: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
@@ -507,7 +579,6 @@ const styles = StyleSheet.create({
     fontWeight: '600' 
   },
 
-  // Add button
   addObservationButton: {
     marginTop: 6,
     paddingVertical: 10,
