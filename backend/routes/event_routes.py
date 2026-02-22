@@ -30,6 +30,7 @@ class CreateEventRequest(BaseModel):
 
 class UpdateEventRequest(BaseModel):
     title: Optional[str] = None
+    type: Optional[str] = None
     date: Optional[str] = None
     endDate: Optional[str] = None
     time: Optional[str] = None
@@ -38,6 +39,8 @@ class UpdateEventRequest(BaseModel):
     description: Optional[str] = None
     cost: Optional[float] = None
     visibleToStaff: Optional[bool] = None
+    notify_staff: Optional[bool] = None  # FEATURE #2: Notifier le staff
+    pending_validation: Optional[bool] = None  # FEATURE #2: En attente de validation
 
 
 class AddObservationRequest(BaseModel):
