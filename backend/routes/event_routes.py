@@ -96,12 +96,35 @@ async def create_event(req: CreateEventRequest):
 @router.put("/{event_id}")
 async def update_event(event_id: str, req: UpdateEventRequest):
     update_data = {k: v for k, v in req.dict().items() if v is not None}
+    
+    # FEATURE #2: Gérer la notification du staff
+    notify_staff = update_data.pop('notify_staff', None)
+    
     if not update_data:
         raise HTTPException(status_code=400, detail="No fields to update")
+    
     result = await db.events.update_one({"id": event_id}, {"$set": update_data})
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Event not found")
+    
     event = await db.events.find_one({"id": event_id}, {"_id": 0})
+    
+    # FEATURE #2: Si notify_staff est True, créer une notification pour le staff
+    if notify_staff and event.get("assignedStaffIds"):
+        # Créer une notification (simplifiée - à implémenter avec un système de notifications complet)
+        notification = {
+            "id": f"notif-{uuid.uuid4().hex[:8]}",
+            "type": "event_reschedule",
+            "eventId": event_id,
+            "eventTitle": event.get("title", "Événement"),
+            "newDate": event.get("date"),
+            "newTime": event.get("time"),
+            "staffIds": event.get("assignedStaffIds", []),
+            "status": "pending",
+            "createdAt": datetime.now(timezone.utc).isoformat(),
+        }
+        await db.notifications.insert_one(notification)
+    
     return event
 
 
