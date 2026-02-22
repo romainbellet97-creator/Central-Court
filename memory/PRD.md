@@ -8,16 +8,29 @@ Application professionnelle de tennis: FastAPI + MongoDB + React Native (Expo)
 ### Core
 - User onboarding (7 steps), profile edit, logout, staff invitations, OCR
 
-### 🆕 Sprint Technique - Bugs & Features (Feb 22, 2026) ✅ 
+### 🆕 Sprint Technique - Bugs & Features v2 (Feb 22, 2026) ✅ 
 #### Bugs corrigés:
-- **Bug #1 - Bouton + observation**: Corrigé - Le bouton ouvre maintenant le modal d'observation
-- **Bug #2 - Calendrier après modification**: Corrigé - Gestion immutable de l'état, nettoyage complet des modals
-- **Bug #3 - Upload Camera/Gallery**: Validé - Le modal d'upload fonctionne correctement
+- **Bug #1 - Bouton + observation FREEZE**: Corrigé
+  - Ajouté backdrop cliquable et `onRequestClose` au modal d'observation
+  - Le modal s'ouvre sans freezer l'interface
+  - Navigation reste fonctionnelle après utilisation
+- **Bug #2 - Tournois "Participant" absents**: Corrigé
+  - Fusion des événements manuels avec les tournois "participating" dans `dayEvents`
+  - Carte tournoi spéciale avec badge "En tournoi", niveau (ATP 500), drapeaux, dates
+  - Clic sur un jour couvert par un tournoi affiche maintenant le tournoi
+- **Bug #3 - Statut not_interested incohérent**: Corrigé
+  - Rendu unifié pour tous les tournois `not_interested` ou `hidden`
+  - Affiche UNIQUEMENT le bouton "👁 Rétablir", pas les autres boutons de statut
+- **Bug #4 - Vue tournois trop dense**: Corrigé
+  - Card résumée pour semaines avec 2+ tournois
+  - Badge "🎾 X tournois" violet
+  - Chips de localisation avec drapeaux
+  - Bouton "Voir le détail" vers le modal complet
 
 #### Features implémentées:
-- **Feature #1 - Label Intéressé/Participant**: Le badge affiche le bon statut (Intéressé, Participant, En attente)
-- **Feature #2 - "X tournois" badge**: Badge violet affiché quand plusieurs tournois dans la même semaine
-- **Feature #3 - Auto-grisage tournois**: Les autres tournois de la semaine sont automatiquement grisés quand on participe
+- **Feature #1 - Label Intéressé/Participant**: Le badge affiche le bon statut dynamiquement
+- **Feature #2 - "X tournois" badge**: Badge violet avec chips de localisation
+- **Feature #3 - Auto-grisage tournois**: Les autres tournois de la semaine sont automatiquement grisés
 
 ### Tournois - Base de données restaurée (Feb 18, 2026) ✅
 - **137 tournois importés** avec données complètes:
