@@ -108,7 +108,7 @@ h1{font-size:26px;color:#1e3c72;margin-bottom:6px}
     </a>
   </div>
 
-  <a class="open-btn" href="exp://tax-days-tracker.ngrok.io">
+  <a class="open-btn" href="exp://event-management-9.ngrok.io">
     Ouvrir Le Court Central
   </a>
 
