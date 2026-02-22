@@ -1733,6 +1733,7 @@ export default function CalendarScreen() {
                 </View>
 
                 <ScrollView 
+                  ref={detailScrollRef}
                   style={styles.detailScroll} 
                   showsVerticalScrollIndicator={false}
                   keyboardShouldPersistTaps="handled"
