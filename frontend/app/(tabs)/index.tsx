@@ -186,6 +186,25 @@ export default function CalendarScreen() {
   const [showConflictModal, setShowConflictModal] = useState(false);
   const [pendingRegistration, setPendingRegistration] = useState<{tournamentId: string, status: string} | null>(null);
 
+  // ============ MODAL CLEANUP FUNCTIONS ============
+  
+  // CRITIQUE: Fonction de reset complète pour l'état des modals d'événements
+  const closeAllEventModals = useCallback(() => {
+    console.log('🔄 Closing all event modals');
+    setShowAddEventModal(false);
+    setShowEditEventModal(false);
+    setShowEventDetailModal(false);
+    setShowAddObservationModal(false);
+    setSelectedEvent(null);
+    setObservationText('');
+    // Reset form
+    setEventType('training');
+    setEventDate(today);
+    setEventTime('09:00');
+    setEventNotes('');
+    setEventLocation('');
+  }, [today]);
+
   // Derive selectedWeek from reactive state
   const selectedWeek = useMemo(() => {
     if (selectedWeekNumber === null) return null;
