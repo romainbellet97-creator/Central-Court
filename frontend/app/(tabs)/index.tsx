@@ -841,7 +841,55 @@ export default function CalendarScreen() {
             </View>
           ) : (
             dayEvents.map(event => {
+              // BUG #2 FIX: Distinguer les événements tournoi des événements manuels
+              const isTournamentEvent = (event as any)._isTournamentEvent;
               const eventConfig = EVENT_TYPES[event.type] || EVENT_TYPES.other;
+              
+              // Rendu spécial pour les tournois "Participant"
+              if (isTournamentEvent) {
+                const tournamentData = (event as any)._tournament;
+                return (
+                  <TouchableOpacity
+                    key={event.id}
+                    style={styles.tournamentEventCard}
+                    onPress={() => {
+                      // Ouvrir le modal de détail du tournoi
+                      if (tournamentData?.week) {
+                        setSelectedWeekNumber(tournamentData.week);
+                        setShowTournamentModal(true);
+                      }
+                    }}
+                    data-testid={`tournament-event-${event.id}`}
+                  >
+                    <View style={[styles.eventColorBar, { backgroundColor: EVENT_TYPES.tournament.color }]} />
+                    <View style={styles.eventContent}>
+                      <View style={styles.eventHeader}>
+                        <View style={styles.tournamentEventBadge}>
+                          <Text style={styles.tournamentEventFlag}>{(event as any)._flag}</Text>
+                          <Text style={styles.tournamentEventLabel}>En tournoi</Text>
+                        </View>
+                        <View style={[styles.categoryBadge, { backgroundColor: getCategoryColor((event as any)._level) + '18' }]}>
+                          <Text style={[styles.categoryText, { color: getCategoryColor((event as any)._level) }]}>
+                            {(event as any)._level}
+                          </Text>
+                        </View>
+                      </View>
+                      <Text style={styles.tournamentEventName}>{event.title}</Text>
+                      <Text style={styles.tournamentEventLocation}>
+                        <Ionicons name="location-outline" size={12} color="#666" /> {event.location}
+                      </Text>
+                      <View style={styles.tournamentEventDates}>
+                        <Ionicons name="calendar-outline" size={12} color="#8B5CF6" />
+                        <Text style={styles.tournamentEventDatesText}>
+                          {new Date((event as any)._startDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} - {new Date((event as any)._endDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
+                        </Text>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                );
+              }
+              
+              // Rendu normal pour les événements manuels
               return (
                 <TouchableOpacity
                   key={event.id}
