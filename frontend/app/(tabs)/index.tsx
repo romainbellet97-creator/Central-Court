@@ -880,12 +880,12 @@ export default function CalendarScreen() {
             <View style={styles.emptyDay}>
               <Ionicons name="calendar-outline" size={48} color="#ccc" />
               <Text style={styles.emptyText}>Aucun événement ce jour</Text>
-              {/* Debug: Show if any participating tournaments exist */}
-              {tournamentWeeks.some(w => w?.tournaments?.some(t => t.registration?.status === 'participating')) && (
-                <Text style={{ fontSize: 10, color: '#999', marginTop: 4 }}>
-                  (Debug: {tournamentWeeks.reduce((count, w) => count + (w?.tournaments?.filter(t => t.registration?.status === 'participating').length || 0), 0)} participating tournaments)
-                </Text>
-              )}
+              {/* Debug BUG #2: Show participating count */}
+              <Text style={{ fontSize: 10, color: '#999', marginTop: 4, textAlign: 'center' }}>
+                (Weeks: {tournamentWeeks.length}, Participating: {
+                  tournamentWeeks.reduce((c, w) => c + (w?.tournaments?.filter((t: any) => t.registration?.status === 'participating').length || 0), 0)
+                }, Date: {selectedDate})
+              </Text>
               <TouchableOpacity 
                 style={styles.addEventInlineBtn}
                 onPress={openAddEventModal}
