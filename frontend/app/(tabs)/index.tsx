@@ -1636,7 +1636,12 @@ export default function CalendarScreen() {
                   </TouchableOpacity>
                 </View>
 
-                <ScrollView style={styles.detailScroll} showsVerticalScrollIndicator={false}>
+                <ScrollView 
+                  style={styles.detailScroll} 
+                  showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                  keyboardDismissMode="none"
+                >
                   {/* Location */}
                   {selectedEvent.location && (
                     <View style={styles.detailSection}>
