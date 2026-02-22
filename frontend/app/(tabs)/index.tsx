@@ -944,7 +944,7 @@ export default function CalendarScreen() {
                 const firstTournament = visibleTournaments[0];
                 if (!firstTournament) return null;
                 
-                // FEATURE #2: Vérifier s'il y a plusieurs tournois dans la semaine
+                // FEATURE #2 & BUG #4: Vérifier s'il y a plusieurs tournois dans la semaine
                 const tournamentCount = visibleTournaments.length;
                 const hasMultipleTournaments = tournamentCount >= 2;
                 
@@ -952,6 +952,83 @@ export default function CalendarScreen() {
                 const participatingTournament = visibleTournaments.find(t => t.registration?.status === 'participating');
                 const isWeekBlocked = !!participatingTournament;
                 
+                // BUG #4 FIX: Card résumée pour semaines avec 2+ tournois
+                if (hasMultipleTournaments) {
+                  return (
+                    <TouchableOpacity
+                      key={week.weekNumber}
+                      style={[styles.weekCardSummary, isWeekBlocked && styles.weekCardBlocked]}
+                      onPress={() => {
+                        setSelectedWeekNumber(week.weekNumber);
+                        setShowTournamentModal(true);
+                      }}
+                      data-testid={`week-card-${week.weekNumber}`}
+                    >
+                      <View style={styles.weekCardHeader}>
+                        <Text style={styles.weekNumber}>S{week.weekNumber}</Text>
+                        <Text style={styles.weekDates}>
+                          {firstTournament.startDate ? new Date(firstTournament.startDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : ''}
+                        </Text>
+                      </View>
+                      
+                      {/* Badge "X tournois" */}
+                      <View style={styles.multiTournamentBadgeLarge}>
+                        <Ionicons name="tennisball" size={16} color="#8B5CF6" />
+                        <Text style={styles.multiTournamentTextLarge}>
+                          {tournamentCount} tournois
+                        </Text>
+                      </View>
+                      
+                      {/* Chips de localisation */}
+                      <View style={styles.locationChips}>
+                        {visibleTournaments.slice(0, 3).map(t => (
+                          <View key={t.id} style={styles.locationChip}>
+                            <Text style={styles.locationChipText}>
+                              {t.flag || getFlagEmoji(t.country)} {t.city}
+                            </Text>
+                          </View>
+                        ))}
+                        {tournamentCount > 3 && (
+                          <View style={styles.locationChipMore}>
+                            <Text style={styles.locationChipMoreText}>+{tournamentCount - 3}</Text>
+                          </View>
+                        )}
+                      </View>
+                      
+                      {/* Bouton CTA */}
+                      <View style={styles.viewDetailBtn}>
+                        <Text style={styles.viewDetailBtnText}>Voir le détail</Text>
+                        <Ionicons name="chevron-forward" size={14} color="#1e3c72" />
+                      </View>
+                      
+                      {/* Badge de statut si un tournoi est inscrit */}
+                      {(() => {
+                        const registeredTournament = week.tournaments.find(t => t.registration);
+                        if (!registeredTournament?.registration) return null;
+                        
+                        const status = registeredTournament.registration.status;
+                        const statusConfig = TOURNAMENT_STATUS_LABELS[status];
+                        
+                        if (!statusConfig) return null;
+                        
+                        return (
+                          <View style={[styles.registrationBadge, { backgroundColor: statusConfig.color + '15' }]}>
+                            <Ionicons 
+                              name={status === 'participating' ? 'checkmark-circle' : status === 'interested' ? 'star' : 'time'} 
+                              size={14} 
+                              color={statusConfig.color} 
+                            />
+                            <Text style={[styles.registrationText, { color: statusConfig.color }]}>
+                              {statusConfig.label}
+                            </Text>
+                          </View>
+                        );
+                      })()}
+                    </TouchableOpacity>
+                  );
+                }
+                
+                // Card détaillée standard pour 1 seul tournoi
                 return (
                   <TouchableOpacity
                     key={week.weekNumber}
@@ -972,16 +1049,6 @@ export default function CalendarScreen() {
                       </Text>
                     </View>
                     
-                    {/* FEATURE #2: Badge "X tournois disponibles" si plusieurs */}
-                    {hasMultipleTournaments && (
-                      <View style={styles.multiTournamentBadge}>
-                        <Ionicons name="tennisball" size={12} color="#8B5CF6" />
-                        <Text style={styles.multiTournamentText}>
-                          {tournamentCount} tournois
-                        </Text>
-                      </View>
-                    )}
-                    
                     <View style={[styles.categoryBadge, { backgroundColor: getCategoryColor(firstTournament.category) + '18' }]}>
                       <Text style={[styles.categoryText, { color: getCategoryColor(firstTournament.category) }]}>
                         {firstTournament.category}
@@ -989,7 +1056,7 @@ export default function CalendarScreen() {
                     </View>
                     
                     <Text style={styles.tournamentName} numberOfLines={1}>
-                      {hasMultipleTournaments ? `${firstTournament.name} +${tournamentCount - 1}` : firstTournament.name}
+                      {firstTournament.name}
                     </Text>
                     
                     <View style={styles.tournamentMeta}>
