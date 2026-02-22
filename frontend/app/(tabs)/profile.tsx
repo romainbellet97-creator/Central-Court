@@ -695,8 +695,6 @@ export default function ProfileScreen() {
                       onChangeText={setInviteName}
                       placeholder="Prénom Nom"
                       placeholderTextColor="#999"
-                      // BUG #4 FIX: Ajout couleur texte visible
-                      color="#333"
                     />
                   </View>
                   
@@ -710,8 +708,6 @@ export default function ProfileScreen() {
                       placeholderTextColor="#999"
                       keyboardType="email-address"
                       autoCapitalize="none"
-                      // BUG #4 FIX: Ajout couleur texte visible
-                      color="#333"
                     />
                   </View>
                   
