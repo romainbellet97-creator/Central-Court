@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 const ONBOARDING_COMPLETE_KEY = 'onboarding_completed';
 
 // Expo Go URL
-const EXPO_URL = 'exp://courtside-48.ngrok.io';
+const EXPO_URL = 'exp://event-management-9.ngrok.io';
 
 export default function Index() {
   const [isLoading, setIsLoading] = useState(true);
