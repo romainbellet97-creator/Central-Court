@@ -144,6 +144,7 @@ async def add_observation(event_id: str, req: AddObservationRequest):
         "author": req.author,
         "role": req.role,
         "text": req.text,
+        "parentId": req.parentId,  # FEATURE #1: Support des réponses
         "createdAt": datetime.now(timezone.utc).isoformat(),
     }
     result = await db.events.update_one(
