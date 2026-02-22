@@ -860,6 +860,24 @@ export default function CalendarScreen() {
     return date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
   };
 
+  // FEATURE #3: Calcul de la durée entre deux heures (format "HH:MM")
+  const calculateDuration = (startTime: string, endTime: string): string => {
+    if (!startTime || !endTime) return '';
+    
+    const [startH, startM] = startTime.split(':').map(Number);
+    const [endH, endM] = endTime.split(':').map(Number);
+    
+    let totalMinutes = (endH * 60 + endM) - (startH * 60 + startM);
+    if (totalMinutes < 0) totalMinutes += 24 * 60; // Next day
+    
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    
+    if (hours === 0) return `${minutes}min`;
+    if (minutes === 0) return `${hours}h`;
+    return `${hours}h${String(minutes).padStart(2, '0')}`;
+  };
+
   const formatRelativeTime = (dateStr: string) => {
     const date = new Date(dateStr);
     const now = new Date();
