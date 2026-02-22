@@ -38,8 +38,8 @@
     "frontend": "75% - 3 of 4 bugs verified working"
   },
   "test_credentials": {
-    "Preview URL": "https://courtside-48.preview.emergentagent.com",
-    "API URL": "https://courtside-48.preview.emergentagent.com/api"
+    "Preview URL": "https://event-management-9.preview.emergentagent.com",
+    "API URL": "https://event-management-9.preview.emergentagent.com/api"
   },
   "seed_data_creation": "Used existing seed data: Events on Feb 15, 18, 22. Tournament weeks S8-S34 with Qatar ExxonMobil Open as 'participating'",
   "retest_needed": true,
