@@ -425,6 +425,8 @@ export default function CalendarScreen() {
     setEventType('training');
     setEventDate(selectedDate || today);
     setEventTime('09:00');
+    setEventEndTime('10:00');
+    setEndTimeManuallySet(false);
     setEventNotes('');
     setEventLocation('');
   };
@@ -444,6 +446,8 @@ export default function CalendarScreen() {
     setEventType(event.type || 'other');
     setEventDate(event.date);
     setEventTime(event.time || '09:00');
+    setEventEndTime(event.endTime || getDefaultEndTime(event.time || '09:00'));
+    setEndTimeManuallySet(!!event.endTime);
     setEventNotes(event.description || '');
     setEventLocation(event.location || '');
     
