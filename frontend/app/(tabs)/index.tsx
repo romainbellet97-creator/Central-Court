@@ -1399,12 +1399,69 @@ export default function CalendarScreen() {
 
               <View style={styles.pickerSpacer} />
 
-              <AppleTimePicker
-                value={eventTime}
-                onChange={setEventTime}
-                minuteStep={5}
-                label="HEURE"
-              />
+              {/* FEATURE #3: Time Pickers - Début et Fin */}
+              <Text style={styles.timeRangeLabel}>HORAIRES</Text>
+              <View style={styles.timeRangeContainer}>
+                <View style={styles.timePickerHalf}>
+                  <AppleTimePicker
+                    value={eventTime}
+                    onChange={(time) => {
+                      setEventTime(time);
+                      if (!endTimeManuallySet) {
+                        setEventEndTime(getDefaultEndTime(time));
+                      }
+                    }}
+                    minuteStep={5}
+                    label="DÉBUT"
+                  />
+                </View>
+                <View style={styles.timeRangeSeparator}>
+                  <Ionicons name="arrow-forward" size={20} color="#9CA3AF" />
+                </View>
+                <View style={styles.timePickerHalf}>
+                  <AppleTimePicker
+                    value={eventEndTime}
+                    onChange={(time) => {
+                      setEventEndTime(time);
+                      setEndTimeManuallySet(true);
+                    }}
+                    minuteStep={5}
+                    label="FIN"
+                  />
+                </View>
+              </View>
+
+              {/* Validation: fin >= début */}
+              {eventEndTime <= eventTime && (
+                <View style={styles.validationError}>
+                  <Ionicons name="warning" size={16} color="#D97706" />
+                  <Text style={styles.validationErrorText}>
+                    L'heure de fin doit être après l'heure de début
+                  </Text>
+                </View>
+              )}
+
+              {/* FEATURE #2: Bannière notification staff si date/heure modifiée */}
+              {selectedEvent && selectedEvent.staffMembers && selectedEvent.staffMembers.length > 0 && (
+                eventDate !== selectedEvent.date || eventTime !== selectedEvent.time
+              ) && (
+                <View style={styles.staffNotificationBanner}>
+                  <View style={styles.staffBannerHeader}>
+                    <Ionicons name="people" size={20} color="#1e3c72" />
+                    <Text style={styles.staffBannerTitle}>Staff associé</Text>
+                  </View>
+                  <Text style={styles.staffBannerText}>
+                    Vous avez modifié la date ou l'heure. Souhaitez-vous notifier le staff de ce changement ?
+                  </Text>
+                  <View style={styles.staffBannerNames}>
+                    {selectedEvent.staffMembers.map((staff, i) => (
+                      <View key={staff.id} style={styles.staffBadge}>
+                        <Text style={styles.staffBadgeText}>{staff.name}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
 
               <Text style={styles.fieldLabel}>LIEU (optionnel)</Text>
               <TextInput
@@ -1426,10 +1483,39 @@ export default function CalendarScreen() {
                 numberOfLines={4}
               />
 
-              <TouchableOpacity style={styles.saveButton} onPress={handleUpdateEvent}>
-                <Ionicons name="checkmark-circle" size={22} color="#fff" />
-                <Text style={styles.saveButtonText}>Enregistrer les modifications</Text>
-              </TouchableOpacity>
+              {/* FEATURE #2: Boutons conditionnels si staff et modification date/heure */}
+              {selectedEvent && selectedEvent.staffMembers && selectedEvent.staffMembers.length > 0 && (
+                eventDate !== selectedEvent.date || eventTime !== selectedEvent.time
+              ) ? (
+                <>
+                  <TouchableOpacity 
+                    style={[styles.saveButton, styles.suggestButton, eventEndTime <= eventTime && styles.saveButtonDisabled]} 
+                    onPress={() => handleUpdateEventWithNotification(true)}
+                    disabled={eventEndTime <= eventTime}
+                  >
+                    <Ionicons name="paper-plane" size={20} color="#fff" />
+                    <Text style={styles.saveButtonText}>Suggérer ce créneau</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={[styles.secondaryButton, eventEndTime <= eventTime && styles.saveButtonDisabled]} 
+                    onPress={() => handleUpdateEventWithNotification(false)}
+                    disabled={eventEndTime <= eventTime}
+                  >
+                    <Ionicons name="checkmark" size={20} color="#1e3c72" />
+                    <Text style={styles.secondaryButtonText}>Modifier sans notifier</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <TouchableOpacity 
+                  style={[styles.saveButton, eventEndTime <= eventTime && styles.saveButtonDisabled]} 
+                  onPress={handleUpdateEvent}
+                  disabled={eventEndTime <= eventTime}
+                >
+                  <Ionicons name="checkmark-circle" size={22} color="#fff" />
+                  <Text style={styles.saveButtonText}>Enregistrer les modifications</Text>
+                </TouchableOpacity>
+              )}
 
               <TouchableOpacity
                 style={styles.cancelButton}
