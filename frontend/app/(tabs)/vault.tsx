@@ -145,6 +145,49 @@ export default function DocumentsScreen() {
     };
   }, []);
 
+  // ============================================================
+  // BUG #2 FIX: Relire les permissions à chaque focus de l'écran
+  // ============================================================
+  useFocusEffect(
+    useCallback(() => {
+      const checkPermissions = async () => {
+        console.log('🔄 Checking camera permissions on focus...');
+        const { status } = await ImagePicker.getCameraPermissionsAsync();
+        console.log('📷 Camera permission status:', status);
+        if (status !== 'granted') {
+          // Permissions perdues, les re-demander au prochain usage
+          console.log('⚠️ Camera permission not granted');
+        }
+      };
+      checkPermissions();
+      
+      // Cleanup: libérer les verrous au blur
+      return () => {
+        isProcessingRef.current = false;
+      };
+    }, [])
+  );
+
+  // ============================================================
+  // BUG #2 FIX: Gérer l'AppState pour le retour de l'app
+  // ============================================================
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', async (nextAppState) => {
+      if (nextAppState === 'active') {
+        console.log('📱 App returned to foreground, resetting locks...');
+        isProcessingRef.current = false;
+        
+        // Re-vérifier les permissions
+        const { status } = await ImagePicker.getCameraPermissionsAsync();
+        console.log('📷 Camera permission after foreground:', status);
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
   // ============ COMPUTED ============
 
   const monthDocs = useMemo(() => {
