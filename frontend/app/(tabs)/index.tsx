@@ -159,6 +159,9 @@ export default function CalendarScreen() {
   const router = useRouter();
   const today = new Date().toISOString().split('T')[0];
   
+  // BUG #3 FIX: Ref pour le scroll automatique du modal détail
+  const detailScrollRef = useRef<ScrollView>(null);
+  
   // Core state
   const [currentMonth, setCurrentMonth] = useState(today.substring(0, 7));
   const [selectedDate, setSelectedDate] = useState<string>(today);
