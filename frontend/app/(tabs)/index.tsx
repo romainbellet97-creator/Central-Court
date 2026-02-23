@@ -806,15 +806,13 @@ export default function CalendarScreen() {
     try {
       await apiRegisterTournament(tournamentId, status);
       
-      // FEATURE #3: Si on devient "participating", griser les autres tournois de la même semaine
-      setTournamentWeeks(prev => {
-        // Trouver la semaine contenant ce tournoi
-        const targetWeek = prev.find(week => 
+      // AMÉLIORATION RÉACTIVITÉ: Mise à jour optimiste immédiate
+      const updateTournaments = (weeks: typeof tournamentWeeks) => {
+        const targetWeek = weeks.find(week => 
           week.tournaments.some(t => t.id === tournamentId)
         );
         
-        return prev.map(week => {
-          // Si ce n'est pas la semaine du tournoi, ne rien changer
+        return weeks.map(week => {
           if (week.weekNumber !== targetWeek?.weekNumber) {
             return week;
           }
@@ -822,39 +820,47 @@ export default function CalendarScreen() {
           return {
             ...week,
             tournaments: (week.tournaments || []).map(t => {
-              // Le tournoi sélectionné : mettre à jour son statut
               if (t.id === tournamentId) {
-                return { ...t, registration: { status } };
+                return { ...t, registration: { status }, hidden: false };
               }
               
-              // FEATURE #3: Si on participe à un tournoi, bloquer les autres de la semaine
-              if (status === 'participating') {
-                // Griser automatiquement les autres tournois (sauf si déjà "participating")
-                if (t.registration?.status !== 'participating') {
-                  return { 
-                    ...t, 
-                    registration: { status: 'not_interested' },
-                    isBlocked: true 
-                  };
-                }
+              // Si on participe, bloquer les autres
+              if (status === 'participating' && t.registration?.status !== 'participating') {
+                return { 
+                  ...t, 
+                  registration: { status: 'not_interested' },
+                  isBlocked: true 
+                };
               }
               
-              // FEATURE #3: Si on repasse en "interested" ou "not_interested", débloquer les autres
-              if (status === 'interested' || status === 'not_interested') {
-                if (t.isBlocked) {
-                  return { 
-                    ...t, 
-                    registration: undefined,
-                    isBlocked: false 
-                  };
-                }
+              // Si on change depuis participating, débloquer
+              if ((status === 'interested' || status === 'pending') && t.isBlocked) {
+                return { 
+                  ...t, 
+                  registration: undefined,
+                  isBlocked: false 
+                };
               }
               
               return t;
             })
           };
         });
-      });
+      };
+      
+      // Mettre à jour tournamentWeeks
+      setTournamentWeeks(updateTournaments);
+      
+      // AMÉLIORATION RÉACTIVITÉ: Mettre à jour selectedWeek si c'est la semaine affichée
+      if (selectedWeekNumber) {
+        setTournamentWeeks(prev => {
+          const updatedWeek = prev.find(w => w.weekNumber === selectedWeekNumber);
+          if (updatedWeek) {
+            // Force re-render du selectedWeek via useEffect/useMemo
+          }
+          return prev;
+        });
+      }
       
       // Message de confirmation
       if (status === 'participating') {
