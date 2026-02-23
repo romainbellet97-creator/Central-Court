@@ -147,6 +147,12 @@ export default function ProfileScreen() {
       }
     } catch (error) {
       console.error('Error loading profile:', error);
+      // BUG #15 FIX: Afficher une alerte si le chargement échoue
+      Alert.alert(
+        'Erreur de chargement',
+        'Impossible de charger votre profil. Vérifiez votre connexion et réessayez.',
+        [{ text: 'Réessayer', onPress: () => loadProfile() }]
+      );
     } finally {
       setIsLoading(false);
       setRefreshing(false);
