@@ -107,9 +107,12 @@ async def add_day_presence(data: DayPresenceCreate, request: Request):
 
 
 @router.put("/days/{date}")
-async def update_day_presence(date: str, data: DayPresenceUpdate):
+async def update_day_presence(date: str, data: DayPresenceUpdate, request: Request):
     """Update a day of presence"""
-    existing = await db.day_presences.find_one({"date": date})
+    # DB-4 FIX: Récupérer userId depuis l'authentification
+    userId = await get_current_user_id(request)
+    
+    existing = await db.day_presences.find_one({"date": date, "userId": userId})
     if not existing:
         raise HTTPException(status_code=404, detail="Day not found")
     
@@ -126,19 +129,19 @@ async def update_day_presence(date: str, data: DayPresenceUpdate):
     update_fields["updatedAt"] = datetime.now(timezone.utc).isoformat()
     
     await db.day_presences.update_one(
-        {"date": date},
+        {"date": date, "userId": userId},
         {"$set": update_fields}
     )
     
-    updated = await db.day_presences.find_one({"date": date}, {"_id": 0})
+    updated = await db.day_presences.find_one({"date": date, "userId": userId}, {"_id": 0})
     return updated
 
 
 @router.delete("/days/{date}")
-async def delete_day_presence(date: str):
+async def delete_day_presence(date: str, request: Request):
     """Delete a day of presence"""
-    # DB-2 FIX: Filtrer par userId
-    userId = "default-user"  # TODO: Get from auth
+    # DB-4 FIX: Récupérer userId depuis l'authentification
+    userId = await get_current_user_id(request)
     result = await db.day_presences.delete_one({"date": date, "userId": userId})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Day not found")
@@ -146,14 +149,14 @@ async def delete_day_presence(date: str):
 
 
 @router.get("/days")
-async def get_day_presences(year: int = None, month: Optional[int] = None):
+async def get_day_presences(request: Request, year: int = None, month: Optional[int] = None):
     """Get all day presences for a year (optionally filtered by month)"""
     # DB-12 FIX: Utiliser l'année courante par défaut
     if year is None:
         year = datetime.now().year
     
-    # DB-2 FIX: Filtrer par userId
-    userId = "default-user"  # TODO: Get from auth
+    # DB-4 FIX: Récupérer userId depuis l'authentification
+    userId = await get_current_user_id(request)
     query = {"date": {"$regex": f"^{year}"}, "userId": userId}
     if month:
         query["date"] = {"$regex": f"^{year}-{month:02d}"}
