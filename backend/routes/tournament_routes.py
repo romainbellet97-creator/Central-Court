@@ -1,8 +1,9 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timezone
 import uuid
+from .auth_helpers import get_current_user_id
 
 router = APIRouter(prefix="/api/tournaments", tags=["tournaments"])
 
