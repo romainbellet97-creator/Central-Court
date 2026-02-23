@@ -1039,6 +1039,12 @@ export default function DocumentsScreen() {
                     </View>
                   )}
 
+                  {/* P2-7 FIX: Bouton Modifier */}
+                  <TouchableOpacity style={s.editBtn} onPress={() => handleEditDoc(showDocDetail)}>
+                    <Ionicons name="pencil-outline" size={18} color="#1e3c72" />
+                    <Text style={s.editText}>Modifier</Text>
+                  </TouchableOpacity>
+
                   <TouchableOpacity style={s.deleteBtn} onPress={() => handleDeleteDoc(showDocDetail.id)}>
                     <Ionicons name="trash-outline" size={18} color="#E53935" />
                     <Text style={s.deleteText}>Supprimer</Text>
