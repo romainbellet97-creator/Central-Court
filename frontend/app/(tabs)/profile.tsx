@@ -941,6 +941,11 @@ const styles = StyleSheet.create({
   pendingBadge: {
     padding: 6,
   },
+  // P2-16 FIX: Style pour le bouton de suppression de membre
+  removeMemberBtn: {
+    padding: 6,
+    marginLeft: 8,
+  },
   hint: {
     fontSize: 12,
     color: '#999',
