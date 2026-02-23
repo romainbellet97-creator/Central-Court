@@ -441,9 +441,10 @@ async def register_tournament(req: RegisterTournamentRequest, request: Request):
 
 
 @router.post("/hide")
-async def hide_tournament(req: HideTournamentRequest):
+async def hide_tournament(req: HideTournamentRequest, request: Request):
     """Hide a tournament (not interested)"""
-    userId = "default-user"  # TODO: Get from auth
+    # DB-4 FIX: Récupérer userId depuis l'authentification
+    userId = await get_current_user_id(request)
     
     # DB-7 FIX: Sauvegarder le status précédent avant de cacher
     existing_reg = await db.tournament_registrations.find_one(
@@ -467,9 +468,10 @@ async def hide_tournament(req: HideTournamentRequest):
 
 
 @router.delete("/hide/{tournament_id}")
-async def unhide_tournament(tournament_id: str):
+async def unhide_tournament(tournament_id: str, request: Request):
     """Unhide a tournament and restore previous status"""
-    userId = "default-user"  # TODO: Get from auth
+    # DB-4 FIX: Récupérer userId depuis l'authentification
+    userId = await get_current_user_id(request)
     
     # DB-7 FIX: Restaurer le status précédent si disponible
     hidden_doc = await db.tournament_hidden.find_one(
