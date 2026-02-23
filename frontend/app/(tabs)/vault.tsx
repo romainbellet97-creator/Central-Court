@@ -714,7 +714,8 @@ export default function DocumentsScreen() {
                       </View>
                       <View style={s.receiptRight}>
                         <Text style={s.receiptAmount}>
-                          {doc.amount ? `${doc.amount.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} €` : '--'}
+                          {/* BUG #5 FIX: Utiliser doc.currency au lieu de hardcoder € */}
+                          {doc.amount != null ? `${doc.amount.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} ${getCurrencySymbol(doc.currency)}` : '--'}
                         </Text>
                       </View>
                     </TouchableOpacity>
