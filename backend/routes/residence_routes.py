@@ -168,14 +168,14 @@ async def get_day_presences(request: Request, year: int = None, month: Optional[
 # ── Stats ──
 
 @router.get("/stats")
-async def get_residence_stats(year: int = None):
+async def get_residence_stats(request: Request, year: int = None):
     """Calculate country stats for the year"""
     # DB-12 FIX: Utiliser l'année courante par défaut
     if year is None:
         year = datetime.now().year
     
-    # DB-2 FIX: Filtrer par userId
-    userId = "default-user"  # TODO: Get from auth
+    # DB-4 FIX: Récupérer userId depuis l'authentification
+    userId = await get_current_user_id(request)
     days = await db.day_presences.find(
         {"date": {"$regex": f"^{year}"}, "userId": userId},
         {"_id": 0, "date": 1, "country": 1, "countryName": 1, "status": 1}
