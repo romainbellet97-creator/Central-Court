@@ -222,7 +222,9 @@ export default function ProfileScreen() {
       
       const invitation = response.data;
       const roleInfo = STAFF_ROLES.find(r => r.id === selectedRole);
-      const webUrl = `https://event-management-9.preview.emergentagent.com/join/${invitation.token}`;
+      // BUG #3 FIX: Utiliser la variable d'environnement au lieu d'un domaine hardcodé
+      const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://event-management-9.preview.emergentagent.com';
+      const webUrl = `${backendUrl}/join/${invitation.token}`;
       
       // Add to local team
       setTeam(prev => [...prev, {
