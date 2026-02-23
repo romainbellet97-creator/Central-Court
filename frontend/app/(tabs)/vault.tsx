@@ -537,9 +537,12 @@ export default function DocumentsScreen() {
       return;
     }
     
+    // BUG #17 FIX: Utiliser null check explicite au lieu de || pour gérer 0 correctement
     const parsedMontant = parseFloat(editedMontant.replace(',', '.')) || 0;
-    const parsedHT = parseFloat(editedMontantHT.replace(',', '.')) || undefined;
-    const parsedTVA = parseFloat(editedMontantTVA.replace(',', '.')) || undefined;
+    const htValue = parseFloat(editedMontantHT.replace(',', '.'));
+    const tvaValue = parseFloat(editedMontantTVA.replace(',', '.'));
+    const parsedHT = isNaN(htValue) ? undefined : htValue;
+    const parsedTVA = isNaN(tvaValue) ? undefined : tvaValue;
 
     setIsSaving(true);
     
