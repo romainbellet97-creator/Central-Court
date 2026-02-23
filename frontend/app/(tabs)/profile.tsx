@@ -570,10 +570,19 @@ export default function ProfileScreen() {
                         {member.status === 'pending' && ' (en attente)'}
                       </Text>
                     </View>
-                    {member.status === 'pending' && (
+                    {member.status === 'pending' ? (
                       <View style={styles.pendingBadge}>
                         <Ionicons name="time-outline" size={14} color="#ff9800" />
                       </View>
+                    ) : (
+                      // P2-16 FIX: Ajout icône suppression visible
+                      <TouchableOpacity 
+                        style={styles.removeMemberBtn}
+                        onPress={() => handleRemoveMember(member)}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      >
+                        <Ionicons name="close-circle-outline" size={22} color="#E53935" />
+                      </TouchableOpacity>
                     )}
                   </TouchableOpacity>
                 );
