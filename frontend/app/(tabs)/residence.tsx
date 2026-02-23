@@ -462,10 +462,15 @@ export default function ResidenceScreen() {
       setShowAddModal(false);
       setSingleDate(new Date());
       setNotes('');
+      setShowNotesField(false); // BUG #11 FIX: Reset l'état des notes
       setSelectedCountry(null);
       loadData();
+      // BUG #6 FIX: Message de succès
+      Alert.alert('Succès', 'Jour de présence enregistré.');
     } catch (err) {
       console.error('Error adding day:', err);
+      // BUG #6 FIX: Afficher une alerte si l'ajout échoue
+      Alert.alert('Erreur', 'Impossible d\'enregistrer ce jour de présence. Veuillez réessayer.');
     } finally {
       setSubmitting(false);
     }
@@ -482,6 +487,10 @@ export default function ResidenceScreen() {
     
     setSubmitting(true);
     try {
+      // Calculer le nombre de jours ajoutés
+      const diffTime = Math.abs(bulkEndDate.getTime() - bulkStartDate.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+      
       await addBulkDays({
         startDate: formatDate(bulkStartDate),
         endDate: formatDate(bulkEndDate),
@@ -493,8 +502,11 @@ export default function ResidenceScreen() {
       setBulkStartDate(new Date());
       setBulkEndDate(new Date());
       setNotes('');
+      setShowNotesField(false); // BUG #11 FIX: Reset l'état des notes
       setSelectedCountry(null);
       loadData();
+      // BUG #14 FIX: Message de succès avec le nombre de jours
+      Alert.alert('Succès', `${diffDays} jour${diffDays > 1 ? 's' : ''} de présence enregistré${diffDays > 1 ? 's' : ''}.`);
     } catch (err) {
       console.error('Error adding bulk days:', err);
       Alert.alert('Erreur', 'Maximum 90 jours par séjour.');
