@@ -383,7 +383,7 @@ async def get_tournament_stats():
 
 
 @router.post("/register")
-async def register_tournament(req: RegisterTournamentRequest):
+async def register_tournament(req: RegisterTournamentRequest, request: Request):
     """Register or update registration for a tournament"""
     valid_statuses = ["interested", "pending", "accepted", "participating", "declined"]
     if req.status not in valid_statuses:
@@ -394,8 +394,8 @@ async def register_tournament(req: RegisterTournamentRequest):
     if not tournament:
         raise HTTPException(status_code=404, detail="Tournament not found")
 
-    # DB-3 FIX: Ajout userId pour isolation utilisateur
-    userId = "default-user"  # TODO: Get from auth
+    # DB-4 FIX: Récupérer userId depuis l'authentification
+    userId = await get_current_user_id(request)
 
     # Upsert registration with userId
     await db.tournament_registrations.update_one(
