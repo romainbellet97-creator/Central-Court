@@ -1059,6 +1059,77 @@ export default function DocumentsScreen() {
         </View>
       </Modal>
 
+      {/* P2-7 FIX: Modal de modification de document */}
+      <Modal visible={showEditDocModal} animationType="slide" transparent>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={s.modalOverlay}>
+          <View style={s.verifySheet}>
+            <View style={s.sheetHandle} />
+            <Text style={s.sheetTitle}>Modifier le document</Text>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={s.fieldLabel}>Fournisseur</Text>
+              <TextInput style={s.input} value={editedFournisseur} onChangeText={setEditedFournisseur} placeholder="Nom du fournisseur" />
+
+              <View style={s.amountRow}>
+                <View style={s.amountField}>
+                  <Text style={s.fieldLabel}>Montant</Text>
+                  <TextInput style={s.input} value={editedMontant} onChangeText={setEditedMontant} placeholder="0.00" keyboardType="decimal-pad" />
+                </View>
+                <View style={s.currencyField}>
+                  <Text style={s.fieldLabel}>Devise</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.currencyPicker}>
+                    {CURRENCIES.map(cur => (
+                      <TouchableOpacity
+                        key={cur}
+                        style={[s.currencyChip, editedCurrency === cur && s.currencyChipActive]}
+                        onPress={() => setEditedCurrency(cur)}
+                      >
+                        <Text style={[s.currencyChipText, editedCurrency === cur && s.currencyChipTextActive]}>{cur}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              </View>
+
+              <Text style={s.fieldLabel}>Date (AAAA-MM-JJ)</Text>
+              <TextInput style={s.input} value={editedDate} onChangeText={setEditedDate} placeholder="AAAA-MM-JJ" />
+
+              <Text style={s.fieldLabel}>Catégorie</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.catPicker}>
+                {OCR_CATEGORIES.map(c => {
+                  const cfg = getCatConfig(c);
+                  const active = editedCategorie === c;
+                  return (
+                    <TouchableOpacity
+                      key={c}
+                      style={[s.catChip, active && { backgroundColor: cfg.color }]}
+                      onPress={() => setEditedCategorie(c)}
+                    >
+                      <Ionicons name={cfg.icon as any} size={14} color={active ? '#fff' : cfg.color} />
+                      <Text style={[s.catChipText, active && { color: '#fff' }]}>{cfg.label}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+
+              <TouchableOpacity 
+                style={[s.saveBtn, isSaving && s.saveBtnDisabled]} 
+                onPress={handleUpdateDocument} 
+                disabled={isSaving}
+              >
+                {isSaving ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={s.saveBtnText}>Enregistrer les modifications</Text>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity style={s.cancelBtn} onPress={() => { setShowEditDocModal(false); setEditingDoc(null); }}>
+                <Text style={s.cancelText}>Annuler</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
       {/* ── Uploading Overlay ── */}
       {isUploading && (
         <View style={s.uploadingOverlay}>
