@@ -163,7 +163,8 @@ export default function ResidenceScreen() {
   const handleDeleteDay = async (date: string) => {
     Alert.alert(
       'Supprimer ce jour ?',
-      `Voulez-vous vraiment supprimer le ${formatDateDisplay(new Date(date))} ?`,
+      // BUG #18 FIX: Utiliser formatDateStringDisplay au lieu de new Date(date)
+      `Voulez-vous vraiment supprimer le ${formatDateStringDisplay(date)} ?`,
       [
         { text: 'Annuler', style: 'cancel' },
         {
