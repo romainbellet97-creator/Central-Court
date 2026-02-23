@@ -1015,6 +1015,7 @@ const s = StyleSheet.create({
   monthTotal: { fontSize: 28, fontWeight: '800', color: '#1e3c72', marginTop: 4 },
   monthNav: { flexDirection: 'row', gap: 8 },
   monthBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#e8f0fe', justifyContent: 'center', alignItems: 'center' },
+  monthBtnDisabled: { backgroundColor: '#f5f5f5', opacity: 0.5 },
 
   // Category Breakdown
   section: { backgroundColor: '#fff', marginHorizontal: 16, borderRadius: 16, padding: 16, marginBottom: 16 },
