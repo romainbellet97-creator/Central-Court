@@ -158,6 +158,29 @@ init_user_db(db)
 init_invitation_db(db)
 init_residence_db(db)
 
+# DB-9 FIX: Créer TTL index sur les sessions au démarrage
+@app.on_event("startup")
+async def create_ttl_indexes():
+    """Create TTL indexes for automatic session cleanup"""
+    try:
+        # TTL index sur user_sessions - supprime automatiquement après expires_at
+        await db.user_sessions.create_index(
+            "expires_at",
+            expireAfterSeconds=0,  # Expire exactement à expires_at
+            name="session_expiry_ttl"
+        )
+        print("✅ TTL index created on user_sessions.expires_at")
+        
+        # TTL index sur invitations - supprime 30 jours après expiration
+        await db.staff_invitations.create_index(
+            "expiresAt",
+            expireAfterSeconds=30 * 24 * 3600,  # 30 jours après expiration
+            name="invitation_expiry_ttl"
+        )
+        print("✅ TTL index created on staff_invitations.expiresAt")
+    except Exception as e:
+        print(f"⚠️ TTL index creation error (may already exist): {e}")
+
 app.include_router(email_router)
 app.include_router(event_router)
 app.include_router(tournament_router)
