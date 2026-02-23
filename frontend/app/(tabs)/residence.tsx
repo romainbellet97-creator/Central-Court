@@ -2162,6 +2162,14 @@ const styles = StyleSheet.create({
     color: Colors.text.secondary,
     marginTop: 2,
   },
+  // P2-12 FIX: Style pour le nom complet du pays
+  countryOptionName: {
+    fontSize: 11,
+    color: Colors.text.secondary,
+    marginTop: 2,
+    textAlign: 'center',
+    maxWidth: 80,
+  },
   // Date picker
   datePickerBtn: {
     flexDirection: 'row',
