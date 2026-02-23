@@ -1879,8 +1879,11 @@ export default function CalendarScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
+              {/* P2-20 FIX: Afficher "Semaine X" au lieu du premier tournoi */}
               <Text style={styles.modalTitle}>
-                {selectedWeek?.tournaments?.[0]?.name || 'Tournoi'}
+                {selectedWeek?.tournaments?.length === 1 
+                  ? selectedWeek.tournaments[0].name 
+                  : `Tournois de la semaine ${selectedWeek?.weekNumber || ''}`}
               </Text>
               <TouchableOpacity onPress={() => setShowTournamentModal(false)}>
                 <Ionicons name="close" size={24} color="#1a1a1a" />
