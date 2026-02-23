@@ -946,7 +946,13 @@ export default function ResidenceScreen() {
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Ajouter un jour</Text>
-              <TouchableOpacity onPress={() => setShowAddModal(false)}>
+              <TouchableOpacity onPress={() => {
+                setShowAddModal(false);
+                // P2-11 FIX: Reset state when closing modal
+                setNotes('');
+                setShowNotesField(false);
+                setSelectedCountry(null);
+              }}>
                 <Ionicons name="close" size={24} color={Colors.text.primary} />
               </TouchableOpacity>
             </View>
