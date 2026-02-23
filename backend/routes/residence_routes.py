@@ -134,16 +134,24 @@ async def update_day_presence(date: str, data: DayPresenceUpdate):
 @router.delete("/days/{date}")
 async def delete_day_presence(date: str):
     """Delete a day of presence"""
-    result = await db.day_presences.delete_one({"date": date})
+    # DB-2 FIX: Filtrer par userId
+    userId = "default-user"  # TODO: Get from auth
+    result = await db.day_presences.delete_one({"date": date, "userId": userId})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Day not found")
     return {"success": True}
 
 
 @router.get("/days")
-async def get_day_presences(year: int = 2026, month: Optional[int] = None):
+async def get_day_presences(year: int = None, month: Optional[int] = None):
     """Get all day presences for a year (optionally filtered by month)"""
-    query = {"date": {"$regex": f"^{year}"}}
+    # DB-12 FIX: Utiliser l'année courante par défaut
+    if year is None:
+        year = datetime.now().year
+    
+    # DB-2 FIX: Filtrer par userId
+    userId = "default-user"  # TODO: Get from auth
+    query = {"date": {"$regex": f"^{year}"}, "userId": userId}
     if month:
         query["date"] = {"$regex": f"^{year}-{month:02d}"}
 
@@ -154,10 +162,16 @@ async def get_day_presences(year: int = 2026, month: Optional[int] = None):
 # ── Stats ──
 
 @router.get("/stats")
-async def get_residence_stats(year: int = 2026):
+async def get_residence_stats(year: int = None):
     """Calculate country stats for the year"""
+    # DB-12 FIX: Utiliser l'année courante par défaut
+    if year is None:
+        year = datetime.now().year
+    
+    # DB-2 FIX: Filtrer par userId
+    userId = "default-user"  # TODO: Get from auth
     days = await db.day_presences.find(
-        {"date": {"$regex": f"^{year}"}},
+        {"date": {"$regex": f"^{year}"}, "userId": userId},
         {"_id": 0, "date": 1, "country": 1, "countryName": 1, "status": 1}
     ).to_list(400)
 
