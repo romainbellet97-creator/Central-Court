@@ -316,12 +316,14 @@ async def list_tournament_weeks(
             tournaments_by_week[wn] = []
         tournaments_by_week[wn].append(serialize_tournament(t))
 
-    # Get registrations and hidden for current user (demo: no auth yet)
+    # DB-3 FIX: Get registrations and hidden for current user with userId filter
+    # TODO: Replace 'default-user' with actual authenticated userId from request
+    userId = "default-user"
     registrations = await db.tournament_registrations.find(
-        {}, {"_id": 0, "tournamentId": 1, "status": 1, "updatedAt": 1}
+        {"userId": userId}, {"_id": 0, "tournamentId": 1, "status": 1, "updatedAt": 1}
     ).limit(500).to_list(500)
     hidden = await db.tournament_hidden.find(
-        {}, {"_id": 0, "tournamentId": 1}
+        {"userId": userId}, {"_id": 0, "tournamentId": 1}
     ).limit(500).to_list(500)
 
     # Build registration map by tournament ID
