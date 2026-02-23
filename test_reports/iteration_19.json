@@ -33,8 +33,8 @@
   },
   "test_credentials": {
     "App User": "testUser@example.com / testpassword123",
-    "Preview URL": "https://event-management-9.preview.emergentagent.com",
-    "API URL": "https://event-management-9.preview.emergentagent.com/api"
+    "Preview URL": "https://residency-app-qa.preview.emergentagent.com",
+    "API URL": "https://residency-app-qa.preview.emergentagent.com/api"
   },
   "seed_data_creation": "Used existing seed data: Events on Feb 15 (3 events) and Feb 18 (2 events), Tournament weeks S8-S34",
   "retest_needed": false,

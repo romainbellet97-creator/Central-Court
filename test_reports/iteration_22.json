@@ -36,7 +36,7 @@
     "frontend": "Code review verified - UI cannot be directly tested (Expo/React Native app)"
   },
   "test_credentials": {
-    "API Base URL": "https://event-management-9.preview.emergentagent.com"
+    "API Base URL": "https://residency-app-qa.preview.emergentagent.com"
   },
   "seed_data_creation": "N/A - used existing test data",
   "retest_needed": false,

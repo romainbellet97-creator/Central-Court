@@ -39,7 +39,7 @@
   "seed_data_creation": "Created test users with prefix TEST_bugfix_, TEST_getbyemail_, TEST_update_, TEST_minimal_, TEST_null_ during testing",
   "retest_needed": false,
   "main_agent_can_self_test": true,
-  "context_for_next_testing_agent": "4-point bug fix fully verified. Key endpoints tested: POST /api/users/onboarding (creates user with residenceFiscale), GET /api/users/profile/email/{email} (retrieves by email), PUT /api/users/profile/{user_id} (updates classement/email/residenceFiscale/prenom), GET /api/tournaments (has prizeMoney field), GET /api/tournaments/weeks (has prizeMoney in tournaments), GET /api/tournaments/stats (returns {total:228, byCircuit:{ATP:60, WTA:52, ITF:116}}). All tests use REACT_APP_BACKEND_URL=https://event-management-9.preview.emergentagent.com",
+  "context_for_next_testing_agent": "4-point bug fix fully verified. Key endpoints tested: POST /api/users/onboarding (creates user with residenceFiscale), GET /api/users/profile/email/{email} (retrieves by email), PUT /api/users/profile/{user_id} (updates classement/email/residenceFiscale/prenom), GET /api/tournaments (has prizeMoney field), GET /api/tournaments/weeks (has prizeMoney in tournaments), GET /api/tournaments/stats (returns {total:228, byCircuit:{ATP:60, WTA:52, ITF:116}}). All tests use REACT_APP_BACKEND_URL=https://residency-app-qa.preview.emergentagent.com",
   "features_tested": {
     "POST /api/users/onboarding": {
       "status": "PASS",
