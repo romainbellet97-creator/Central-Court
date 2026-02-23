@@ -279,9 +279,13 @@ class BulkDaysCreate(BaseModel):
     notes: Optional[str] = None
 
 @router.post("/days/bulk")
-async def add_bulk_days(data: BulkDaysCreate):
+async def add_bulk_days(data: BulkDaysCreate, request: Request):
     """Add multiple days at once (date range)"""
     from datetime import timedelta
+    
+    # DB-4 FIX: Récupérer userId depuis l'authentification
+    userId = await get_current_user_id(request)
+    
     start = datetime.strptime(data.startDate, "%Y-%m-%d")
     end = datetime.strptime(data.endDate, "%Y-%m-%d")
     if end < start:
@@ -293,10 +297,11 @@ async def add_bulk_days(data: BulkDaysCreate):
     current = start
     while current <= end:
         date_str = current.strftime("%Y-%m-%d")
-        existing = await db.day_presences.find_one({"date": date_str})
+        existing = await db.day_presences.find_one({"date": date_str, "userId": userId})
         if not existing:
             await db.day_presences.insert_one({
-                "id": str(uuid.uuid4())[:8],
+                "id": str(uuid.uuid4()),  # DB-13 FIX: UUID complet
+                "userId": userId,  # DB-4 FIX: userId depuis auth
                 "date": date_str,
                 "country": data.country,
                 "countryName": data.countryName,
