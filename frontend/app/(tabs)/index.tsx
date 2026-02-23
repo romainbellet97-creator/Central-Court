@@ -167,6 +167,7 @@ export default function CalendarScreen() {
   const detailScrollRef = useRef<ScrollView>(null);
   
   // Core state
+  // BUG #1 FIX: Utiliser la date actuelle au lieu de hardcoder Février 2026
   const [currentMonth, setCurrentMonth] = useState(today.substring(0, 7));
   const [selectedDate, setSelectedDate] = useState<string>(today);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
