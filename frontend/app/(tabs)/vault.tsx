@@ -55,7 +55,8 @@ const CATEGORY_CONFIG: Record<string, { label: string; icon: string; color: stri
   'other': { label: 'Autre', icon: 'document', color: '#757575' },
 };
 
-const OCR_CATEGORIES = ['Transport', 'Hébergement', 'Restauration', 'Médical', 'Matériel', 'Services', 'Autre'];
+// BUG #22 FIX: Aligner les catégories OCR avec CATEGORY_CONFIG
+const OCR_CATEGORIES = ['Transport', 'Hébergement', 'Restauration', 'Médical', 'Équipement', 'Services', 'Autre'];
 
 const getCatConfig = (cat: string) => CATEGORY_CONFIG[cat] || CATEGORY_CONFIG['other'] || { label: cat || 'Autre', icon: 'document', color: '#757575' };
 
