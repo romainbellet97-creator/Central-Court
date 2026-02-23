@@ -67,15 +67,15 @@ async def get_country_list():
 @router.post("/days")
 async def add_day_presence(data: DayPresenceCreate):
     """Add a day of presence in a country"""
-    # Check for duplicate
+    # DB-2 FIX: Filtrer par userId pour l'isolation utilisateur
     existing = await db.day_presences.find_one(
-        {"date": data.date},
+        {"date": data.date, "userId": data.userId},
         {"_id": 0}
     )
     if existing:
         # Update existing
         await db.day_presences.update_one(
-            {"date": data.date},
+            {"date": data.date, "userId": data.userId},
             {"$set": {
                 "country": data.country,
                 "countryName": data.countryName,
@@ -84,11 +84,12 @@ async def add_day_presence(data: DayPresenceCreate):
                 "updatedAt": datetime.now(timezone.utc).isoformat(),
             }}
         )
-        updated = await db.day_presences.find_one({"date": data.date}, {"_id": 0})
+        updated = await db.day_presences.find_one({"date": data.date, "userId": data.userId}, {"_id": 0})
         return updated
 
     doc = {
-        "id": str(uuid.uuid4())[:8],
+        "id": str(uuid.uuid4()),  # DB-13 FIX: UUID complet au lieu de 8 chars
+        "userId": data.userId,  # DB-2 FIX: Ajout userId
         "date": data.date,
         "country": data.country,
         "countryName": data.countryName,
