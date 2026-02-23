@@ -391,11 +391,15 @@ async def register_tournament(req: RegisterTournamentRequest):
     if not tournament:
         raise HTTPException(status_code=404, detail="Tournament not found")
 
-    # Upsert registration
+    # DB-3 FIX: Ajout userId pour isolation utilisateur
+    userId = "default-user"  # TODO: Get from auth
+
+    # Upsert registration with userId
     await db.tournament_registrations.update_one(
-        {"tournamentId": req.tournamentId},
+        {"tournamentId": req.tournamentId, "userId": userId},
         {"$set": {
             "tournamentId": req.tournamentId,
+            "userId": userId,
             "status": req.status,
             "updatedAt": datetime.now(timezone.utc).isoformat(),
         }},
@@ -410,13 +414,25 @@ async def register_tournament(req: RegisterTournamentRequest):
         ).to_list(100)
         for t in week_tournaments:
             await db.tournament_hidden.update_one(
-                {"tournamentId": t["id"]},
-                {"$set": {"tournamentId": t["id"]}},
+                {"tournamentId": t["id"], "userId": userId},
+                {"$set": {
+                    "tournamentId": t["id"], 
+                    "userId": userId,
+                    "autoHidden": True,  # DB-8 FIX: Marquer comme auto-masqué
+                    "hiddenByTournament": req.tournamentId,  # DB-8 FIX: Référence au tournoi source
+                }},
                 upsert=True
             )
+    else:
+        # DB-8 FIX: Si on change le statut depuis participating, restaurer les tournois auto-masqués
+        await db.tournament_hidden.delete_many({
+            "userId": userId,
+            "autoHidden": True,
+            "hiddenByTournament": req.tournamentId
+        })
 
     # Remove from hidden if registering
-    await db.tournament_hidden.delete_one({"tournamentId": req.tournamentId})
+    await db.tournament_hidden.delete_one({"tournamentId": req.tournamentId, "userId": userId})
 
     return {"success": True, "tournamentId": req.tournamentId, "status": req.status}
 
@@ -424,18 +440,54 @@ async def register_tournament(req: RegisterTournamentRequest):
 @router.post("/hide")
 async def hide_tournament(req: HideTournamentRequest):
     """Hide a tournament (not interested)"""
+    userId = "default-user"  # TODO: Get from auth
+    
+    # DB-7 FIX: Sauvegarder le status précédent avant de cacher
+    existing_reg = await db.tournament_registrations.find_one(
+        {"tournamentId": req.tournamentId, "userId": userId},
+        {"_id": 0}
+    )
+    
     await db.tournament_hidden.update_one(
-        {"tournamentId": req.tournamentId},
-        {"$set": {"tournamentId": req.tournamentId}},
+        {"tournamentId": req.tournamentId, "userId": userId},
+        {"$set": {
+            "tournamentId": req.tournamentId,
+            "userId": userId,
+            "previousStatus": existing_reg.get("status") if existing_reg else None,  # DB-7 FIX
+            "autoHidden": False,
+        }},
         upsert=True
     )
-    # Remove registration if exists
-    await db.tournament_registrations.delete_one({"tournamentId": req.tournamentId})
+    # DB-7 FIX: Ne plus supprimer la registration, juste la marquer comme hidden
+    # await db.tournament_registrations.delete_one({"tournamentId": req.tournamentId, "userId": userId})
     return {"success": True}
 
 
 @router.delete("/hide/{tournament_id}")
 async def unhide_tournament(tournament_id: str):
-    """Unhide a tournament"""
-    await db.tournament_hidden.delete_one({"tournamentId": tournament_id})
+    """Unhide a tournament and restore previous status"""
+    userId = "default-user"  # TODO: Get from auth
+    
+    # DB-7 FIX: Restaurer le status précédent si disponible
+    hidden_doc = await db.tournament_hidden.find_one(
+        {"tournamentId": tournament_id, "userId": userId},
+        {"_id": 0}
+    )
+    
+    await db.tournament_hidden.delete_one({"tournamentId": tournament_id, "userId": userId})
+    
+    # Restaurer le status précédent s'il existait
+    if hidden_doc and hidden_doc.get("previousStatus"):
+        await db.tournament_registrations.update_one(
+            {"tournamentId": tournament_id, "userId": userId},
+            {"$set": {
+                "tournamentId": tournament_id,
+                "userId": userId,
+                "status": hidden_doc["previousStatus"],
+                "updatedAt": datetime.now(timezone.utc).isoformat(),
+            }},
+            upsert=True
+        )
+        return {"success": True, "restoredStatus": hidden_doc["previousStatus"]}
+    
     return {"success": True}
