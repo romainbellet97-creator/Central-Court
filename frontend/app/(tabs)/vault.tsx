@@ -493,6 +493,12 @@ export default function DocumentsScreen() {
       
     } catch (error: any) {
       console.error('❌ OCR ERROR:', error?.message || error);
+      // BUG #4 FIX: Afficher une alerte si l'OCR échoue
+      Alert.alert(
+        'OCR non disponible',
+        'L\'analyse automatique n\'a pas pu extraire les données. Veuillez remplir le formulaire manuellement.',
+        [{ text: 'OK' }]
+      );
       // Still show form for manual entry
       setEditedFournisseur('');
       setEditedDate(new Date().toISOString().split('T')[0]);
