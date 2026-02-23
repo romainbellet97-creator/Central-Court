@@ -206,8 +206,14 @@ export default function ProfileScreen() {
   };
 
   const handleInvite = async () => {
+    // BUG #21 FIX: Validation du format email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!selectedRole || !inviteEmail || !inviteName || !userProfile?.id) {
       Alert.alert('Erreur', 'Veuillez remplir tous les champs');
+      return;
+    }
+    if (!emailRegex.test(inviteEmail)) {
+      Alert.alert('Erreur', 'Veuillez entrer une adresse email valide');
       return;
     }
     
