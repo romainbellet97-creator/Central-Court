@@ -646,7 +646,7 @@ def extract_amount_from_text(text: str) -> Optional[float]:
     return None
 
 def extract_date_from_text(text: str) -> Optional[str]:
-    """Extract date from OCR text"""
+    """Extract date from OCR text - DB-6 FIX: Returns ISO 8601 format (YYYY-MM-DD)"""
     # Various date patterns
     date_patterns = [
         # DD/MM/YYYY or DD-MM-YYYY
@@ -673,16 +673,22 @@ def extract_date_from_text(text: str) -> Optional[str]:
         if match:
             groups = match.groups()
             if len(groups) == 3:
-                if groups[0].isdigit() and len(groups[0]) == 4:  # YYYY-MM-DD
-                    return f"{groups[2].zfill(2)}/{groups[1].zfill(2)}/{groups[0]}"
+                if groups[0].isdigit() and len(groups[0]) == 4:  # YYYY-MM-DD already
+                    year = groups[0]
+                    month = groups[1].zfill(2)
+                    day = groups[2].zfill(2)
+                    return f"{year}-{month}-{day}"  # DB-6 FIX: ISO format
                 elif groups[1] in month_map:  # DD Month YYYY
-                    return f"{groups[0].zfill(2)}/{month_map[groups[1]]}/{groups[2]}"
+                    day = groups[0].zfill(2)
+                    month = month_map[groups[1]]
+                    year = groups[2]
+                    return f"{year}-{month}-{day}"  # DB-6 FIX: ISO format
                 else:  # DD/MM/YYYY
                     day = groups[0].zfill(2)
                     month = groups[1].zfill(2)
                     year = groups[2]
                     if int(month) <= 12:
-                        return f"{day}/{month}/{year}"
+                        return f"{year}-{month}-{day}"  # DB-6 FIX: ISO format
     
     return None
 
