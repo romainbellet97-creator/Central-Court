@@ -289,8 +289,47 @@ export default function DocumentsScreen() {
   };
 
   const nextMonth = () => {
+    // BUG #9 FIX: Limiter la navigation aux mois futurs (max = mois actuel)
+    const now = new Date();
+    const currentActualMonth = now.getMonth();
+    const currentActualYear = now.getFullYear();
+    
+    // Si on est déjà au mois actuel, ne pas avancer
+    if (currentYear === currentActualYear && currentMonth === currentActualMonth) {
+      return; // Ne rien faire
+    }
+    
+    // Calculer le mois suivant
+    const nextM = currentMonth === 11 ? 0 : currentMonth + 1;
+    const nextY = currentMonth === 11 ? currentYear + 1 : currentYear;
+    
+    // Vérifier que le mois suivant ne dépasse pas le mois actuel
+    if (nextY > currentActualYear || (nextY === currentActualYear && nextM > currentActualMonth)) {
+      return; // Ne pas avancer au-delà du mois actuel
+    }
+    
     if (currentMonth === 11) { setCurrentMonth(0); setCurrentYear(y => y + 1); }
     else setCurrentMonth(m => m + 1);
+  };
+
+  // BUG #9 FIX: Helper pour vérifier si on peut avancer
+  const canGoNextMonth = useMemo(() => {
+    const now = new Date();
+    const nextM = currentMonth === 11 ? 0 : currentMonth + 1;
+    const nextY = currentMonth === 11 ? currentYear + 1 : currentYear;
+    return !(nextY > now.getFullYear() || (nextY === now.getFullYear() && nextM > now.getMonth()));
+  }, [currentMonth, currentYear]);
+
+  // BUG #10 FIX: Validation du format de date
+  const isValidDateFormat = (dateStr: string): boolean => {
+    if (!dateStr) return false;
+    const regex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!regex.test(dateStr)) return false;
+    const [year, month, day] = dateStr.split('-').map(Number);
+    if (month < 1 || month > 12) return false;
+    if (day < 1 || day > 31) return false;
+    const date = new Date(year, month - 1, day);
+    return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
   };
 
   // ============ UPLOAD / OCR - CORRIGÉ ============
