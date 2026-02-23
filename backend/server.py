@@ -146,9 +146,11 @@ from routes.documents import router as documents_router, init_db as init_documen
 from routes.user_routes import router as user_router, init_db as init_user_db
 from routes.invitation_routes import router as invitation_router, init_db as init_invitation_db
 from routes.residence_routes import router as residence_router, init_db as init_residence_db
+from routes.auth_helpers import init_db as init_auth_helpers_db
 
 # Initialize DB in all routes
 init_event_db(db)
+init_auth_helpers_db(db)  # DB-4 FIX: Init auth helpers for routes
 init_tournament_db(db)
 init_alert_db(db)
 init_preference_db(db)
