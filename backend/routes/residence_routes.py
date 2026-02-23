@@ -66,17 +66,19 @@ async def get_country_list():
 # ── Day Presence CRUD ──
 
 @router.post("/days")
-async def add_day_presence(data: DayPresenceCreate):
+async def add_day_presence(data: DayPresenceCreate, request: Request):
     """Add a day of presence in a country"""
-    # DB-2 FIX: Filtrer par userId pour l'isolation utilisateur
+    # DB-4 FIX: Récupérer userId depuis l'authentification
+    userId = await get_current_user_id(request)
+    
     existing = await db.day_presences.find_one(
-        {"date": data.date, "userId": data.userId},
+        {"date": data.date, "userId": userId},
         {"_id": 0}
     )
     if existing:
         # Update existing
         await db.day_presences.update_one(
-            {"date": data.date, "userId": data.userId},
+            {"date": data.date, "userId": userId},
             {"$set": {
                 "country": data.country,
                 "countryName": data.countryName,
@@ -85,12 +87,12 @@ async def add_day_presence(data: DayPresenceCreate):
                 "updatedAt": datetime.now(timezone.utc).isoformat(),
             }}
         )
-        updated = await db.day_presences.find_one({"date": data.date, "userId": data.userId}, {"_id": 0})
+        updated = await db.day_presences.find_one({"date": data.date, "userId": userId}, {"_id": 0})
         return updated
 
     doc = {
         "id": str(uuid.uuid4()),  # DB-13 FIX: UUID complet au lieu de 8 chars
-        "userId": data.userId,  # DB-2 FIX: Ajout userId
+        "userId": userId,  # DB-4 FIX: userId depuis auth
         "date": data.date,
         "country": data.country,
         "countryName": data.countryName,
