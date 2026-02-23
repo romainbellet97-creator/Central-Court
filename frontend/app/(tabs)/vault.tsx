@@ -1022,7 +1022,8 @@ export default function DocumentsScreen() {
                   <View style={s.detailAmountBox}>
                     <Text style={s.detailAmountLabel}>Montant</Text>
                     <Text style={s.detailAmount}>
-                      {showDocDetail.amount ? `${showDocDetail.amount.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} €` : '--'}
+                      {/* BUG #5 FIX: Utiliser getCurrencySymbol */}
+                      {showDocDetail.amount != null ? `${showDocDetail.amount.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} ${getCurrencySymbol(showDocDetail.currency)}` : '--'}
                     </Text>
                   </View>
 
