@@ -2,12 +2,13 @@
 Routes pour la géolocalisation et le suivi de résidence fiscale.
 Gère les présences par jour, les stats par pays et les rapports.
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, field_validator
 from typing import Optional, List
 from datetime import datetime, timezone
 import uuid
+from .auth_helpers import get_current_user_id
 
 router = APIRouter(prefix="/api/residence", tags=["residence"])
 db = None
