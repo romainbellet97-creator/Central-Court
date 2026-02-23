@@ -1208,6 +1208,7 @@ export default function ResidenceScreen() {
                   onChange={(event, date) => {
                     if (date) setBulkEndDate(date);
                   }}
+                  maximumDate={new Date()}  // P2-13 FIX: Limite date future
                   themeVariant="dark"
                   textColor="#FFFFFF"
                   style={styles.iosDatePicker}
@@ -1225,6 +1226,7 @@ export default function ResidenceScreen() {
                   setShowEndDatePicker(false);
                   if (date) setBulkEndDate(date);
                 }}
+                maximumDate={new Date()}  // P2-13 FIX: Limite date future
               />
             )}
 
