@@ -697,8 +697,14 @@ export default function DocumentsScreen() {
             <TouchableOpacity onPress={prevMonth} style={s.monthBtn} data-testid="month-prev">
               <Ionicons name="chevron-back" size={22} color="#1e3c72" />
             </TouchableOpacity>
-            <TouchableOpacity onPress={nextMonth} style={s.monthBtn} data-testid="month-next">
-              <Ionicons name="chevron-forward" size={22} color="#1e3c72" />
+            {/* BUG #9 FIX: Désactiver le bouton si on ne peut pas avancer */}
+            <TouchableOpacity 
+              onPress={nextMonth} 
+              style={[s.monthBtn, !canGoNextMonth && s.monthBtnDisabled]} 
+              disabled={!canGoNextMonth}
+              data-testid="month-next"
+            >
+              <Ionicons name="chevron-forward" size={22} color={canGoNextMonth ? "#1e3c72" : "#ccc"} />
             </TouchableOpacity>
           </View>
         </View>
