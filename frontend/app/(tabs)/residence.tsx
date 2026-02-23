@@ -984,7 +984,8 @@ export default function ResidenceScreen() {
                   <Text style={styles.countryOptionFlag}>
                     {countryFlags[country.code] || '🌍'}
                   </Text>
-                  <Text style={styles.countryOptionCode}>{country.code}</Text>
+                  {/* P2-12 FIX: Afficher le nom complet du pays */}
+                  <Text style={styles.countryOptionName}>{country.name}</Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
@@ -1118,7 +1119,8 @@ export default function ResidenceScreen() {
                   <Text style={styles.countryOptionFlag}>
                     {countryFlags[country.code] || '🌍'}
                   </Text>
-                  <Text style={styles.countryOptionCode}>{country.code}</Text>
+                  {/* P2-12 FIX: Afficher le nom complet du pays */}
+                  <Text style={styles.countryOptionName}>{country.name}</Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
@@ -1461,7 +1463,8 @@ export default function ResidenceScreen() {
                       <Text style={styles.countryOptionFlag}>
                         {countryFlags[country.code] || '🌍'}
                       </Text>
-                      <Text style={styles.countryOptionCode}>{country.code}</Text>
+                      {/* P2-12 FIX: Afficher le nom complet du pays */}
+                  <Text style={styles.countryOptionName}>{country.name}</Text>
                     </TouchableOpacity>
                   ))}
                 </ScrollView>
