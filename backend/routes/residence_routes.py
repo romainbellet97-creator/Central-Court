@@ -26,7 +26,7 @@ class DayPresenceCreate(BaseModel):
     countryName: str
     status: str = "manual"  # manual, confirmed, inferred
     notes: Optional[str] = None
-    userId: str = "default-user"  # DB-2 FIX: Ajout userId pour isolation
+    # DB-4 FIX: userId sera injecté depuis l'auth, pas envoyé par le client
 
 class DayPresenceUpdate(BaseModel):
     country: Optional[str] = None
