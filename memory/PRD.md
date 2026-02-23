@@ -1,126 +1,101 @@
 # Le Court Central - PRD
 
-## Completed Bug Fixes (Feb 23, 2026)
+## Session du 23 Février 2026
 
-### Sprint DB - Critical Bugs Fixed
+### Corrections Complétées
 
-#### DB-4 - Incompatible User ID Systems (CRITICAL) ✅ NEW
-| Fix | Description |
-|-----|-------------|
-| `auth_helpers.py` | Created centralized auth helper module |
-| `residence_routes.py` | All endpoints now use real userId from auth (not "default-user") |
-| `tournament_routes.py` | All endpoints now use real userId from auth |
-| `server.py` | Initialized auth_helpers_db at startup |
+#### DB Critiques (CRITICAL)
+| Bug | Description | Status |
+|-----|-------------|--------|
+| **DB-4** | Systèmes d'ID utilisateur incompatibles | ✅ Corrigé |
+| **DB-6** | Formats de dates incohérents (OCR) | ✅ Corrigé |
 
-**Implementation:**
-- Created `/app/backend/routes/auth_helpers.py` with `get_current_user_id()` function
-- Modified all residence endpoints (`/days`, `/stats`, `/days/bulk`) to use auth
-- Modified all tournament endpoints (`/weeks`, `/register`, `/hide`) to use auth
-- Fallback to "default-user" for backward compatibility when not authenticated
+**Implémentation DB-4:**
+- Créé `/app/backend/routes/auth_helpers.py` avec `get_current_user_id(request)`
+- Modifié `residence_routes.py`: tous les endpoints utilisent le vrai userId depuis l'auth
+- Modifié `tournament_routes.py`: tous les endpoints utilisent le vrai userId
+- Fallback `"default-user"` pour rétro-compatibilité
 
-#### DB-6 - Inconsistent Date Formats (CRITICAL) ✅ NEW
-| Fix | Description |
-|-----|-------------|
-| `server.py` | OCR `extract_date_from_text()` now returns ISO 8601 format (YYYY-MM-DD) |
+**Implémentation DB-6:**
+- `server.py > extract_date_from_text()` retourne maintenant ISO 8601 (`YYYY-MM-DD`)
+- Avant: `15/01/2026` → Après: `2026-01-15`
 
-**Before:** OCR returned dates as `DD/MM/YYYY` (e.g., `15/01/2026`)
-**After:** OCR returns dates as `YYYY-MM-DD` (e.g., `2026-01-15`)
+#### Frontend P2 (HIGH/MEDIUM)
+| Bug | Description | Status |
+|-----|-------------|--------|
+| **P2-8** | Impossible modifier/supprimer événements | ✅ Déjà implémenté |
+| **P2-11** | État partagé entre modals residence | ✅ Corrigé |
+| **P2-14** | Pas de message succès après ajout séjour | ✅ Déjà implémenté |
+| **P2-16** | Suppression staff non-découvrable | ✅ Corrigé |
+| **P2-20** | Titre modal tournoi incorrect | ✅ Corrigé |
 
-### Previous DB Fixes (Feb 22, 2026)
+**Implémentation P2-11:**
+- `residence.tsx`: Reset `notes`, `showNotesField`, `selectedCountry` à la fermeture des modals
+- Modal "Ajouter un jour" et "Ajouter un séjour" réinitialisent l'état
 
-| # | Bug | Status | Fix |
-|---|-----|--------|-----|
-| DB-2 | No user isolation on day_presences | ✅ | `userId` added to all documents and queries |
-| DB-3 | No user isolation on tournament_registrations | ✅ | `userId` filter on register/hide/unhide |
-| DB-7 | hide deletes registration | ✅ | `previousStatus` saved, restored on unhide |
-| DB-8 | Auto-hiding irreversible | ✅ | `autoHidden` + `hiddenByTournament` for cleanup |
-| DB-9 | Infinite session growth | ✅ | TTL index on `user_sessions.expires_at` |
-| DB-12 | Hardcoded year 2026 | ✅ | `datetime.now().year` default |
-| DB-13 | Short 8-char IDs | ✅ | Full UUID to avoid collisions |
+**Implémentation P2-16:**
+- `profile.tsx`: Ajout icône de suppression visible (❌) à côté de chaque membre actif
+- Le long-press reste disponible comme alternative
 
-### P2 UX Bugs Fixed
+**Implémentation P2-20:**
+- `index.tsx`: Titre du modal = nom du tournoi (si 1 seul) ou "Tournois de la semaine X" (si plusieurs)
 
-| # | Bug | Status | Fix |
-|---|-----|--------|-----|
-| P2-7 | Cannot edit documents | ✅ | Edit modal in vault.tsx |
-| P2-9 | Future month navigation unlimited | ✅ | `canGoNextMonth` + disabled button |
-| P2-10 | Date validation | ✅ | `isValidDateFormat()` helper |
-| P2-12 | Country selector only codes | ✅ | Shows full country names |
-| P2-13 | No future date limit on bulk stay | ✅ | `maximumDate={new Date()}` on all pickers |
+### Corrections DB Précédentes
+| # | Bug | Fix |
+|---|-----|-----|
+| DB-2 | Isolation day_presences | userId sur tous les documents |
+| DB-3 | Isolation tournament_registrations | userId sur register/hide |
+| DB-7 | hide supprime registration | previousStatus sauvegardé |
+| DB-8 | Auto-hiding irréversible | autoHidden + hiddenByTournament |
+| DB-9 | Sessions infinies | TTL index sur expires_at |
+| DB-12 | Année hardcodée | datetime.now().year |
+| DB-13 | IDs courts 8-char | UUID complet |
 
-### Previous Sprint Fixes
+### Fichiers Modifiés
+```
+/app/backend/
+├── routes/
+│   ├── auth_helpers.py      # NOUVEAU
+│   ├── residence_routes.py  # MODIFIÉ
+│   └── tournament_routes.py # MODIFIÉ
+└── server.py               # MODIFIÉ
 
-- #3 Staff invitation URL → `EXPO_PUBLIC_BACKEND_URL`
-- #4 OCR feedback → Alert "OCR non disponible"
-- #5 Hardcoded currency → `getCurrencySymbol()`
-- #6 Silent error on day addition → Success/error alerts
-- #11 Shared notes state → Reset `showNotesField`
-- #14 No success message bulk stay → "X jour(s) enregistré(s)"
-- #15 Silent profile loading failure → Alert + Retry
-- #17 Value 0 treated as undefined → `isNaN()` check
-- #18/19 Timezone bugs → `parseDateString()`
-- #21 Email validation → Regex
-- #22 Category mismatch → OCR_CATEGORIES
-
-## Key Backend Changes
-
-### New File: `/app/backend/routes/auth_helpers.py`
-```python
-async def get_current_user_id(request: Request) -> str:
-    """Get real user_id from session token, fallback to 'default-user'"""
+/app/frontend/app/(tabs)/
+├── index.tsx               # MODIFIÉ (P2-20)
+├── profile.tsx             # MODIFIÉ (P2-16)
+└── residence.tsx           # MODIFIÉ (P2-11)
 ```
 
-### Modified: `residence_routes.py`
-- All endpoints use `await get_current_user_id(request)`
-- POST `/days`: userId from auth
-- GET `/days`: Filter by userId
-- GET `/stats`: Filter by userId
-- POST `/days/bulk`: userId from auth
-- DELETE `/days/{date}`: Filter by userId
+## Backlog Restant
 
-### Modified: `tournament_routes.py`
-- All endpoints use `await get_current_user_id(request)`
-- GET `/weeks`: userId for registration/hidden queries
-- POST `/register`: userId in upsert
-- POST `/hide`: userId in document
-- DELETE `/hide/{id}`: userId filter
+### P1 - Haute Priorité
+- DB-7 & DB-8 : Tests complets des changements de statut tournoi
 
-### Modified: `server.py`
-- Added `init_auth_helpers_db(db)` at startup
-- `extract_date_from_text()` returns ISO 8601 format
+### P2 - Moyenne Priorité
+- Améliorer la réactivité du modal tournoi
+- Homogénéité des cartes tournoi
 
-## Backlog
+### P0 - Phase 3 (Backlog Long Terme)
+- Géolocalisation automatique avec tracking GPS
+- Alertes push pour seuils fiscaux
+- Export PDF des rapports de résidence
 
-### P0 - Phase 3 Tax Residency
-- GPS background tracking + push alerts + PDF export
+## Credentials Test
+- **User**: `testUser@example.com` / `testpassword123`
+- **Admin**: `r.admin@gmail.com` / `allezparis75`
 
-### P1 - Remaining
-- P2-8: Cannot delete/modify calendar events
-- P2-11: Shared state between residence modals (notes)
-- P2-14: No success message after bulk stay
-- P2-16: Non-discoverable staff deletion (onLongPress)
-- P2-20: Incorrect tournament modal title
+## Architecture Technique
 
-### P2 - Future
-- DB-7 & DB-8: Irreversible tournament status changes (partially fixed)
-- Tournament modal reactivity
-- Tournament card UI homogeneity
-
-## Test Reports
-- /app/test_reports/iteration_24.json - Bugs Observations (8/8 - 100%)
-- /app/test_reports/iteration_32.json
-- /app/test_reports/iteration_39.json
-
-## Architecture
-
+### Auth Flow (après DB-4)
 ```
-/app/backend/routes/
-├── auth_helpers.py      # NEW: Centralized auth for routes
-├── residence_routes.py  # MODIFIED: Uses auth helpers
-├── tournament_routes.py # MODIFIED: Uses auth helpers
-└── server.py           # MODIFIED: Init auth helpers + ISO dates
+Request → Cookie/Header session_token
+       → auth_helpers.get_current_user_id()
+       → Lookup user_sessions collection
+       → Return user_id (string format: user_xxx)
+       → Fallback "default-user" si non auth
 ```
 
-## Credentials
-- App User: `testUser@example.com` / `testpassword123`
-- Admin User: `r.admin@gmail.com` / `allezparis75`
+### Date Format Standard (après DB-6)
+- **Stockage**: `YYYY-MM-DD` (ISO 8601)
+- **Affichage**: `DD/MM/YYYY` ou `D MMMM YYYY` (localisé)
+- **API**: Toujours ISO 8601
