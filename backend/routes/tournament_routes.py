@@ -265,11 +265,15 @@ async def list_user_tournaments(user_id: str, limit: int = Query(default=100, le
 
 @router.get("/weeks")
 async def list_tournament_weeks(
+    request: Request,
     circuits: Optional[str] = Query(None, description="Comma-separated circuit filter: ATP,WTA,ITF,ITF_WHEELCHAIR"),
     categories: Optional[str] = Query(None, description="Comma-separated category filter: Grand Slam,Masters 1000,ATP 500,etc.")
 ):
     """Get tournaments grouped by week with registrations and hidden status.
     Filter by circuits and categories (comma-separated) to show only relevant tournaments."""
+    
+    # DB-4 FIX: Récupérer userId depuis l'authentification
+    userId = await get_current_user_id(request)
     
     # Mapping of user-facing circuits to database values
     circuit_mapping = {
@@ -317,9 +321,7 @@ async def list_tournament_weeks(
             tournaments_by_week[wn] = []
         tournaments_by_week[wn].append(serialize_tournament(t))
 
-    # DB-3 FIX: Get registrations and hidden for current user with userId filter
-    # TODO: Replace 'default-user' with actual authenticated userId from request
-    userId = "default-user"
+    # DB-4 FIX: Get registrations and hidden for current user with real userId
     registrations = await db.tournament_registrations.find(
         {"userId": userId}, {"_id": 0, "tournamentId": 1, "status": 1, "updatedAt": 1}
     ).limit(500).to_list(500)
