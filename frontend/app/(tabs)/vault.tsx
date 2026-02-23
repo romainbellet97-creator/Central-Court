@@ -59,6 +59,18 @@ const OCR_CATEGORIES = ['Transport', 'Hébergement', 'Restauration', 'Médical',
 
 const getCatConfig = (cat: string) => CATEGORY_CONFIG[cat] || CATEGORY_CONFIG['other'] || { label: cat || 'Autre', icon: 'document', color: '#757575' };
 
+// BUG #5 FIX: Helper pour obtenir le symbole de devise
+const getCurrencySymbol = (currency?: string): string => {
+  switch (currency?.toUpperCase()) {
+    case 'USD': return '$';
+    case 'GBP': return '£';
+    case 'CHF': return 'CHF';
+    case 'AED': return 'AED';
+    case 'EUR':
+    default: return '€';
+  }
+};
+
 // ============ COMPONENT ============
 
 export default function DocumentsScreen() {
