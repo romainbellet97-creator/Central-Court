@@ -438,7 +438,23 @@ export default function ResidenceScreen() {
     return date.toISOString().split('T')[0];
   };
 
+  // BUG #18/#19 FIX: Parser les dates YYYY-MM-DD sans décalage UTC
+  const parseDateString = (dateStr: string): Date => {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    return new Date(year, month - 1, day); // Mois est 0-indexé
+  };
+
   const formatDateDisplay = (date: Date): string => {
+    return date.toLocaleDateString('fr-FR', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+  };
+
+  // BUG #18/#19 FIX: Formater une string date sans décalage UTC
+  const formatDateStringDisplay = (dateStr: string): string => {
+    const date = parseDateString(dateStr);
     return date.toLocaleDateString('fr-FR', {
       day: 'numeric',
       month: 'short',
