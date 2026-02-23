@@ -1233,6 +1233,9 @@ const s = StyleSheet.create({
   cancelText: { fontSize: 15, fontWeight: '600', color: '#999' },
   deleteBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 14, marginTop: 16, backgroundColor: '#ffebee', borderRadius: 12 },
   deleteText: { fontSize: 15, fontWeight: '600', color: '#E53935' },
+  // P2-7 FIX: Style bouton modifier
+  editBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 14, marginTop: 16, backgroundColor: '#e8f0fe', borderRadius: 12 },
+  editText: { fontSize: 15, color: '#1e3c72', fontWeight: '600' },
 
   // Detail
   detailHeader: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 20 },
