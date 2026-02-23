@@ -672,6 +672,65 @@ export default function DocumentsScreen() {
     ]);
   };
 
+  // P2-7 FIX: Handler pour ouvrir le modal de modification
+  const handleEditDoc = (doc: Document) => {
+    setEditingDoc(doc);
+    setEditedFournisseur(doc.fournisseur || doc.name || '');
+    setEditedDate(doc.date || '');
+    setEditedMontant(doc.amount?.toString() || '');
+    setEditedCategorie(doc.category || 'Autre');
+    setEditedCurrency(doc.currency || 'EUR');
+    setShowDocDetail(null);
+    setShowEditDocModal(true);
+  };
+
+  // P2-7 FIX: Handler pour sauvegarder les modifications
+  const handleUpdateDocument = async () => {
+    if (!editingDoc || isSaving) return;
+    
+    // P2-10 FIX: Validation du format de date
+    if (editedDate && !isValidDateFormat(editedDate)) {
+      Alert.alert('Erreur', 'Format de date invalide. Utilisez AAAA-MM-JJ');
+      return;
+    }
+    
+    setIsSaving(true);
+    try {
+      const parsedMontant = parseFloat(editedMontant.replace(',', '.')) || 0;
+      
+      const response = await api.put(`/api/documents/${editingDoc.id}`, {
+        name: editedFournisseur || editingDoc.name,
+        fournisseur: editedFournisseur,
+        dateFacture: editedDate,
+        category: editedCategorie,
+        montantTotal: parsedMontant,
+        currency: editedCurrency,
+      });
+      
+      // Mettre à jour localement
+      setDocuments(prev => prev.map(d => 
+        d.id === editingDoc.id 
+          ? { ...d, 
+              name: editedFournisseur || d.name, 
+              fournisseur: editedFournisseur,
+              date: editedDate || d.date,
+              category: editedCategorie,
+              amount: parsedMontant,
+              currency: editedCurrency,
+            }
+          : d
+      ));
+      
+      setShowEditDocModal(false);
+      setEditingDoc(null);
+      Alert.alert('Succès', 'Document mis à jour');
+    } catch (error: any) {
+      Alert.alert('Erreur', error?.message || 'Impossible de modifier le document');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   // ============ RENDER ============
 
   if (isLoading) {
