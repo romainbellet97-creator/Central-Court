@@ -59,12 +59,6 @@
           "photosPermission": "L'app a besoin d'accéder à vos photos pour scanner les factures",
           "cameraPermission": "L'app a besoin d'accéder à l'appareil photo pour scanner les factures"
         }
-      ],
-      [
-        "expo-document-picker",
-        {
-          "iCloudContainerEnvironment": "Production"
-        }
       ]
     ],
     "experiments": {

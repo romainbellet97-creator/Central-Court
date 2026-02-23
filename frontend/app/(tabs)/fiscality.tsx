@@ -11,6 +11,7 @@ import {
   Platform,
   KeyboardAvoidingView,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -173,6 +174,17 @@ export default function FiscalityScreen() {
         await getCurrentCountry();
       } else {
         setLocationStatus('denied');
+        Alert.alert(
+          'Accès à la localisation refusé',
+          'Veuillez activer la localisation dans les paramètres pour utiliser cette fonctionnalité.',
+          [
+            { text: 'Annuler', style: 'cancel' },
+            {
+              text: 'Ouvrir Paramètres',
+              onPress: () => Platform.OS === 'ios' ? Linking.openURL('app-settings:') : Linking.openSettings(),
+            },
+          ]
+        );
       }
     } catch (error) {
       console.error('Error requesting location:', error);
@@ -184,6 +196,11 @@ export default function FiscalityScreen() {
 
   const getCurrentCountry = async () => {
     try {
+      const { status } = await Location.getForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        console.warn('Location permission not granted, skipping getCurrentCountry');
+        return;
+      }
       const location = await Location.getCurrentPositionAsync({});
       const [geocode] = await Location.reverseGeocodeAsync({
         latitude: location.coords.latitude,

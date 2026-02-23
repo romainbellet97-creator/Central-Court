@@ -13,6 +13,7 @@ import {
   RefreshControl,
   Switch,
   Alert,
+  Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -301,7 +302,21 @@ export default function ResidenceScreen() {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       setLocationPermission(status === 'granted' ? 'granted' : 'denied');
-      return status === 'granted';
+      if (status !== 'granted') {
+        Alert.alert(
+          'Accès à la localisation refusé',
+          'Veuillez activer la localisation dans les paramètres pour enregistrer automatiquement votre position.',
+          [
+            { text: 'Annuler', style: 'cancel' },
+            {
+              text: 'Ouvrir Paramètres',
+              onPress: () => Platform.OS === 'ios' ? Linking.openURL('app-settings:') : Linking.openSettings(),
+            },
+          ]
+        );
+        return false;
+      }
+      return true;
     } catch (err) {
       console.error('Error requesting location permission:', err);
       return false;

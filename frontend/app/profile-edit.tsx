@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   Image,
   Alert,
+  Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -168,37 +169,65 @@ export default function EditProfileScreen() {
   const handlePickPhoto = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission requise', 'L\'accès à la galerie est nécessaire.');
+      Alert.alert(
+        'Permission requise',
+        "L'accès à la galerie est nécessaire pour choisir une photo de profil.",
+        [
+          { text: 'Annuler', style: 'cancel' },
+          {
+            text: 'Ouvrir Paramètres',
+            onPress: () => Platform.OS === 'ios' ? Linking.openURL('app-settings:') : Linking.openSettings(),
+          },
+        ]
+      );
       return;
     }
-    
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
-    
-    if (!result.canceled && result.assets[0]) {
-      saveProfile({ photoUri: result.assets[0].uri });
+
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets[0]) {
+        saveProfile({ photoUri: result.assets[0].uri });
+      }
+    } catch (err) {
+      console.error('Error picking photo from library:', err);
+      Alert.alert('Erreur', 'Impossible d\'ouvrir la galerie. Veuillez réessayer.');
     }
   };
-  
+
   const handleTakePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission requise', 'L\'accès à la caméra est nécessaire.');
+      Alert.alert(
+        'Permission requise',
+        "L'accès à la caméra est nécessaire pour prendre une photo de profil.",
+        [
+          { text: 'Annuler', style: 'cancel' },
+          {
+            text: 'Ouvrir Paramètres',
+            onPress: () => Platform.OS === 'ios' ? Linking.openURL('app-settings:') : Linking.openSettings(),
+          },
+        ]
+      );
       return;
     }
-    
-    const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
-    
-    if (!result.canceled && result.assets[0]) {
-      saveProfile({ photoUri: result.assets[0].uri });
+
+    try {
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets[0]) {
+        saveProfile({ photoUri: result.assets[0].uri });
+      }
+    } catch (err) {
+      console.error('Error taking photo with camera:', err);
+      Alert.alert('Erreur', 'Impossible d\'ouvrir la caméra. Veuillez réessayer.');
     }
   };
   
