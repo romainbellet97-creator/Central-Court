@@ -94,6 +94,10 @@ export default function DocumentsScreen() {
   const [showVerificationModal, setShowVerificationModal] = useState(false);
   const [showDocDetail, setShowDocDetail] = useState<Document | null>(null);
   const [showAllCategories, setShowAllCategories] = useState(false);
+  
+  // P2-7 FIX: État pour la modification de document existant
+  const [showEditDocModal, setShowEditDocModal] = useState(false);
+  const [editingDoc, setEditingDoc] = useState<Document | null>(null);
 
   // Upload/OCR state - CRITIQUE: Utiliser des états séparés
   const [isUploading, setIsUploading] = useState(false);
