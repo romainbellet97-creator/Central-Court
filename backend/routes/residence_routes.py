@@ -25,6 +25,7 @@ class DayPresenceCreate(BaseModel):
     countryName: str
     status: str = "manual"  # manual, confirmed, inferred
     notes: Optional[str] = None
+    userId: str = "default-user"  # DB-2 FIX: Ajout userId pour isolation
 
 class DayPresenceUpdate(BaseModel):
     country: Optional[str] = None
