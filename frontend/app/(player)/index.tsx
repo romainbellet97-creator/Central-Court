@@ -12,6 +12,8 @@ import {
   KeyboardAvoidingView,
   ActivityIndicator,
   Dimensions,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -1827,56 +1829,64 @@ export default function CalendarScreen() {
           setObservationText('');
         }}
       >
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
-          <TouchableOpacity 
-            style={styles.modalBackdrop} 
-            activeOpacity={1} 
-            onPress={() => {
-              console.log('🔙 Observation modal closed via backdrop');
-              setShowAddObservationModal(false);
-              setObservationText('');
-            }}
-          />
-          <View style={styles.observationModal}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Ajouter une observation</Text>
-              <TouchableOpacity onPress={() => {
-                setShowAddObservationModal(false);
-                setObservationText('');
-              }}>
-                <Ionicons name="close" size={28} color="#666" />
-              </TouchableOpacity>
+        <KeyboardAvoidingView 
+          style={{ flex: 1 }} 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        >
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View style={styles.observationModalOverlay}>
+              <TouchableOpacity 
+                style={styles.observationModalBackdrop} 
+                activeOpacity={1} 
+                onPress={() => {
+                  console.log('🔙 Observation modal closed via backdrop');
+                  setShowAddObservationModal(false);
+                  setObservationText('');
+                }}
+              />
+              <View style={styles.observationModalContainer}>
+                {/* Header fixe */}
+                <View style={styles.observationModalHeader}>
+                  <Text style={styles.observationModalTitle}>Ajouter une observation</Text>
+                  <TouchableOpacity onPress={() => {
+                    setShowAddObservationModal(false);
+                    setObservationText('');
+                  }}>
+                    <Ionicons name="close" size={28} color="#666" />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Zone de saisie épinglée en bas — toujours visible */}
+                <View style={styles.observationInputContainer}>
+                  <View style={styles.observationInputRow}>
+                    <TextInput
+                      style={styles.observationTextInput}
+                      value={observationText}
+                      onChangeText={setObservationText}
+                      placeholder="Écrire une observation..."
+                      placeholderTextColor="#6b7a8d"
+                      multiline
+                      maxLength={500}
+                      autoFocus
+                    />
+                    <TouchableOpacity
+                      style={[
+                        styles.observationSendButton,
+                        !observationText.trim() && styles.observationSendButtonDisabled
+                      ]}
+                      onPress={handleSaveObservation}
+                      disabled={!observationText.trim()}
+                      accessibilityLabel="Envoyer l'observation"
+                      accessibilityRole="button"
+                    >
+                      <Ionicons name="arrow-up" size={20} color="#fff" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
             </View>
-
-            <TextInput
-              style={styles.observationInput}
-              value={observationText}
-              onChangeText={setObservationText}
-              placeholder="Votre commentaire..."
-              placeholderTextColor="#999"
-              multiline
-              numberOfLines={6}
-              autoFocus
-            />
-
-            <TouchableOpacity
-              style={[styles.saveObservationButton, !observationText.trim() && styles.disabledButton]}
-              onPress={handleSaveObservation}
-              disabled={!observationText.trim()}
-            >
-              <Text style={styles.saveObservationButtonText}>Publier</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.cancelButton}
-              onPress={() => {
-                setShowAddObservationModal(false);
-                setObservationText('');
-              }}
-            >
-              <Text style={styles.cancelButtonText}>Annuler</Text>
-            </TouchableOpacity>
-          </View>
+          </TouchableWithoutFeedback>
         </KeyboardAvoidingView>
       </Modal>
 
@@ -2234,7 +2244,18 @@ const styles = StyleSheet.create({
   closeDetailButton: { padding: 16, alignItems: 'center', marginTop: 16 },
   closeDetailButtonText: { fontSize: 16, fontWeight: '600', color: '#666' },
   
-  // Observation Modal
+  // Observation Modal - NEW keyboard-aware styles
+  observationModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  observationModalBackdrop: { flex: 1 },
+  observationModalContainer: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: 280 },
+  observationModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
+  observationModalTitle: { fontSize: 18, fontWeight: '700', color: '#1a1a1a' },
+  observationInputContainer: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: Platform.OS === 'ios' ? 34 : 20 },
+  observationInputRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
+  observationTextInput: { flex: 1, minHeight: 44, maxHeight: 120, borderRadius: 22, borderWidth: 1.5, borderColor: '#e0e0e0', paddingHorizontal: 16, paddingVertical: 10, fontSize: 16, color: '#1a2744', backgroundColor: '#f8f9fb' },
+  observationSendButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#4A9B8E', justifyContent: 'center', alignItems: 'center' },
+  observationSendButtonDisabled: { backgroundColor: '#c5d0d8' },
+  // Legacy observation styles (keep for backward compat)
   observationModal: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 40 },
   observationInput: { backgroundColor: '#F9FAFB', borderRadius: 12, padding: 14, fontSize: 16, color: '#1a1a1a', height: 150, textAlignVertical: 'top', marginTop: 16 },
   saveObservationButton: { backgroundColor: '#10B981', padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 20 },

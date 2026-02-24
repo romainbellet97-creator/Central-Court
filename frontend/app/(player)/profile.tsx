@@ -12,6 +12,9 @@ import {
   ActivityIndicator,
   TextInput,
   RefreshControl,
+  KeyboardAvoidingView,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -679,76 +682,91 @@ export default function ProfileScreen() {
 
       {/* Invite Modal */}
       <Modal visible={showInviteModal} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Inviter un membre</Text>
-              <TouchableOpacity onPress={() => { setShowInviteModal(false); resetInviteForm(); }}>
-                <Ionicons name="close" size={24} color="#333" />
-              </TouchableOpacity>
-            </View>
-            
-            <ScrollView style={styles.modalBody}>
-              <Text style={styles.formLabel}>Choisir un rôle</Text>
-              <View style={styles.roleGrid}>
-                {STAFF_ROLES.map(role => (
-                  <TouchableOpacity
-                    key={role.id}
-                    style={[
-                      styles.roleCard,
-                      selectedRole === role.id && { backgroundColor: role.color + '15', borderColor: role.color }
-                    ]}
-                    onPress={() => setSelectedRole(role.id)}
-                  >
-                    <Text style={styles.roleEmoji}>{role.emoji}</Text>
-                    <Text style={[styles.roleLabel, selectedRole === role.id && { color: role.color }]}>
-                      {role.label}
-                    </Text>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        >
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View style={styles.modalOverlay}>
+              <View style={styles.inviteModalContent}>
+                {/* HEADER fixe */}
+                <View style={styles.inviteModalHeader}>
+                  <Text style={styles.modalTitle}>Inviter un membre</Text>
+                  <TouchableOpacity onPress={() => { setShowInviteModal(false); resetInviteForm(); }}>
+                    <Ionicons name="close" size={24} color="#333" />
                   </TouchableOpacity>
-                ))}
-              </View>
-              
-              {selectedRole && (
-                <>
-                  <View style={styles.formGroup}>
-                    <Text style={styles.formLabel}>Nom</Text>
-                    <TextInput
-                      style={styles.formInput}
-                      value={inviteName}
-                      onChangeText={setInviteName}
-                      placeholder="Prénom Nom"
-                      placeholderTextColor="#999"
-                    />
+                </View>
+                
+                {/* CONTENU scrollable (rôles) */}
+                <ScrollView 
+                  style={styles.inviteScrollContent}
+                  keyboardShouldPersistTaps="handled"
+                  showsVerticalScrollIndicator={false}
+                >
+                  <Text style={styles.formLabel}>Choisir un rôle</Text>
+                  <View style={styles.roleGrid}>
+                    {STAFF_ROLES.map(role => (
+                      <TouchableOpacity
+                        key={role.id}
+                        style={[
+                          styles.roleCard,
+                          selectedRole === role.id && { backgroundColor: role.color + '15', borderColor: role.color }
+                        ]}
+                        onPress={() => setSelectedRole(role.id)}
+                      >
+                        <Text style={styles.roleEmoji}>{role.emoji}</Text>
+                        <Text style={[styles.roleLabel, selectedRole === role.id && { color: role.color }]}>
+                          {role.label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
                   </View>
-                  
-                  <View style={styles.formGroup}>
-                    <Text style={styles.formLabel}>Email</Text>
-                    <TextInput
-                      style={styles.formInput}
-                      value={inviteEmail}
-                      onChangeText={setInviteEmail}
-                      placeholder="email@example.com"
-                      placeholderTextColor="#999"
-                      keyboardType="email-address"
-                      autoCapitalize="none"
-                    />
-                  </View>
-                  
-                  <TouchableOpacity style={styles.saveBtn} onPress={handleInvite} disabled={isSaving}>
+                </ScrollView>
+                
+                {/* INPUT + BOUTON épinglés en bas — toujours visibles */}
+                <View style={styles.bottomInputContainer}>
+                  <TextInput
+                    style={styles.inviteNameInput}
+                    value={inviteName}
+                    onChangeText={setInviteName}
+                    placeholder="Prénom Nom"
+                    placeholderTextColor="#6b7a8d"
+                  />
+                  <TextInput
+                    style={styles.inviteEmailInput}
+                    value={inviteEmail}
+                    onChangeText={setInviteEmail}
+                    placeholder="Adresse email du membre"
+                    placeholderTextColor="#6b7a8d"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoComplete="email"
+                    returnKeyType="send"
+                    onSubmitEditing={handleInvite}
+                  />
+                  <TouchableOpacity 
+                    style={[
+                      styles.inviteSendButton, 
+                      (!selectedRole || !inviteEmail.trim()) && styles.inviteSendButtonDisabled
+                    ]} 
+                    onPress={handleInvite} 
+                    disabled={isSaving || !selectedRole || !inviteEmail.trim()}
+                  >
                     {isSaving ? (
                       <ActivityIndicator color="#fff" />
                     ) : (
                       <>
                         <Ionicons name="send" size={18} color="#fff" />
-                        <Text style={styles.saveBtnText}>Envoyer l'invitation</Text>
+                        <Text style={styles.inviteSendButtonText}>Envoyer l'invitation</Text>
                       </>
                     )}
                   </TouchableOpacity>
-                </>
-              )}
-            </ScrollView>
-          </View>
-        </View>
+                </View>
+              </View>
+            </View>
+          </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -980,6 +998,74 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: '85%',
+  },
+  // Invite modal - keyboard-aware styles
+  inviteModalContent: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    marginTop: 100,
+  },
+  inviteModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  inviteScrollContent: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+  },
+  bottomInputContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 16,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+    backgroundColor: '#fff',
+    gap: 10,
+  },
+  inviteNameInput: {
+    height: 48,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#e0e0e0',
+    paddingHorizontal: 16,
+    fontSize: 16,
+    color: '#1a2744',
+    backgroundColor: '#f8f9fb',
+  },
+  inviteEmailInput: {
+    height: 48,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#e0e0e0',
+    paddingHorizontal: 16,
+    fontSize: 16,
+    color: '#1a2744',
+    backgroundColor: '#f8f9fb',
+  },
+  inviteSendButton: {
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#4A9B8E',
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
+  },
+  inviteSendButtonDisabled: {
+    backgroundColor: '#c5d0d8',
+  },
+  inviteSendButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
   modalHeader: {
     flexDirection: 'row',
