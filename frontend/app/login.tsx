@@ -383,6 +383,62 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 16,
   },
+  // Divider
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 20,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+  },
+  dividerText: {
+    color: 'rgba(255,255,255,0.7)',
+    paddingHorizontal: 16,
+    fontSize: 14,
+  },
+  // Inline staff form
+  staffFormInline: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 12,
+    padding: 16,
+  },
+  staffFormTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  inlineInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    marginBottom: 10,
+    gap: 8,
+  },
+  inlineTextInput: {
+    flex: 1,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: '#1F2937',
+  },
+  staffLoginBtn: {
+    backgroundColor: '#4A9B8E',
+    paddingVertical: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  staffLoginBtnText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+  },
   // Staff login form styles
   keyboardView: {
     flex: 1,
