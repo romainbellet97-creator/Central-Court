@@ -69,6 +69,7 @@ interface Invitation {
 
 export default function JoinScreen() {
   const { token } = useLocalSearchParams<{ token: string }>();
+  const { setUserFromStaffSignup } = useAuth();
   
   const [invitation, setInvitation] = useState<Invitation | null>(null);
   const [isLoading, setIsLoading] = useState(true);
