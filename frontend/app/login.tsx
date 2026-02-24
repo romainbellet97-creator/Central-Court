@@ -1,11 +1,15 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
-  Image,
+  TextInput,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -17,13 +21,50 @@ import Colors from '../src/constants/colors';
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user, isLoading, isAuthenticated, login } = useAuth();
+  const { user, isLoading, isAuthenticated, login, loginStaff } = useAuth();
+  
+  // Staff login form
+  const [showStaffLogin, setShowStaffLogin] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     if (isAuthenticated && user) {
-      router.replace('/(tabs)');
+      // Redirect based on role
+      if (user.role !== 'player' && user.isStaff) {
+        router.replace('/(staff)/dashboard');
+      } else {
+        router.replace('/(player)/');
+      }
     }
   }, [isAuthenticated, user]);
+
+  const handleStaffLogin = async () => {
+    if (!email.trim()) {
+      Alert.alert('Erreur', 'Veuillez entrer votre email');
+      return;
+    }
+    if (!password) {
+      Alert.alert('Erreur', 'Veuillez entrer votre mot de passe');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const success = await loginStaff(email.trim(), password);
+      if (success) {
+        router.replace('/(staff)/dashboard');
+      } else {
+        Alert.alert('Erreur', 'Email ou mot de passe incorrect');
+      }
+    } catch (error) {
+      Alert.alert('Erreur', 'Impossible de se connecter');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -34,6 +75,109 @@ export default function LoginScreen() {
     );
   }
 
+  // Staff login form view
+  if (showStaffLogin) {
+    return (
+      <LinearGradient colors={['#1e3c72', '#2a5298']} style={styles.container}>
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.keyboardView}
+        >
+          <ScrollView 
+            contentContainerStyle={[styles.staffLoginContent, { paddingTop: insets.top + 40 }]}
+            keyboardShouldPersistTaps="handled"
+          >
+            {/* Back button */}
+            <TouchableOpacity 
+              style={styles.backButton} 
+              onPress={() => setShowStaffLogin(false)}
+            >
+              <Ionicons name="arrow-back" size={24} color="#fff" />
+              <Text style={styles.backButtonText}>Retour</Text>
+            </TouchableOpacity>
+
+            {/* Header */}
+            <View style={styles.staffLoginHeader}>
+              <View style={styles.staffLogoCircle}>
+                <Ionicons name="people" size={40} color="#fff" />
+              </View>
+              <Text style={styles.staffLoginTitle}>Connexion Staff</Text>
+              <Text style={styles.staffLoginSubtitle}>
+                Connectez-vous avec vos identifiants d'équipe
+              </Text>
+            </View>
+
+            {/* Form */}
+            <View style={styles.formContainer}>
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Email</Text>
+                <View style={styles.inputWrapper}>
+                  <Ionicons name="mail-outline" size={20} color="#6B7280" style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.textInput}
+                    placeholder="votre@email.com"
+                    value={email}
+                    onChangeText={setEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoComplete="email"
+                    placeholderTextColor="#9CA3AF"
+                  />
+                </View>
+              </View>
+
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Mot de passe</Text>
+                <View style={styles.inputWrapper}>
+                  <Ionicons name="lock-closed-outline" size={20} color="#6B7280" style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.textInput}
+                    placeholder="••••••••"
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry={!showPassword}
+                    placeholderTextColor="#9CA3AF"
+                  />
+                  <TouchableOpacity 
+                    onPress={() => setShowPassword(!showPassword)}
+                    style={styles.showPasswordBtn}
+                  >
+                    <Ionicons 
+                      name={showPassword ? "eye-off-outline" : "eye-outline"} 
+                      size={20} 
+                      color="#6B7280" 
+                    />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={[styles.staffLoginButton, isSubmitting && styles.buttonDisabled]}
+                onPress={handleStaffLogin}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <>
+                    <Ionicons name="log-in-outline" size={22} color="#fff" />
+                    <Text style={styles.staffLoginButtonText}>Se connecter</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.staffLoginNote}>
+              Vous avez reçu une invitation par email ?{'\n'}
+              Utilisez le lien de l'invitation pour créer votre compte.
+            </Text>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </LinearGradient>
+    );
+  }
+
+  // Main login view
   return (
     <LinearGradient colors={['#1e3c72', '#2a5298']} style={styles.container}>
       <View style={[styles.content, { paddingTop: insets.top + 60 }]}>
@@ -42,7 +186,7 @@ export default function LoginScreen() {
           <View style={styles.logoCircle}>
             <Ionicons name="tennisball" size={60} color="#fff" />
           </View>
-          <Text style={styles.appName}>Le Central Court</Text>
+          <Text style={styles.appName}>Le Court Central</Text>
           <Text style={styles.tagline}>Gérez votre carrière de tennis professionnel</Text>
         </View>
 
@@ -66,11 +210,21 @@ export default function LoginScreen() {
           </View>
         </View>
 
-        {/* Login Button */}
+        {/* Login Section */}
         <View style={styles.loginSection}>
+          {/* Player login (Google) */}
           <TouchableOpacity style={styles.googleButton} onPress={login}>
             <Ionicons name="logo-google" size={22} color="#333" />
-            <Text style={styles.googleButtonText}>Continuer avec Google</Text>
+            <Text style={styles.googleButtonText}>Joueur — Connexion Google</Text>
+          </TouchableOpacity>
+
+          {/* Staff login */}
+          <TouchableOpacity 
+            style={styles.staffButton} 
+            onPress={() => setShowStaffLogin(true)}
+          >
+            <Ionicons name="people-outline" size={22} color="#fff" />
+            <Text style={styles.staffButtonText}>Staff — Connexion Email</Text>
           </TouchableOpacity>
 
           <Text style={styles.disclaimer}>
