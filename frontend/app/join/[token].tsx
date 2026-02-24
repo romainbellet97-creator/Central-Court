@@ -164,16 +164,11 @@ export default function JoinScreen() {
         password,
       });
       
-      // Store auth token and staff data for staff authentication
-      if (response.data.authToken) {
-        await AsyncStorage.setItem('staff_token', response.data.authToken);
-        await AsyncStorage.setItem('staff_data', JSON.stringify(response.data.staff));
-        
-        // Also store session token for AuthContext compatibility
-        await AsyncStorage.setItem('session_token', response.data.authToken);
-        
-        // Store user data in the format expected by AuthContext
+      // Store auth in context using the new method
+      if (response.data.authToken && response.data.staff) {
         const staffData = response.data.staff;
+        
+        // Build user object compatible with AuthContext
         const userData = {
           user_id: staffData.id,
           name: `${staffData.firstName} ${staffData.lastName || ''}`.trim(),
@@ -184,7 +179,9 @@ export default function JoinScreen() {
           player_id: staffData.playerId, // ID du joueur associé
           isStaff: true,
         };
-        await AsyncStorage.setItem('user_data', JSON.stringify(userData));
+        
+        // Set user in AuthContext
+        await setUserFromStaffSignup(userData, response.data.authToken);
       }
       
       Alert.alert(
