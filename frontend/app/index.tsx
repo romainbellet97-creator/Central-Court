@@ -4,6 +4,7 @@ import { Redirect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '../src/context/AuthContext';
 
 const ONBOARDING_COMPLETE_KEY = 'onboarding_completed';
 
@@ -11,6 +12,7 @@ const ONBOARDING_COMPLETE_KEY = 'onboarding_completed';
 const EXPO_URL = 'exp://event-management-9.ngrok.io';
 
 export default function Index() {
+  const { user, isLoading: authLoading } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
   const [isNewUser, setIsNewUser] = useState(true);
   const [isWebBrowser, setIsWebBrowser] = useState(false);
@@ -57,7 +59,7 @@ export default function Index() {
   };
 
   // Loading state
-  if (isLoading) {
+  if (isLoading || authLoading) {
     return (
       <View style={styles.container}>
         <ActivityIndicator size="large" color="#1e3c72" />
@@ -144,11 +146,22 @@ export default function Index() {
     );
   }
 
-  // Native app - redirect based on onboarding status
+  // Native app - redirect based on role and onboarding status
   if (isNewUser) {
     return <Redirect href="/onboarding" />;
   }
 
+  // If user is authenticated, redirect based on role
+  if (user) {
+    // Staff roles redirect to staff dashboard
+    if (user.role !== 'player') {
+      return <Redirect href="/(staff)/dashboard" />;
+    }
+    // Players redirect to player tabs
+    return <Redirect href="/(player)/" />;
+  }
+
+  // Default: redirect to (tabs) for backward compatibility
   return <Redirect href="/(tabs)" />;
 }
 
