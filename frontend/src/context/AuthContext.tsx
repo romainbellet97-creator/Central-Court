@@ -199,6 +199,38 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     await login();
   };
 
+  // Login staff member with email/password
+  const loginStaff = async (email: string, password: string): Promise<boolean> => {
+    setIsLoading(true);
+    try {
+      const response = await fetch(`${API_URL}/api/auth/staff-login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        await setSessionToken(data.session_token);
+        setUser(data.user);
+        return true;
+      } else {
+        return false;
+      }
+    } catch (error) {
+      console.error('Staff login error:', error);
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Set user after staff signup (no API call needed, data already available)
+  const setUserFromStaffSignup = async (userData: User, token: string): Promise<void> => {
+    await setSessionToken(token);
+    setUser(userData);
+  };
+
   const logout = async () => {
     try {
       const token = await getSessionToken();
