@@ -163,10 +163,27 @@ export default function JoinScreen() {
         password,
       });
       
-      // Store auth token
+      // Store auth token and staff data for staff authentication
       if (response.data.authToken) {
         await AsyncStorage.setItem('staff_token', response.data.authToken);
         await AsyncStorage.setItem('staff_data', JSON.stringify(response.data.staff));
+        
+        // Also store session token for AuthContext compatibility
+        await AsyncStorage.setItem('session_token', response.data.authToken);
+        
+        // Store user data in the format expected by AuthContext
+        const staffData = response.data.staff;
+        const userData = {
+          user_id: staffData.id,
+          name: `${staffData.firstName} ${staffData.lastName || ''}`.trim(),
+          firstName: staffData.firstName,
+          lastName: staffData.lastName,
+          email: staffData.email,
+          role: staffData.role, // 'agent', 'medical', 'technical', etc.
+          player_id: staffData.playerId, // ID du joueur associé
+          isStaff: true,
+        };
+        await AsyncStorage.setItem('user_data', JSON.stringify(userData));
       }
       
       Alert.alert(
@@ -176,8 +193,8 @@ export default function JoinScreen() {
           {
             text: 'Continuer',
             onPress: () => {
-              // Navigate to main app or staff dashboard
-              router.replace('/');
+              // Navigate to staff dashboard
+              router.replace('/(staff)/dashboard');
             }
           }
         ]
