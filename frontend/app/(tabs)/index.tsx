@@ -1827,56 +1827,64 @@ export default function CalendarScreen() {
           setObservationText('');
         }}
       >
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
-          <TouchableOpacity 
-            style={styles.modalBackdrop} 
-            activeOpacity={1} 
-            onPress={() => {
-              console.log('🔙 Observation modal closed via backdrop');
-              setShowAddObservationModal(false);
-              setObservationText('');
-            }}
-          />
-          <View style={styles.observationModal}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Ajouter une observation</Text>
-              <TouchableOpacity onPress={() => {
-                setShowAddObservationModal(false);
-                setObservationText('');
-              }}>
-                <Ionicons name="close" size={28} color="#666" />
-              </TouchableOpacity>
+        <KeyboardAvoidingView 
+          style={{ flex: 1 }} 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        >
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View style={styles.observationModalOverlay}>
+              <TouchableOpacity 
+                style={styles.observationModalBackdrop} 
+                activeOpacity={1} 
+                onPress={() => {
+                  console.log('🔙 Observation modal closed via backdrop');
+                  setShowAddObservationModal(false);
+                  setObservationText('');
+                }}
+              />
+              <View style={styles.observationModalContainer}>
+                {/* Header fixe */}
+                <View style={styles.observationModalHeader}>
+                  <Text style={styles.observationModalTitle}>Ajouter une observation</Text>
+                  <TouchableOpacity onPress={() => {
+                    setShowAddObservationModal(false);
+                    setObservationText('');
+                  }}>
+                    <Ionicons name="close" size={28} color="#666" />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Zone de saisie épinglée en bas — toujours visible */}
+                <View style={styles.observationInputContainer}>
+                  <View style={styles.observationInputRow}>
+                    <TextInput
+                      style={styles.observationTextInput}
+                      value={observationText}
+                      onChangeText={setObservationText}
+                      placeholder="Écrire une observation..."
+                      placeholderTextColor="#6b7a8d"
+                      multiline
+                      maxLength={500}
+                      autoFocus
+                    />
+                    <TouchableOpacity
+                      style={[
+                        styles.observationSendButton,
+                        !observationText.trim() && styles.observationSendButtonDisabled
+                      ]}
+                      onPress={handleSaveObservation}
+                      disabled={!observationText.trim()}
+                      accessibilityLabel="Envoyer l'observation"
+                      accessibilityRole="button"
+                    >
+                      <Ionicons name="arrow-up" size={20} color="#fff" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
             </View>
-
-            <TextInput
-              style={styles.observationInput}
-              value={observationText}
-              onChangeText={setObservationText}
-              placeholder="Votre commentaire..."
-              placeholderTextColor="#999"
-              multiline
-              numberOfLines={6}
-              autoFocus
-            />
-
-            <TouchableOpacity
-              style={[styles.saveObservationButton, !observationText.trim() && styles.disabledButton]}
-              onPress={handleSaveObservation}
-              disabled={!observationText.trim()}
-            >
-              <Text style={styles.saveObservationButtonText}>Publier</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.cancelButton}
-              onPress={() => {
-                setShowAddObservationModal(false);
-                setObservationText('');
-              }}
-            >
-              <Text style={styles.cancelButtonText}>Annuler</Text>
-            </TouchableOpacity>
-          </View>
+          </TouchableWithoutFeedback>
         </KeyboardAvoidingView>
       </Modal>
 
