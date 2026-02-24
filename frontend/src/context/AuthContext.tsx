@@ -10,8 +10,11 @@ export interface User {
   email: string;
   name: string;
   picture?: string;
-  role: 'player' | 'agent' | 'medical' | 'technical' | 'logistics';
+  role: 'player' | 'agent' | 'medical' | 'technical' | 'logistics' | 'family';
   player_id?: string;
+  isStaff?: boolean;
+  firstName?: string;
+  lastName?: string;
 }
 
 interface AuthContextType {
@@ -20,6 +23,8 @@ interface AuthContextType {
   isAuthenticated: boolean;
   login: () => Promise<void>;
   loginWithInvitation: (invitationCode: string) => Promise<void>;
+  loginStaff: (email: string, password: string) => Promise<boolean>;
+  setUserFromStaffSignup: (userData: User, token: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
