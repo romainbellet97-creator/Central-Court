@@ -56,6 +56,11 @@ class StaffSignupRequest(BaseModel):
     password: str
 
 
+class StaffLoginRequest(BaseModel):
+    email: str
+    password: str
+
+
 # ============ HELPER FUNCTIONS ============
 
 def generate_token(length: int = 32) -> str:
