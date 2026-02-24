@@ -481,3 +481,74 @@ async def remove_staff_member(staff_id: str):
         raise HTTPException(status_code=404, detail="Staff member not found")
     
     return {"success": True, "message": "Membre retiré de l'équipe"}
+
+
+# ============ STAFF LOGIN ============
+
+@router.post("/staff/login")
+async def staff_login(req: StaffLoginRequest):
+    """Login for existing staff members"""
+    if db is None:
+        raise HTTPException(status_code=500, detail="Database not initialized")
+    
+    import hashlib
+    
+    # Find staff by email
+    staff = await db.staff_members.find_one({
+        "email": req.email.lower(),
+        "status": "active"
+    })
+    
+    if not staff:
+        raise HTTPException(status_code=401, detail="Email ou mot de passe incorrect")
+    
+    # Verify password
+    password_hash = hashlib.sha256(req.password.encode()).hexdigest()
+    if staff.get("passwordHash") != password_hash:
+        raise HTTPException(status_code=401, detail="Email ou mot de passe incorrect")
+    
+    # Generate new auth token
+    auth_token = generate_token(64)
+    
+    # Update staff with new token
+    await db.staff_members.update_one(
+        {"_id": staff["_id"]},
+        {"$set": {
+            "authToken": auth_token,
+            "lastLoginAt": datetime.now(timezone.utc)
+        }}
+    )
+    
+    # Update staff object with new token
+    staff["authToken"] = auth_token
+    
+    return {
+        "success": True,
+        "staff": serialize_staff(staff),
+        "authToken": auth_token,
+        "session_token": auth_token,  # For AuthContext compatibility
+        "user": {
+            "user_id": str(staff["_id"]),
+            "email": staff.get("email", ""),
+            "name": f"{staff.get('firstName', '')} {staff.get('lastName', '')}".strip(),
+            "firstName": staff.get("firstName"),
+            "lastName": staff.get("lastName"),
+            "role": staff.get("role", "agent"),
+            "player_id": staff.get("playerId"),
+            "isStaff": True,
+        }
+    }
+
+
+@router.get("/staff/me")
+async def get_current_staff(authorization: str = None):
+    """Get current staff member from auth token"""
+    if db is None:
+        raise HTTPException(status_code=500, detail="Database not initialized")
+    
+    from fastapi import Request
+    
+    # This should be called with the token in header
+    # For now, return 401 if no valid way to get token
+    raise HTTPException(status_code=401, detail="Not implemented - use /api/auth/staff-login")
+
