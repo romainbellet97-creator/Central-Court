@@ -218,14 +218,58 @@ export default function LoginScreen() {
             <Text style={styles.googleButtonText}>Joueur — Connexion Google</Text>
           </TouchableOpacity>
 
-          {/* Staff login */}
-          <TouchableOpacity 
-            style={styles.staffButton} 
-            onPress={() => setShowStaffLogin(true)}
-          >
-            <Ionicons name="people-outline" size={22} color="#fff" />
-            <Text style={styles.staffButtonText}>Staff — Connexion Email</Text>
-          </TouchableOpacity>
+          {/* Divider */}
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>ou</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          {/* Staff login form inline */}
+          <View style={styles.staffFormInline}>
+            <Text style={styles.staffFormTitle}>Connexion Staff</Text>
+            <View style={styles.inlineInputWrapper}>
+              <Ionicons name="mail-outline" size={18} color="#6B7280" />
+              <TextInput
+                style={styles.inlineTextInput}
+                placeholder="Email"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                placeholderTextColor="#9CA3AF"
+              />
+            </View>
+            <View style={styles.inlineInputWrapper}>
+              <Ionicons name="lock-closed-outline" size={18} color="#6B7280" />
+              <TextInput
+                style={styles.inlineTextInput}
+                placeholder="Mot de passe"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+                placeholderTextColor="#9CA3AF"
+              />
+              <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+                <Ionicons 
+                  name={showPassword ? "eye-off-outline" : "eye-outline"} 
+                  size={18} 
+                  color="#6B7280" 
+                />
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity
+              style={[styles.staffLoginBtn, isSubmitting && styles.buttonDisabled]}
+              onPress={handleStaffLogin}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={styles.staffLoginBtnText}>Se connecter</Text>
+              )}
+            </TouchableOpacity>
+          </View>
 
           <Text style={styles.disclaimer}>
             En continuant, vous acceptez nos conditions d'utilisation
