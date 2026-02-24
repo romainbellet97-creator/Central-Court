@@ -597,6 +597,60 @@ async def remove_team_member(user_id: str, user: User = Depends(require_player))
     
     return {"success": True}
 
+
+# ============ STAFF AUTH (proxy to invitation routes) ============
+
+class StaffLoginRequest(BaseModel):
+    email: str
+    password: str
+
+@app.post("/api/auth/staff-login")
+async def staff_login(req: StaffLoginRequest):
+    """Login for staff members - proxies to invitation routes"""
+    import hashlib
+    
+    # Find staff by email
+    staff = await db.staff_members.find_one({
+        "email": req.email.lower(),
+        "status": "active"
+    })
+    
+    if not staff:
+        raise HTTPException(status_code=401, detail="Email ou mot de passe incorrect")
+    
+    # Verify password
+    password_hash = hashlib.sha256(req.password.encode()).hexdigest()
+    if staff.get("passwordHash") != password_hash:
+        raise HTTPException(status_code=401, detail="Email ou mot de passe incorrect")
+    
+    # Generate new auth token
+    auth_token = f"staff_{uuid.uuid4().hex}"
+    
+    # Update staff with new token
+    await db.staff_members.update_one(
+        {"_id": staff["_id"]},
+        {"$set": {
+            "authToken": auth_token,
+            "lastLoginAt": datetime.now(timezone.utc)
+        }}
+    )
+    
+    return {
+        "success": True,
+        "session_token": auth_token,
+        "user": {
+            "user_id": str(staff["_id"]),
+            "email": staff.get("email", ""),
+            "name": f"{staff.get('firstName', '')} {staff.get('lastName', '')}".strip(),
+            "firstName": staff.get("firstName"),
+            "lastName": staff.get("lastName"),
+            "role": staff.get("role", "agent"),
+            "player_id": staff.get("playerId"),
+            "isStaff": True,
+        }
+    }
+
+
 # ============ OCR RECEIPT ANALYSIS ============
 
 class OCRResult(BaseModel):
