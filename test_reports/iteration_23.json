@@ -38,7 +38,7 @@
     "frontend": "Code review verified - Expo/React Native app requires mobile device testing"
   },
   "test_credentials": {
-    "API Base URL": "https://residency-app-qa.preview.emergentagent.com"
+    "API Base URL": "https://multi-tenant-secure-2.preview.emergentagent.com"
   },
   "seed_data_creation": "Test documents created with various dateFacture values for testing (cleaned up after tests)",
   "retest_needed": false,

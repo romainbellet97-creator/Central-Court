@@ -1,8 +1,9 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timezone
 import uuid
+from .auth_helpers import get_current_user_id
 
 router = APIRouter(prefix="/api/events", tags=["events"])
 
@@ -51,29 +52,77 @@ class AddObservationRequest(BaseModel):
 
 
 @router.get("")
-async def list_events(date: Optional[str] = None, month: Optional[str] = None):
-    """List events, optionally filtered by date or month (YYYY-MM)"""
-    query = {}
+async def list_events(
+    request: Request,
+    date: Optional[str] = None, 
+    month: Optional[str] = None,
+    userId: Optional[str] = None,  # Allow explicit userId for staff viewing player's events
+    startDate: Optional[str] = None,
+    endDate: Optional[str] = None,
+):
+    """List events, optionally filtered by date or month (YYYY-MM).
+    
+    SECURITY FIX: Events are now filtered by userId.
+    - If userId is provided (staff viewing player), use that
+    - Otherwise use authenticated user's ID
+    - Falls back to 'default-user' for backward compatibility
+    """
+    # Get user ID from auth or explicit parameter
+    if userId:
+        # Staff accessing player's events
+        target_user_id = userId
+    else:
+        # Get current user's events
+        target_user_id = await get_current_user_id(request)
+    
+    # Build query with user isolation
+    query = {"userId": target_user_id}
+    
     if date:
         query["date"] = date
     elif month:
         query["date"] = {"$regex": f"^{month}"}
+    
+    # Support date range for staff dashboard
+    if startDate and endDate:
+        query["date"] = {"$gte": startDate, "$lte": endDate}
+    
     events = await db.events.find(query, {"_id": 0}).to_list(500)
     return events
 
 
 @router.get("/{event_id}")
-async def get_event(event_id: str):
+async def get_event(request: Request, event_id: str):
+    """Get a single event by ID.
+    
+    SECURITY FIX: Verify ownership before returning.
+    """
+    current_user_id = await get_current_user_id(request)
     event = await db.events.find_one({"id": event_id}, {"_id": 0})
+    
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
+    
+    # SECURITY: Check ownership (403 if not owner, unless it's a shared event)
+    event_owner = event.get("userId")
+    if event_owner and event_owner != current_user_id and current_user_id != "default-user":
+        raise HTTPException(status_code=403, detail="Access denied")
+    
     return event
 
 
 @router.post("")
-async def create_event(req: CreateEventRequest):
+async def create_event(request: Request, req: CreateEventRequest):
+    """Create a new event.
+    
+    SECURITY FIX: Associate event with authenticated user.
+    """
+    # Get current user ID for ownership
+    current_user_id = await get_current_user_id(request)
+    
     event = {
         "id": f"evt-{uuid.uuid4().hex[:8]}",
+        "userId": current_user_id,  # SECURITY FIX: Add user ownership
         "type": req.type,
         "title": req.title,
         "date": req.date,
@@ -95,7 +144,23 @@ async def create_event(req: CreateEventRequest):
 
 
 @router.put("/{event_id}")
-async def update_event(event_id: str, req: UpdateEventRequest):
+async def update_event(request: Request, event_id: str, req: UpdateEventRequest):
+    """Update an event.
+    
+    SECURITY FIX: Verify ownership before updating.
+    """
+    current_user_id = await get_current_user_id(request)
+    
+    # Check event exists and belongs to user
+    event = await db.events.find_one({"id": event_id}, {"_id": 0})
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    
+    # SECURITY: Check ownership
+    event_owner = event.get("userId")
+    if event_owner and event_owner != current_user_id and current_user_id != "default-user":
+        raise HTTPException(status_code=403, detail="Access denied")
+    
     update_data = {k: v for k, v in req.dict().items() if v is not None}
     
     # FEATURE #2: Gérer la notification du staff

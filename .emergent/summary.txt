@@ -1,196 +1,153 @@
 <analysis>**original_problem_statement:**
-The user has provided a series of technical sprint documents and bug reports to be addressed. The work is divided into several phases:
+The user's initial goal was to address a long backlog of frontend and database bugs. The work then shifted to a 5-day sprint to build a new Staff Interface within the existing application. This involved creating a role-based routing system to separate the Player and Staff experiences, building new screens for the staff dashboard, calendar, documents, and player info, and implementing a permissions system.
 
-**Completed Sprints:**
-*   **Sprint 1-3:** Addressed critical UI freezes on the calendar, overhauled the observation/comment system, added end dates to events, and implemented staff notifications.
-*   **Various Bug Sprints:** Fixed issues related to keyboard behavior, tournament status logic, event display, camera permissions, invoice saving, onboarding logic, and invisible input text.
+After the initial structure for the staff interface was created, the user encountered issues with the staff login and registration flow, which were then fixed.
 
-**Current Work (From User Bug Reports):**
-The user has provided two large reports detailing numerous bugs across the application's frontend and backend database.
-
-**1. Frontend UX Bugs (From Message 339):**
-*   **CRITICAL:** Hardcoded calendar month, no loading state on tournament registration, hardcoded preview URL in staff invites, silent OCR failure, incorrect currency symbol display, silent error on residence day addition.
-*   **HIGH:** Inability to edit/delete documents or calendar events, navigation to future months in the vault, free-text date fields without validation, shared state between modals, country selector showing only codes, no future date limit on bulk stay picker, no success message on bulk stay addition, silent profile loading failure, non-discoverable long-press for deletion.
-*   **MEDIUM:**  being misinterpreted as , timezone bugs in date displays, incorrect tournament modal titles, no email validation on invites, and mismatched category names ( vs ).
-
-**2. Database Architecture Bugs (From Message 398):**
-*   **CRITICAL:** Lack of user data isolation on  and , and two incompatible user ID systems ( vs. ).
-*   **HIGH:** Inconsistent date formats ( vs. ), irreversible data deletion/modification for tournament statuses, infinite growth of  collection, and unlimited use of invitation codes.
-*   **MEDIUM:** Unnecessarily short UUIDs, missing categories in stats endpoints.
-
-The agent has been tasked with working through the P2 (High/Medium priority) frontend bugs and the critical database issues.
+Most recently, the user reported a critical data isolation bug where users could see each other's data. The agent's current and highest priority task is to audit and fix all backend endpoints to ensure strict data tenancy.
 
 **User's preferred language**: French
 
 **what currently exists?**
-The application is largely functional, but contains a significant number of UX and database architecture bugs that the agent is actively working through.
+The application is a React Native/Expo app with a FastAPI/MongoDB backend.
 
-**Completed in this session:**
-*   **Backend:**
-    *   **DB-9:** A TTL (Time-To-Live) index has been added to the  collection via a startup event in  to ensure automatic cleanup of expired sessions.
-    *   **DB-2 & DB-3:** User data isolation has been added to the  and  routes by adding and querying a  field.
-*   **Frontend:**
-    *   **P2-7 (Vault):** A Modifier (Edit) button and a corresponding edit modal have been implemented for documents in , allowing users to correct existing entries.
-    *   **P2-9 & P2-10 (Vault):** The vault now prevents navigation to future months, and the date input has been improved.
-    *   **P2-12 (Residence):** The country selector in  has been updated to display the full country name alongside the country code, improving usability.
-    *   **P2-13 (Residence):** The date pickers in the Add Stay (bulk) modal now have a  set to today, preventing users from logging future stays.
+A significant refactoring has been completed to introduce a role-based architecture using Expo Router's group routes. The file structure is now split into  and , with separate navigation tabs and screens for each role. A  component and a staff permission type system have been created.
+
+The login screen has been updated to support both Google Auth for players and a separate email/password form for staff members. The  has been extended to handle staff authentication.
+
+Several critical backend bugs have been fixed, including inconsistent user ID systems (DB-4) and date formats (DB-6). Keyboard avoidance issues in the Invite Member and Add Observation modals have also been resolved.
+
+However, a critical data isolation vulnerability exists where several endpoints do not filter data based on the authenticated user.
 
 **Last working item**:
--   **Last item agent was working**: The agent was continuing to fix the list of P2 backlog items. It was applying the  prop to the end date pickers within the Add Stay (bulk) modal in . This is part of fixing bug **P2-13**.
+-   **Last item agent was working**: The agent was in the process of fixing the critical data isolation bug. It had identified several vulnerable backend files (, , , ). The agent started by modifying , adding the authentication dependency and the  filter to the  function. It was about to secure the creation, update, and deletion endpoints within the same file.
 -   **Status**: IN PROGRESS
 -   **Agent Testing Done**: N
--   **Which testing method agent to use?**: both. Frontend testing agent for the UI changes in  and . Backend testing agent to verify the database fixes.
+-   **Which testing method agent to use?**: backend testing agent. This is a critical, backend-only data integrity fix. The testing agent should be instructed to create two separate users (e.g.,  and ), create data for each user via the relevant endpoints (events, documents, alerts), and then verify that when logged in as , API calls *only* return data for  and return a 403 or empty list when trying to access 's data.
 -   **User Testing Done**: N
 
 **All Pending/In progress Issue list**:
-The remaining bugs from the user's reports in messages 339 and 398.
-
--   **Issue 1 (P0): DB-4 - Incompatible User ID Systems.** The  auth creates string-based s while  creates s, causing fatal errors when one system tries to read data from the other. This is a critical architectural flaw.
--   **Issue 2 (P0): DB-6 - Inconsistent Date Formats.** The app uses both  and , causing incorrect date filtering and sorting, especially in PDF exports.
--   **Issue 3 (P1): P2-8 - Cannot delete/modify calendar events.** User-created events are read-only after creation.
--   **Issue 4 (P1): P2-11 - Shared state between residence modals.** The notes field persists between the Add Day and Add Stay modals.
--   **Issue 5 (P1): P2-14 - No success message after adding bulk stay.** The modal closes without user feedback.
--   **Issue 6 (P1): P2-16 - Non-discoverable staff deletion.** Deletion via  is not intuitive.
--   **Issue 7 (P1): P2-20 - Incorrect tournament modal title.** The title always shows the first tournament in a multi-tournament week.
--   **Issue 8 (P1): DB-7 & DB-8 - Irreversible tournament status changes.** Hiding a tournament permanently deletes registration, and auto-hiding other tournaments is not undone if the user cancels participation.
+-   **Issue 1: CRITICAL - Data Isolation Vulnerability (P0)**
 
 **Issues Detail**:
--   **Issue 1: DB-4 - Incompatible User ID Systems**
-    -   **Attempted fixes:** None yet.
-    -   **Next debug checklist:**
-        1.  Analyze  (auth routes) and  to see where the two different ID types are created.
-        2.  Decide on a single, unified ID system. Using MongoDB's  is standard practice.
-        3.  Refactor all user creation, authentication, and session management logic to use .
-        4.  Update all backend routes that filter by  to expect and handle .
-        5.  Consider writing a migration script if existing data needs to be cleaned up.
-    -   **Why fix this issue and what will be achieved with the fix?**: This will resolve fundamental data integrity and API functionality issues, preventing  errors and ensuring users can access their own data consistently.
-    -   **Status**: NOT STARTED
-    -   **Is recurring issue?**: N
+-   **Issue 1: CRITICAL - Data Isolation Vulnerability**
+    -   **Description**: Multiple backend endpoints return data for all users instead of filtering by the currently authenticated user (). This is a severe data leak.
+    -   **Attempted fixes**: The agent identified the vulnerable files. It began fixing  by adding an auth dependency and a  filter to the  list endpoint. The fix for this file is incomplete.
+    -   **Next debug checklist**:
+        1.  **Complete fix for **:
+            *   Add  to the  function signature and save it with the new event.
+            *   Secure the  and  endpoints to verify that the event being modified/deleted belongs to the . Return a 403 Forbidden error if not.
+        2.  **Fix **:
+            *   Add the  dependency to .
+            *   Filter the alert query by .
+        3.  **Fix **:
+            *   Make the  parameter in  and  non-optional and derive it from the auth dependency, not a query parameter.
+            *   Secure all detail, update, and delete endpoints to verify ownership.
+        4.  **Fix **:
+            *   Remove the  default and use the  dependency.
+        5.  **Audit and Test**: After fixing all files, run a comprehensive test with the backend testing agent to confirm data is fully isolated between two distinct user accounts.
+    -   **Why fix this issue and what will be achieved with the fix?**: This is the highest priority. Fixing it will prevent users from accessing or modifying each other's private data, resolving a critical security flaw.
+    -   **Status**: IN PROGRESS
+    -   **Is recurring issue?**: Y (Previous fixes for data isolation were not comprehensive).
     -   **Should Test frontend/backend/both after fix?**: backend
-    -   **Blocked on other issue**: No.
-
--   **Issue 2: DB-6 - Inconsistent Date Formats**
-    -   **Attempted fixes:** None yet.
-    -   **Next debug checklist:**
-        1.  Standardize on  (ISO 8601) for all date storage and API communication.
-        2.  Modify the legacy OCR endpoint () to return dates in  format.
-        3.  Modify the PDF export logic to use  for date range filtering.
-        4.  Ensure all frontend components parse and display dates correctly, converting to user-friendly formats () only at the presentation layer.
-    -   **Why fix this issue and what will be achieved with the fix?**: This will ensure correct date sorting and filtering across the entire application, making features like PDF export reliable.
-    -   **Status**: NOT STARTED
-    -   **Is recurring issue?**: Y
-    -   **Should Test frontend/backend/both after fix?**: both
-    -   **Blocked on other issue**: No.
+    -   **Blocked on other issue**: No. This is the top priority blocker.
 
 **In progress Task List**:
--   **Task 1**: Complete all bug fixes from user reports (Messages 339 & 398).
-
-**Task Detail**:
--   **Task 1**:
+-   **Task 1: Staff Interface Implementation (P1)**
+    -   **Description**: The initial structure is in place, but the functionality inside the staff screens is mostly placeholder code.
     -   **Where to resume**:
-        1.  Finish the current fix in  by applying  to all relevant date pickers in the bulk-add modal (P2-13).
-        2.  Address the remaining P2 (High/Medium) bugs from the list in message 339.
-        3.  Address the critical remaining DB issues from the list in message 398, starting with **DB-4**.
-    -   **What will be achieved with this?**: This will significantly improve the application's stability, user experience, and data integrity, resolving dozens of reported issues.
+        1.  Implement the backend logic for  and .
+        2.  Refactor the player calendar components () to be reusable and pass a  prop to them from the staff calendar ().
+        3.  Implement the data fetching and UI for all staff screens (, , ) using the provided wireframes and API endpoints.
+        4.  Ensure the  object in  is correctly populated with , , and  upon staff login.
+    -   **What will be achieved with this?**: A functional interface for staff members to manage their assigned player.
     -   **Status**: IN PROGRESS
     -   **Should Test frontend/backend/both after fix?**: both
-    -   **Blocked on something**: No.
+    -   **Blocked on something**: Data Isolation Vulnerability (Issue 1).
 
 **Upcoming and Future Tasks**
 -   **Upcoming Tasks**:
-    -   Implement Geolocation Phase 3 - Automatic Tax Residency Tracking (P0 - Original task, long-deprioritized).
+    -   **DB-7 & DB-8 (P1)**: Fix irreversible tournament status changes, where hiding a tournament permanently deletes registration data.
 -   **Future Tasks**:
-    -   Fix tournament modal reactivity (P1).
-    -   Improve tournament card UI homogeneity (P2).
-    -   Implement PDF report generation for the tax residency feature.
+    -   **Geolocation Phase 3 (P2)**: Implement automatic tax residency tracking using background GPS and generate PDF reports.
 
 **Completed work in this session**
--   **Sprint 3 Completion**: Fully implemented and tested the new observation system, event end times, and staff notification feature.
--   **Expo Go / ngrok Debugging**: Diagnosed and resolved (by waiting out) a persistent environmental issue with the Expo Go tunnel.
--   **URL Standardization**: Replaced all instances of  with .
--   **Bug Fix Sprints**:
-    -   Fixed keyboard dismissal, calendar freezes, and event display issues.
-    -   Fixed camera permissions, invoice update logic, onboarding circuit selection, and invisible staff invite text.
-    -   Fixed observation UI bugs (author name, sending status, and keyboard avoidance).
--   **Critical UX Bug Fixes (from list of 22)**:
-    -   Fixed hardcoded calendar month, staff invite URL, incorrect currency display, and silent error handling.
--   **Database Architecture Fixes**:
-    -   **DB-2 & DB-3**: Added  for data isolation in residence and tournament data.
-    -   **DB-9**: Implemented a TTL index on the  collection in MongoDB to auto-expire old sessions.
--   **P2 Backlog Bug Fixes**:
-    -   **P2-7**: Implemented Edit Document functionality in the vault.
-    -   **P2-9 & P2-10**: Prevented future month navigation in the vault.
-    -   **P2-12**: Improved country selector to show full names.
-    -   **P2-13**: Limited bulk-add date pickers to prevent selecting future dates.
-
-**Earlier issues found/mentioned but not fixed**
-All remaining unfixed bugs from the user's detailed lists in messages 339 and 398 are pending. The highest priority ones are listed in the **All Pending/In progress Issue list** section above.
+-   **Backend Architecture**:
+    -   Fixed **DB-4 (Incompatible User IDs)** by creating  to provide a consistent  dependency, which was then implemented in  and .
+    -   Fixed **DB-6 (Inconsistent Date Formats)** by modifying the OCR helper in  to always return dates in  (ISO 8601) format.
+-   **Frontend Architecture (Staff Sprint)**:
+    -   Restructured the  directory into  and  groups.
+    -   Implemented role-based routing in  to direct users upon login.
+    -   Created placeholder screens and tab navigation for the staff interface.
+    -   Created  and .
+-   **Authentication Flow**:
+    -   Fixed the staff signup/login flow by updating , adding a staff-specific login form to , and extending  with  and  methods.
+    -   Added a  endpoint to .
+-   **Bug Fixes**:
+    -   Fixed keyboard avoidance issues in the Invite Member () and Add Observation () modals using .
+    -   Addressed multiple P2 frontend bugs, including shared modal state and discoverability of staff deletion.
+    -   Improved UI reactivity and visual consistency for the tournament cards on the main calendar screen.
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
--   **Backend**: FastAPI, MongoDB, Pydantic, Data Isolation (multi-tenancy), TTL Indexes.
--   **Frontend**: React Native, Expo, TypeScript, State Management (, ), , , Modal implementation, Style management.
+-   **Backend**: FastAPI, MongoDB, Data Isolation (multi-tenancy).
+-   **Frontend**: React Native, Expo, TypeScript, Expo Router (Group Routes for role-based navigation), , Context API for authentication.
 
 **key DB schema**
--   **user_sessions**: Now has a  on the  field.
--   **day_presences**:  field needs to be added and used in all queries.
--   **tournament_registrations**:  field needs to be added and used in all queries.
--   **users**: Contains two different ID formats (: string, : ObjectId) which needs to be unified.
+-   **events, documents, alerts**: Require a  field to be added or enforced in all queries to ensure data isolation.
+-   **staff_members**: Contains  to link a staff member to a player.
+-   **users**: The primary user collection.
 
 **All files of reference**
--   ****: Modified to add a startup event to create a TTL index on the  collection.
--   ****: Modified to enforce user data isolation by adding  to queries.
--   ****: Modified to enforce user data isolation.
--   ****: Heavily modified to add an Edit Document modal and to prevent navigation to future months.
--   ****: Modified to improve the country selector UI and add date limits to the bulk-add date pickers.
--   ****: Modified to fix multiple UI bugs.
--   ****: Modified to fix calendar and observation bugs.
+-   : **Currently being fixed for data isolation.**
+-   , , : **Identified as vulnerable and require fixing.**
+-   : Implements the main player/staff routing logic.
+-   : Contains the updated login UI for both user roles.
+-   : Contains the authentication logic for both roles.
+-    and : The new directory structure for role-based screens.
+-    & : Modified to fix keyboard avoidance bugs. These changes need to be synced to .
 
 **Critical Info for New Agent**
--   The user is highly technical and provides detailed sprint documents which should be treated as the source of truth.
--   The immediate priority is to continue working through the extensive bug lists provided in **messages 339 (Frontend UX) and 398 (Database)**.
--   A critical architectural flaw (**DB-4: Incompatible User IDs**) exists in the backend and should be addressed with high priority as it breaks data integrity.
--   Prioritize bugs based on the user's classification (Critical > High > Medium).
+-   **Priority #1 is the data isolation bug.** Do not proceed with any other feature work until all backend endpoints listed in the Issues Detail section are fully secured and tested.
+-   The user is technical and provides detailed instructions. Adhere closely to the provided sprint documents and bug reports.
+-   The frontend file structure has been significantly changed. The old  directory has been copied to . Ensure any new frontend changes are applied to the correct files within the  or  groups.
 
 **documents and test reports created in this job**
--   
--   
--   
--   
--    (updated multiple times)
+-    (updated with staff sprint and bug fix progress)
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **User (Msg 455):** continue backlog p2 + db 9 - Instructed agent to continue working on the P2 backlog and DB bug #9. (Status: **IN PROGRESS**)
-2.  **User (Msg 398):** Provided a detailed list of 16 critical database architecture bugs. (Status: **IN PROGRESS**)
-3.  **User (Msg 339):** Provided a detailed list of 22 frontend UX bugs. (Status: **IN PROGRESS**)
-4.  **User (Msg 292):** Provided a new sprint doc with 3 bugs related to the observation section, with screenshots. (Status: **Completed**)
-5.  **User (Msg 253):** Provided a new sprint doc with 4 bugs related to invoices, camera, onboarding, and staff invites. (Status: **Completed**)
-6.  **User (Msg 208):** Provided a new sprint doc with 3 bugs related to keyboard behavior, calendar freezes, and event display. (Status: **Completed**)
-7.  **User (Msg 186):** redemarre expo go ! - Asked to restart Expo Go again. (Status: **Completed**)
-8.  **User (Msg 152):** Instructed the agent to change all endpoints from  to . (Status: **Completed**)
-9.  **User (Msg 86):** Reported that the Expo Go tunnel was offline. (Status: **Completed**)
-10. **User (Msg 5):** fini le sprint 3 - Instructed agent to finish Sprint 3. (Status: **Completed**)
+1.  **User (Msg 312):** Reported a critical data isolation bug and provided a detailed investigation and correction plan. (Status: **IN PROGRESS**)
+2.  **User (Msg 281):** Requested a fix for two modals where the keyboard was hiding the text input field. (Status: **Completed**)
+3.  **User (Msg 265):** Reported that the staff login form was not visible on the login page and that Google login led to another user's account. (Status: **Completed**)
+4.  **User (Msg 263):** Asked for the correct URL to log in as a coach, as the main button was not working. (Status: **Completed**)
+5.  **User (Msg 202):** Reported that the staff signup flow did not redirect to the staff dashboard. (Status: **Completed**)
+6.  **User (Msg 169):** Confirmed the plan for the staff interface sprint. (Status: **Completed**)
+7.  **User (Msg 160):** Provided a 5-day sprint plan to build the entire Staff Interface. (Status: **Partially Completed**, structure is in place).
+8.  **User (Msg 127):** Asked the agent to improve the reactivity and UI homogeneity of the tournament cards. (Status: **Completed**)
+9.  **User (Msg 68):** Instructed the agent to proceed with the next actions in the P1/P2 backlog. (Status: **Completed**)
+10. **User (Msg 5):** Instructed the agent to finish the current work and move on to priority actions. (Status: **Completed**)
 
 **Project Health Check:**
--   **Broken**: The database architecture has critical data isolation and integrity flaws (e.g., **DB-4**), making it unsuitable for multiple users. The frontend has numerous UX bugs that degrade the user experience.
--   **Mocked**: No mocked components are currently active.
+-   **Broken**: The application has a critical data leak due to the lack of user data isolation on several key backend endpoints. This makes the app unsafe for use until the issue is fully resolved.
 
 **3rd Party Integrations**
 -   **Expo**: Core React Native framework.
--   **expo-location, expo-task-manager, expo-background-fetch**: For a future geolocation feature.
--   **ngrok**: Used by Expo for the development tunnel.
+-   **Emergent-managed Google Auth**: Used for player login.
 
 **Testing status**
--   **Testing agent used after significant changes**: YES
--   **Troubleshoot agent used after agent stuck in loop**: YES (for the ngrok issue)
+-   **Testing agent used after significant changes**: NO (Not for the latest fixes).
+-   **Troubleshoot agent used after agent stuck in loop**: NO
 -   **Test files created**: None.
--   **Known regressions**: None identified, but the high number of bugs suggests a lack of comprehensive testing coverage.
+-   **Known regressions**: None explicitly identified, but the data isolation issue is a major regression in security.
 
 **Credentials to test flow:**
--   **App User**:  / 
--   **Admin User**:  / 
+-   **Player (Google Auth)**: Use the Joueur - Connexion Google button.
+-   **Staff (Email/Pass)**:
+    -   **Email**: 
+    -   **Password**: The password created during the initial signup flow (the agent does not have it, the user does). A password reset or new invitation flow may be needed if the user forgot it.
 
 **What agent forgot to execute**
-The agent has been diligently following the user's high-priority bug reports and sprint documents. The original task (Geolocation Phase 3) remains in the backlog as it has been consistently deprioritized by the user in favor of fixing a large volume of bugs.</analysis>
+-   The agent correctly prioritized the critical security bug reported by the user. However, the fix is still in progress.
+-   The agent copied the old  directory to  but did not delete the original  directory, which could cause confusion.
+-   The keyboard fixes applied to  and  were also copied to  but the original files remain, creating duplicate code. The next agent should consider cleaning this up.</analysis>

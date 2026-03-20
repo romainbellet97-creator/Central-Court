@@ -40,7 +40,7 @@
   "seed_data_creation": "Used existing tournaments: adelaide-2026, brisbane-2026 for hide/unhide testing. State cleaned up after tests.",
   "retest_needed": false,
   "main_agent_can_self_test": true,
-  "context_for_next_testing_agent": "Phase 1 tournament optimizations fully tested. Key endpoints: POST /api/tournaments/hide (hides tournament, removes registration), DELETE /api/tournaments/hide/{tournament_id} (unhides), GET /api/tournaments/weeks?circuits=ATP (returns weeks with hidden/registration/country fields), GET /api/tournaments (has country, prizeMoney, startDate, endDate, currency). All tests use REACT_APP_BACKEND_URL=https://residency-app-qa.preview.emergentagent.com",
+  "context_for_next_testing_agent": "Phase 1 tournament optimizations fully tested. Key endpoints: POST /api/tournaments/hide (hides tournament, removes registration), DELETE /api/tournaments/hide/{tournament_id} (unhides), GET /api/tournaments/weeks?circuits=ATP (returns weeks with hidden/registration/country fields), GET /api/tournaments (has country, prizeMoney, startDate, endDate, currency). All tests use REACT_APP_BACKEND_URL=https://multi-tenant-secure-2.preview.emergentagent.com",
   "features_tested": {
     "POST /api/tournaments/hide": {
       "status": "PASS",
