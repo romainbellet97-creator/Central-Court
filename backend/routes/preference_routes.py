@@ -1,7 +1,9 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timezone
+
+from .auth_helpers import get_current_user_id
 
 router = APIRouter(prefix="/api/preferences", tags=["preferences"])
 
@@ -33,8 +35,9 @@ class UpdatePreferencesRequest(BaseModel):
 
 
 @router.get("")
-async def get_preferences(user_id: str = "demo-user"):
-    """Get user preferences"""
+async def get_preferences(request: Request):
+    """Get user preferences. SECURITY FIX: Use authenticated user."""
+    user_id = await get_current_user_id(request)
     prefs = await db.user_preferences.find_one({"userId": user_id}, {"_id": 0})
     if not prefs:
         return {"userId": user_id, "voyage": None, "hotel": None, "food": None}
@@ -42,8 +45,9 @@ async def get_preferences(user_id: str = "demo-user"):
 
 
 @router.put("")
-async def update_preferences(req: UpdatePreferencesRequest, user_id: str = "demo-user"):
-    """Update user preferences"""
+async def update_preferences(request: Request, req: UpdatePreferencesRequest):
+    """Update user preferences. SECURITY FIX: Use authenticated user."""
+    user_id = await get_current_user_id(request)
     update_data = {"userId": user_id, "updatedAt": datetime.now(timezone.utc).isoformat()}
     if req.voyage is not None:
         update_data["voyage"] = req.voyage.dict()

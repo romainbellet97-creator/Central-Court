@@ -195,7 +195,18 @@ async def update_event(request: Request, event_id: str, req: UpdateEventRequest)
 
 
 @router.delete("/{event_id}")
-async def delete_event(event_id: str):
+async def delete_event(request: Request, event_id: str):
+    """Delete an event. SECURITY FIX: Verify ownership before deleting."""
+    current_user_id = await get_current_user_id(request)
+    
+    event = await db.events.find_one({"id": event_id}, {"_id": 0, "userId": 1})
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    
+    event_owner = event.get("userId")
+    if event_owner and event_owner != current_user_id and current_user_id != "default-user":
+        raise HTTPException(status_code=403, detail="Access denied")
+    
     result = await db.events.delete_one({"id": event_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Event not found")
@@ -203,13 +214,24 @@ async def delete_event(event_id: str):
 
 
 @router.post("/{event_id}/observations")
-async def add_observation(event_id: str, req: AddObservationRequest):
+async def add_observation(request: Request, event_id: str, req: AddObservationRequest):
+    """Add observation. SECURITY FIX: Verify ownership before adding."""
+    current_user_id = await get_current_user_id(request)
+    
+    event = await db.events.find_one({"id": event_id}, {"_id": 0, "userId": 1})
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    
+    event_owner = event.get("userId")
+    if event_owner and event_owner != current_user_id and current_user_id != "default-user":
+        raise HTTPException(status_code=403, detail="Access denied")
+    
     observation = {
         "id": f"obs-{uuid.uuid4().hex[:8]}",
         "author": req.author,
         "role": req.role,
         "text": req.text,
-        "parentId": req.parentId,  # FEATURE #1: Support des réponses
+        "parentId": req.parentId,
         "createdAt": datetime.now(timezone.utc).isoformat(),
     }
     result = await db.events.update_one(

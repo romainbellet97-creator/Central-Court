@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timezone
@@ -6,6 +6,7 @@ import uuid
 import asyncio
 
 from services.email_service import send_email, build_tournament_alert_email
+from .auth_helpers import get_current_user_id
 
 router = APIRouter(prefix="/api/alerts", tags=["alerts"])
 
@@ -35,9 +36,10 @@ class CreateAlertRequest(BaseModel):
 
 
 @router.get("")
-async def list_alerts(unread_only: bool = False):
-    """List all alerts"""
-    query = {}
+async def list_alerts(request: Request, unread_only: bool = False):
+    """List alerts for the current user. SECURITY FIX: Filter by userId."""
+    current_user_id = await get_current_user_id(request)
+    query = {"userId": current_user_id}
     if unread_only:
         query["read"] = False
         query["dismissed"] = False
@@ -46,10 +48,12 @@ async def list_alerts(unread_only: bool = False):
 
 
 @router.post("")
-async def create_alert(req: CreateAlertRequest):
-    """Create a new alert/notification"""
+async def create_alert(request: Request, req: CreateAlertRequest):
+    """Create a new alert. SECURITY FIX: Associate with authenticated user."""
+    current_user_id = await get_current_user_id(request)
     alert = {
         "id": f"alert-{uuid.uuid4().hex[:8]}",
+        "userId": current_user_id,
         "type": req.type,
         "priority": req.priority,
         "title": req.title,
@@ -75,38 +79,57 @@ async def create_alert(req: CreateAlertRequest):
 
 
 @router.put("/{alert_id}/read")
-async def mark_alert_read(alert_id: str):
-    """Mark an alert as read"""
-    result = await db.alerts.update_one({"id": alert_id}, {"$set": {"read": True}})
+async def mark_alert_read(request: Request, alert_id: str):
+    """Mark alert as read. SECURITY FIX: Verify ownership."""
+    current_user_id = await get_current_user_id(request)
+    result = await db.alerts.update_one(
+        {"id": alert_id, "userId": current_user_id},
+        {"$set": {"read": True}}
+    )
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Alert not found")
     return {"success": True}
 
 
 @router.put("/{alert_id}/dismiss")
-async def dismiss_alert(alert_id: str):
-    """Dismiss an alert"""
-    result = await db.alerts.update_one({"id": alert_id}, {"$set": {"dismissed": True}})
+async def dismiss_alert(request: Request, alert_id: str):
+    """Dismiss alert. SECURITY FIX: Verify ownership."""
+    current_user_id = await get_current_user_id(request)
+    result = await db.alerts.update_one(
+        {"id": alert_id, "userId": current_user_id},
+        {"$set": {"dismissed": True}}
+    )
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Alert not found")
     return {"success": True}
 
 
 @router.put("/read-all")
-async def mark_all_read():
-    """Mark all alerts as read"""
-    await db.alerts.update_many({"read": False}, {"$set": {"read": True}})
+async def mark_all_read(request: Request):
+    """Mark all alerts as read. SECURITY FIX: Only current user's alerts."""
+    current_user_id = await get_current_user_id(request)
+    await db.alerts.update_many(
+        {"read": False, "userId": current_user_id},
+        {"$set": {"read": True}}
+    )
     return {"success": True}
 
 
 @router.post("/generate")
-async def generate_alerts():
+async def generate_alerts(request: Request):
     """Generate alerts based on tournament registrations and missing bookings.
+    SECURITY FIX: Filter by authenticated user.
     Also sends email notifications for high-priority alerts."""
-    # Get active registrations with projection
+    current_user_id = await get_current_user_id(request)
+    
+    # Get active registrations for the current user
+    reg_query = {"status": {"$in": ["participating", "accepted", "pending"]}}
+    if current_user_id != "default-user":
+        reg_query["userId"] = current_user_id
+    
     registrations = await db.tournament_registrations.find(
-        {"status": {"$in": ["participating", "accepted", "pending"]}},
-        {"_id": 0, "tournamentId": 1, "status": 1}
+        reg_query,
+        {"_id": 0, "tournamentId": 1, "status": 1, "userId": 1}
     ).limit(100).to_list(100)
 
     if not registrations:
@@ -120,9 +143,12 @@ async def generate_alerts():
     ).to_list(100)
     tournaments_map = {t["id"]: t for t in tournaments_list}
 
-    # Get events with projection and limit
+    # Get events for the current user
+    evt_query = {}
+    if current_user_id != "default-user":
+        evt_query["userId"] = current_user_id
     events = await db.events.find(
-        {}, {"_id": 0, "id": 1, "title": 1, "date": 1, "time": 1, "type": 1, "tournamentId": 1}
+        evt_query, {"_id": 0, "id": 1, "title": 1, "date": 1, "time": 1, "type": 1, "tournamentId": 1}
     ).limit(200).to_list(200)
 
     today = datetime.now(timezone.utc).date()
@@ -160,6 +186,7 @@ async def generate_alerts():
             if not existing:
                 alert = {
                     "id": f"alert-flight-{tid}",
+                    "userId": current_user_id,
                     "type": "flight_missing",
                     "priority": priority,
                     "title": "Vol non réservé",
@@ -191,6 +218,7 @@ async def generate_alerts():
             if not existing:
                 alert = {
                     "id": f"alert-hotel-{tid}",
+                    "userId": current_user_id,
                     "type": "hotel_missing",
                     "priority": priority,
                     "title": "Hôtel non réservé",
@@ -215,6 +243,7 @@ async def generate_alerts():
             if not existing:
                 alert = {
                     "id": f"alert-reg-{tid}",
+                    "userId": current_user_id,
                     "type": "registration_pending",
                     "priority": priority,
                     "title": "Inscription en attente",

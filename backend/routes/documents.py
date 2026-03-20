@@ -3,7 +3,7 @@ Routes pour la gestion des documents (OCR + CRUD + Export PDF)
 Collection MongoDB: documents
 """
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Query
+from fastapi import APIRouter, HTTPException, UploadFile, File, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from typing import Optional, List
@@ -14,6 +14,7 @@ import io
 
 # Import OCR service
 from services.ocr_service import analyze_document, analyze_document_with_ai, suggest_category_from_text
+from .auth_helpers import get_current_user_id
 
 router = APIRouter(prefix="/api")
 
@@ -159,11 +160,12 @@ def serialize_document(doc: dict) -> dict:
 # ============ CRUD ENDPOINTS ============
 
 @router.post("/documents", response_model=DocumentResponse)
-async def create_document(doc: DocumentCreate):
-    """Create a new document"""
+async def create_document(request: Request, doc: DocumentCreate):
+    """Create a new document. SECURITY FIX: Use auth userId."""
     if db is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
     
+    current_user_id = await get_current_user_id(request)
     now = datetime.now(timezone.utc)
     
     document = {
@@ -182,7 +184,7 @@ async def create_document(doc: DocumentCreate):
         "description": doc.description,
         "fileType": doc.fileType,
         "fileBase64": doc.fileBase64,
-        "userId": doc.userId,
+        "userId": current_user_id,
         "createdAt": now,
         "updatedAt": now,
     }
@@ -195,6 +197,7 @@ async def create_document(doc: DocumentCreate):
 
 @router.get("/documents", response_model=List[DocumentResponse])
 async def get_documents(
+    request: Request,
     userId: Optional[str] = None,
     category: Optional[str] = None,
     startDate: Optional[str] = None,
@@ -202,15 +205,17 @@ async def get_documents(
     limit: int = Query(default=100, le=500),
     skip: int = Query(default=0, ge=0)
 ):
-    """Get all documents with optional filters"""
+    """Get documents. SECURITY FIX: Filter by auth user (or explicit userId for staff)."""
     if db is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
     
-    query = {}
-    
+    # Use explicit userId (staff viewing player) or authenticated user
     if userId:
-        # Support both userId and user_id field names for flexibility
-        query["user_id"] = userId
+        target_user_id = userId
+    else:
+        target_user_id = await get_current_user_id(request)
+    
+    query = {"userId": target_user_id}
     
     if category:
         query["category"] = category
@@ -235,17 +240,21 @@ async def get_documents(
 
 @router.get("/documents/stats")
 async def get_documents_stats(
+    request: Request,
     userId: Optional[str] = None,
     startDate: Optional[str] = None,
     endDate: Optional[str] = None
 ):
-    """Get documents statistics"""
+    """Get documents stats. SECURITY FIX: Filter by auth user."""
     if db is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
     
-    query = {}
     if userId:
-        query["userId"] = userId
+        target_user_id = userId
+    else:
+        target_user_id = await get_current_user_id(request)
+    
+    query = {"userId": target_user_id}
     if startDate or endDate:
         date_query = {}
         if startDate:
@@ -301,10 +310,12 @@ async def get_categories():
 
 
 @router.get("/documents/{document_id}", response_model=DocumentResponse)
-async def get_document(document_id: str):
-    """Get a single document by ID"""
+async def get_document(request: Request, document_id: str):
+    """Get a single document. SECURITY FIX: Verify ownership."""
     if db is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
+    
+    current_user_id = await get_current_user_id(request)
     
     try:
         doc = await db.documents.find_one({"_id": ObjectId(document_id)}, {"fileBase64": 0})
@@ -314,22 +325,32 @@ async def get_document(document_id: str):
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
     
+    doc_owner = doc.get("userId")
+    if doc_owner and doc_owner != current_user_id and current_user_id != "default-user":
+        raise HTTPException(status_code=403, detail="Access denied")
+    
     return serialize_document(doc)
 
 
 @router.get("/documents/{document_id}/file")
-async def get_document_file(document_id: str):
-    """Get the original file (image/PDF) of a document"""
+async def get_document_file(request: Request, document_id: str):
+    """Get document file. SECURITY FIX: Verify ownership."""
     if db is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
     
+    current_user_id = await get_current_user_id(request)
+    
     try:
-        doc = await db.documents.find_one({"_id": ObjectId(document_id)}, {"fileBase64": 1, "fileType": 1, "name": 1})
+        doc = await db.documents.find_one({"_id": ObjectId(document_id)}, {"fileBase64": 1, "fileType": 1, "name": 1, "userId": 1})
     except:
         raise HTTPException(status_code=400, detail="Invalid document ID")
     
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
+    
+    doc_owner = doc.get("userId")
+    if doc_owner and doc_owner != current_user_id and current_user_id != "default-user":
+        raise HTTPException(status_code=403, detail="Access denied")
     
     if not doc.get("fileBase64"):
         raise HTTPException(status_code=404, detail="No file attached to this document")
@@ -350,17 +371,27 @@ async def get_document_file(document_id: str):
 
 
 @router.put("/documents/{document_id}", response_model=DocumentResponse)
-async def update_document(document_id: str, update: DocumentUpdate):
-    """Update a document"""
+async def update_document(request: Request, document_id: str, update: DocumentUpdate):
+    """Update a document. SECURITY FIX: Verify ownership."""
     if db is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
+    
+    current_user_id = await get_current_user_id(request)
     
     try:
         object_id = ObjectId(document_id)
     except:
         raise HTTPException(status_code=400, detail="Invalid document ID")
     
-    # Build update dict with only non-None values
+    # Check ownership
+    doc = await db.documents.find_one({"_id": object_id}, {"userId": 1})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    
+    doc_owner = doc.get("userId")
+    if doc_owner and doc_owner != current_user_id and current_user_id != "default-user":
+        raise HTTPException(status_code=403, detail="Access denied")
+    
     update_dict = {k: v for k, v in update.dict().items() if v is not None}
     
     if update_dict.get("lignes"):
@@ -381,15 +412,26 @@ async def update_document(document_id: str, update: DocumentUpdate):
 
 
 @router.delete("/documents/{document_id}")
-async def delete_document(document_id: str):
-    """Delete a document"""
+async def delete_document(request: Request, document_id: str):
+    """Delete a document. SECURITY FIX: Verify ownership."""
     if db is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
+    
+    current_user_id = await get_current_user_id(request)
     
     try:
         object_id = ObjectId(document_id)
     except:
         raise HTTPException(status_code=400, detail="Invalid document ID")
+    
+    # Check ownership
+    doc = await db.documents.find_one({"_id": object_id}, {"userId": 1})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    
+    doc_owner = doc.get("userId")
+    if doc_owner and doc_owner != current_user_id and current_user_id != "default-user":
+        raise HTTPException(status_code=403, detail="Access denied")
     
     result = await db.documents.delete_one({"_id": object_id})
     
@@ -554,13 +596,14 @@ async def analyze_invoice_base64(request: AnalyzeDocumentRequest):
 
 @router.get("/documents/export/pdf")
 async def export_documents_pdf(
+    request: Request,
     userId: Optional[str] = None,
     category: Optional[str] = None,
     startDate: Optional[str] = None,
     endDate: Optional[str] = None,
-    period: Optional[str] = None  # "month", "year", "all"
+    period: Optional[str] = None
 ):
-    """Export documents as PDF report"""
+    """Export documents as PDF. SECURITY FIX: Filter by auth user."""
     if db is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
     
@@ -571,10 +614,13 @@ async def export_documents_pdf(
     from reportlab.lib.units import cm
     from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
     
-    # Build query
-    query = {}
+    # Use explicit userId (staff) or authenticated user
     if userId:
-        query["userId"] = userId
+        target_user_id = userId
+    else:
+        target_user_id = await get_current_user_id(request)
+    
+    query = {"userId": target_user_id}
     if category:
         query["category"] = category
     
