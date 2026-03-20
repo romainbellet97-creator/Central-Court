@@ -1,126 +1,92 @@
 # Le Court Central - PRD
 
+## Application
+Tennis player management app (React Native/Expo + FastAPI/MongoDB) with role-based access for Players and Staff.
+
 ## Sprint Interface Staff — Février 24, 2026
 
 ### Implémentation Complète
 
 #### Étape 1 — Routing Player/Staff ✅
-**Structure créée:**
-```
-app/
-├── _layout.tsx              # MODIFIÉ: Ajout AuthProvider + routes (player)/(staff)
-├── index.tsx                # MODIFIÉ: Redirection basée sur user.role
-├── (player)/                # NOUVEAU
-│   ├── _layout.tsx          # Tabs joueur avec garde de rôle
-│   ├── index.tsx            # Calendrier joueur (copié de (tabs))
-│   ├── vault.tsx            # Documents joueur
-│   ├── residence.tsx        # Résidence fiscale
-│   ├── profile.tsx          # Profil joueur
-│   └── [autres fichiers]
-└── (staff)/                 # NOUVEAU
-    ├── _layout.tsx          # Tabs staff avec garde de rôle
-    ├── dashboard.tsx        # Vue d'ensemble staff
-    ├── calendar.tsx         # Calendrier (lecture/édition)
-    ├── documents.tsx        # Documents avec filtres
-    └── player-info.tsx      # Fiche joueur
-```
+Structure `app/(player)/` et `app/(staff)/` avec tabs séparés.
 
 #### Étape 2 — Types & Permissions ✅
-**Fichiers créés:**
-- `src/types/staff.ts` — Types `StaffRole`, `StaffPermissions`, `ROLE_PERMISSIONS`
-- `src/components/PermissionGate.tsx` — Composant de contrôle d'accès
+`src/types/staff.ts`, `src/components/PermissionGate.tsx`
 
-**Rôles supportés:**
-| Rôle | canViewCalendar | canEditCalendar | canViewDocuments | canUploadDocuments | canViewFinances |
-|------|-----------------|-----------------|------------------|--------------------| ----------------|
-| tennis_coach | ✅ | ✅ | ✅ | ✅ | ❌ |
-| physical_coach | ✅ | ✅ | ✅ | ✅ | ❌ |
-| physio | ✅ | ❌ | ✅ | ✅ | ❌ |
-| agent | ✅ | ✅ | ✅ | ✅ | ✅ |
-| family | ✅ | ❌ | ✅ | ❌ | ❌ |
+#### Étape 3 — Écrans Staff ✅ (structure)
+Dashboard, Calendrier, Documents, Fiche Joueur (placeholder UI en place).
 
-**Mapping backend → staff:**
-- `technical` → `tennis_coach`
-- `medical` → `physio`
-- `logistics` → `physical_coach`
-- `agent` → `agent`
+### Logique de Redirection ✅
+index.tsx redirige vers `/(player)/` ou `/(staff)/dashboard` selon le rôle.
 
-#### Étape 3 — Écrans Staff ✅
+## Bug Fixes Complétés
 
-**Dashboard (`dashboard.tsx`):**
-- Header avec gradient + nom du staff + rôle
-- Section "Cette semaine" avec événements du joueur
-- Section "Alertes" avec badge compteur
-- Section "Statut rapide" avec stats (classement, points, tournois)
-- Pull-to-refresh
+### DB-4: Incompatible User IDs ✅
+`backend/routes/auth_helpers.py` centralisé avec `get_current_user_id`.
 
-**Calendrier (`calendar.tsx`):**
-- Calendrier français avec `react-native-calendars`
-- Badge "Lecture seule" si pas de permission d'édition
-- Liste des événements du jour sélectionné
-- Événements en attente (`pending_approval`) affichés en grisé
-- FAB "+" pour proposer un créneau (si `canEditCalendar`)
-- Modal de proposition avec titre, heure début/fin, notes
+### DB-6: Inconsistent Date Formats ✅
+OCR helper retourne toujours `YYYY-MM-DD`.
 
-**Documents (`documents.tsx`):**
-- Liste des documents avec icônes par catégorie
-- Montants masqués si `!canViewFinances`
-- FAB upload si `canUploadDocuments`
-- `RestrictedScreen` si `!canViewDocuments`
+### P0: Data Isolation Vulnerability ✅ (Février 26, 2026)
+**RÉSOLU** — Audit complet et correction de tous les endpoints vulnérables:
+- `event_routes.py`: GET/POST/PUT/DELETE + observations → filtrage par userId ✅
+- `alert_routes.py`: GET/POST/read/dismiss/read-all/generate → filtrage par userId ✅
+- `documents.py`: GET list/single/POST/PUT/DELETE/export PDF → filtrage par userId ✅
+- `preference_routes.py`: GET/PUT → remplacement de "demo-user" par auth ✅
+- **Test**: 16/16 tests passés (pytest) — isolation vérifiée entre 2 utilisateurs distincts
 
-**Fiche Joueur (`player-info.tsx`):**
-- Header avec avatar et nom du joueur
-- Sections: Profil, Classement, Tournois confirmés, Préférences voyage
-- Section "Résidence fiscale" uniquement si `canViewFinances`
+### Keyboard Avoidance ✅
+Modals "Invite Member" et "Add Observation" corrigés avec `KeyboardAvoidingView`.
 
-### Logique de Redirection
-
-```
-index.tsx:
-  Si authLoading → Loader
-  Si web → Landing page Expo Go
-  Si isNewUser → /onboarding
-  Si user.role !== 'player' → /(staff)/dashboard
-  Sinon → /(player)/
-  Fallback → /(tabs)
-```
-
-### Non-régression
-- Les fichiers `(tabs)` restent intacts pour rétro-compatibilité
-- Les écrans joueur sont copiés dans `(player)` avec garde de rôle
-
-### Fichiers Créés
-```
-/app/frontend/
-├── app/(player)/_layout.tsx       # Layout tabs joueur
-├── app/(staff)/_layout.tsx        # Layout tabs staff
-├── app/(staff)/dashboard.tsx      # Dashboard staff
-├── app/(staff)/calendar.tsx       # Calendrier staff
-├── app/(staff)/documents.tsx      # Documents staff
-├── app/(staff)/player-info.tsx    # Fiche joueur
-├── src/types/staff.ts             # Types staff
-└── src/components/PermissionGate.tsx # Composant permissions
-```
-
-### Fichiers Modifiés
-```
-/app/frontend/app/_layout.tsx      # Ajout AuthProvider + routes
-/app/frontend/app/index.tsx        # Redirection selon rôle
-```
+### Staff Login/Signup ✅
+Formulaire email/password staff + endpoint `POST /api/auth/staff-login`.
 
 ## Backlog Restant
 
-### Sprint Staff (À compléter)
-- [ ] Tester connexion staff via invitation
-- [ ] Vérifier proposition de créneaux
-- [ ] Notifications push au joueur
-- [ ] Endpoint `PATCH /api/events/{id}/approve`
+### Sprint Staff (P1 — À compléter)
+- [ ] Backend: `POST /api/notifications/push`
+- [ ] Backend: `PATCH /api/events/{id}/approve`
+- [ ] Refactorer calendrier joueur en composant réutilisable (prop `readOnly`)
+- [ ] Implémenter data fetching dans tous les écrans staff
+- [ ] Peupler `staffRole`, `staffRoleLabel`, `linkedPlayerId` dans AuthContext
 
-### P0 - Phase 3 Tax Residency
-- GPS background tracking
-- Alertes push seuils fiscaux
-- Export PDF
+### DB-7 & DB-8 (P1)
+- [ ] Corriger changements irréversibles de statut des tournois
+- [ ] Masquage d'un tournoi ne doit pas supprimer les données d'inscription
+
+### Nettoyage technique (P1)
+- [ ] Supprimer l'ancien dossier `app/(tabs)/` (dupliqué avec `app/(player)/`)
+
+### Phase 3 Tax Residency (P2)
+- [ ] GPS background tracking
+- [ ] Alertes push seuils fiscaux
+- [ ] Export PDF résidence fiscale
 
 ## Credentials Test
-- **Player**: `testUser@example.com` / `testpassword123`
+- **Player**: Google Auth (bouton "Joueur - Connexion Google")
+- **Staff**: `coach@gmail.com` + mot de passe créé à l'inscription
 - **Admin**: `r.admin@gmail.com` / `allezparis75`
+
+## Architecture
+```
+backend/routes/
+├── auth_helpers.py      # Auth centralisé (get_current_user_id, require_user_id)
+├── event_routes.py      # SÉCURISÉ ✅
+├── alert_routes.py      # SÉCURISÉ ✅
+├── documents.py         # SÉCURISÉ ✅
+├── preference_routes.py # SÉCURISÉ ✅
+├── residence_routes.py  # SÉCURISÉ ✅
+├── tournament_routes.py # SÉCURISÉ ✅
+├── invitation_routes.py # Staff invitations
+├── user_routes.py       # User management
+├── admin_routes.py      # Admin
+└── email_routes.py      # Email service
+
+frontend/app/
+├── (player)/            # Écrans joueur
+├── (staff)/             # Écrans staff
+├── (tabs)/              # LEGACY — à supprimer
+├── _layout.tsx          # Root layout + role routing
+├── login.tsx            # Login unifié
+└── index.tsx            # Redirection
+```
