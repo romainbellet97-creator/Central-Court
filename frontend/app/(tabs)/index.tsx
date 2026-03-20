@@ -25,6 +25,7 @@ import {
   fetchTournamentWeeks,
   fetchAlerts,
   createEvent as apiCreateEvent,
+  deleteEvent as apiDeleteEvent,
   registerTournament as apiRegisterTournament,
   hideTournament as apiHideTournament,
   unhideTournament as apiUnhideTournament,
