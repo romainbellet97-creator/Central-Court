@@ -1,10 +1,11 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timezone
 import uuid
 import asyncio
 
+from auth_utils import require_auth
 from services.email_service import send_email, build_tournament_alert_email
 
 router = APIRouter(prefix="/api/alerts", tags=["alerts"])
@@ -35,9 +36,10 @@ class CreateAlertRequest(BaseModel):
 
 
 @router.get("")
-async def list_alerts(unread_only: bool = False):
-    """List all alerts"""
-    query = {}
+async def list_alerts(unread_only: bool = False, user: dict = Depends(require_auth)):
+    """List alerts for the authenticated player"""
+    player_id = user["user_id"]
+    query = {"player_id": player_id}
     if unread_only:
         query["read"] = False
         query["dismissed"] = False
@@ -46,10 +48,12 @@ async def list_alerts(unread_only: bool = False):
 
 
 @router.post("")
-async def create_alert(req: CreateAlertRequest):
-    """Create a new alert/notification"""
+async def create_alert(req: CreateAlertRequest, user: dict = Depends(require_auth)):
+    """Create a new alert for the authenticated player"""
+    player_id = user["user_id"]
     alert = {
         "id": f"alert-{uuid.uuid4().hex[:8]}",
+        "player_id": player_id,
         "type": req.type,
         "priority": req.priority,
         "title": req.title,
@@ -75,44 +79,55 @@ async def create_alert(req: CreateAlertRequest):
 
 
 @router.put("/{alert_id}/read")
-async def mark_alert_read(alert_id: str):
-    """Mark an alert as read"""
-    result = await db.alerts.update_one({"id": alert_id}, {"$set": {"read": True}})
+async def mark_alert_read(alert_id: str, user: dict = Depends(require_auth)):
+    """Mark an alert as read (must belong to the authenticated player)"""
+    player_id = user["user_id"]
+    result = await db.alerts.update_one(
+        {"id": alert_id, "player_id": player_id},
+        {"$set": {"read": True}}
+    )
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Alert not found")
     return {"success": True}
 
 
 @router.put("/{alert_id}/dismiss")
-async def dismiss_alert(alert_id: str):
-    """Dismiss an alert"""
-    result = await db.alerts.update_one({"id": alert_id}, {"$set": {"dismissed": True}})
+async def dismiss_alert(alert_id: str, user: dict = Depends(require_auth)):
+    """Dismiss an alert (must belong to the authenticated player)"""
+    player_id = user["user_id"]
+    result = await db.alerts.update_one(
+        {"id": alert_id, "player_id": player_id},
+        {"$set": {"dismissed": True}}
+    )
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Alert not found")
     return {"success": True}
 
 
 @router.put("/read-all")
-async def mark_all_read():
-    """Mark all alerts as read"""
-    await db.alerts.update_many({"read": False}, {"$set": {"read": True}})
+async def mark_all_read(user: dict = Depends(require_auth)):
+    """Mark all unread alerts as read for the authenticated player"""
+    player_id = user["user_id"]
+    await db.alerts.update_many(
+        {"player_id": player_id, "read": False},
+        {"$set": {"read": True}}
+    )
     return {"success": True}
 
 
 @router.post("/generate")
-async def generate_alerts():
-    """Generate alerts based on tournament registrations and missing bookings.
-    Also sends email notifications for high-priority alerts."""
-    # Get active registrations with projection
+async def generate_alerts(user: dict = Depends(require_auth)):
+    """Generate alerts based on the authenticated player's tournament registrations."""
+    player_id = user["user_id"]
+
     registrations = await db.tournament_registrations.find(
-        {"status": {"$in": ["participating", "accepted", "pending"]}},
+        {"player_id": player_id, "status": {"$in": ["participating", "accepted", "pending"]}},
         {"_id": 0, "tournamentId": 1, "status": 1}
     ).limit(100).to_list(100)
 
     if not registrations:
         return {"generated": 0}
 
-    # Batch fetch tournaments (fix N+1 query)
     tournament_ids = [r["tournamentId"] for r in registrations]
     tournaments_list = await db.tournaments.find(
         {"id": {"$in": tournament_ids}},
@@ -120,9 +135,10 @@ async def generate_alerts():
     ).to_list(100)
     tournaments_map = {t["id"]: t for t in tournaments_list}
 
-    # Get events with projection and limit
+    # Scope events to this player
     events = await db.events.find(
-        {}, {"_id": 0, "id": 1, "title": 1, "date": 1, "time": 1, "type": 1, "tournamentId": 1}
+        {"player_id": player_id},
+        {"_id": 0, "id": 1, "title": 1, "date": 1, "time": 1, "type": 1, "tournamentId": 1}
     ).limit(200).to_list(200)
 
     today = datetime.now(timezone.utc).date()
@@ -146,6 +162,8 @@ async def generate_alerts():
 
         tid = tournament["id"]
         priority = "high" if days_until <= 3 else "medium"
+        # Use player-scoped alert ID to avoid cross-player collisions
+        alert_prefix = f"alert-{player_id[:8]}"
 
         # Check flight
         has_flight = any(
@@ -156,10 +174,12 @@ async def generate_alerts():
             for e in events
         )
         if not has_flight:
-            existing = await db.alerts.find_one({"id": f"alert-flight-{tid}"}, {"_id": 0})
+            alert_id = f"{alert_prefix}-flight-{tid}"
+            existing = await db.alerts.find_one({"id": alert_id}, {"_id": 0})
             if not existing:
                 alert = {
-                    "id": f"alert-flight-{tid}",
+                    "id": alert_id,
+                    "player_id": player_id,
                     "type": "flight_missing",
                     "priority": priority,
                     "title": "Vol non réservé",
@@ -187,10 +207,12 @@ async def generate_alerts():
             for e in events
         )
         if not has_hotel:
-            existing = await db.alerts.find_one({"id": f"alert-hotel-{tid}"}, {"_id": 0})
+            alert_id = f"{alert_prefix}-hotel-{tid}"
+            existing = await db.alerts.find_one({"id": alert_id}, {"_id": 0})
             if not existing:
                 alert = {
-                    "id": f"alert-hotel-{tid}",
+                    "id": alert_id,
+                    "player_id": player_id,
                     "type": "hotel_missing",
                     "priority": priority,
                     "title": "Hôtel non réservé",
@@ -211,10 +233,12 @@ async def generate_alerts():
 
         # Check pending registration
         if reg["status"] == "pending":
-            existing = await db.alerts.find_one({"id": f"alert-reg-{tid}"}, {"_id": 0})
+            alert_id = f"{alert_prefix}-reg-{tid}"
+            existing = await db.alerts.find_one({"id": alert_id}, {"_id": 0})
             if not existing:
                 alert = {
-                    "id": f"alert-reg-{tid}",
+                    "id": alert_id,
+                    "player_id": player_id,
                     "type": "registration_pending",
                     "priority": priority,
                     "title": "Inscription en attente",

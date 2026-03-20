@@ -2,13 +2,15 @@
 Routes pour la gestion des invitations du staff
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, EmailStr
 from typing import Optional, List
 from datetime import datetime, timezone, timedelta
 from bson import ObjectId
 import secrets
 import string
+
+from auth_utils import require_auth
 
 router = APIRouter(prefix="/api/invitations")
 
@@ -184,13 +186,17 @@ def get_role_label(role: str) -> str:
 # ============ ENDPOINTS ============
 
 @router.post("/create", response_model=InvitationResponse)
-async def create_invitation(request: CreateInvitationRequest):
-    """Create a new staff invitation"""
+async def create_invitation(request: CreateInvitationRequest, user: dict = Depends(require_auth)):
+    """Create a new staff invitation (playerId must match authenticated user)"""
     if db is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
-    
+
+    # Ensure the caller can only invite for themselves
+    if request.playerId != user["user_id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+
     now = datetime.now(timezone.utc)
-    
+
     # Check if staff member already exists for this player
     existing_staff = await db.staff_members.find_one({
         "playerId": request.playerId,
@@ -284,11 +290,14 @@ async def mark_invitation_viewed(token: str):
 
 
 @router.get("/player/{player_id}")
-async def get_player_invitations(player_id: str):
-    """Get all invitations sent by a player"""
+async def get_player_invitations(player_id: str, user: dict = Depends(require_auth)):
+    """Get all invitations sent by a player (must be the authenticated player)"""
     if db is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
-    
+
+    if player_id != user["user_id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+
     # Update expired invitations
     now = datetime.now(timezone.utc)
     await db.invitations.update_many(
@@ -307,20 +316,20 @@ async def get_player_invitations(player_id: str):
 
 
 @router.post("/{invitation_id}/resend")
-async def resend_invitation(invitation_id: str):
-    """Resend an invitation (extends expiry)"""
+async def resend_invitation(invitation_id: str, user: dict = Depends(require_auth)):
+    """Resend an invitation (extends expiry) — must belong to the authenticated player"""
     if db is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
-    
+
     try:
         object_id = ObjectId(invitation_id)
     except:
         raise HTTPException(status_code=400, detail="Invalid invitation ID")
-    
+
     now = datetime.now(timezone.utc)
-    
+
     result = await db.invitations.update_one(
-        {"_id": object_id},
+        {"_id": object_id, "playerId": user["user_id"]},
         {
             "$set": {
                 "status": "pending",
@@ -338,18 +347,18 @@ async def resend_invitation(invitation_id: str):
 
 
 @router.post("/{invitation_id}/cancel")
-async def cancel_invitation(invitation_id: str):
-    """Cancel an invitation"""
+async def cancel_invitation(invitation_id: str, user: dict = Depends(require_auth)):
+    """Cancel an invitation — must belong to the authenticated player"""
     if db is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
-    
+
     try:
         object_id = ObjectId(invitation_id)
     except:
         raise HTTPException(status_code=400, detail="Invalid invitation ID")
-    
+
     result = await db.invitations.update_one(
-        {"_id": object_id, "status": "pending"},
+        {"_id": object_id, "playerId": user["user_id"], "status": "pending"},
         {"$set": {"status": "cancelled"}}
     )
     
@@ -441,11 +450,14 @@ async def staff_signup(request: StaffSignupRequest):
 
 
 @router.get("/staff/player/{player_id}")
-async def get_player_staff(player_id: str):
-    """Get all active staff members for a player"""
+async def get_player_staff(player_id: str, user: dict = Depends(require_auth)):
+    """Get all active staff members for a player (must be the authenticated player)"""
     if db is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
-    
+
+    if player_id != user["user_id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+
     cursor = db.staff_members.find({
         "playerId": player_id,
         "status": {"$ne": "removed"}
@@ -457,18 +469,18 @@ async def get_player_staff(player_id: str):
 
 
 @router.delete("/staff/{staff_id}")
-async def remove_staff_member(staff_id: str):
-    """Remove a staff member (soft delete)"""
+async def remove_staff_member(staff_id: str, user: dict = Depends(require_auth)):
+    """Remove a staff member (soft delete) — must belong to the authenticated player's team"""
     if db is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
-    
+
     try:
         object_id = ObjectId(staff_id)
     except:
         raise HTTPException(status_code=400, detail="Invalid staff ID")
-    
+
     result = await db.staff_members.update_one(
-        {"_id": object_id},
+        {"_id": object_id, "playerId": user["user_id"]},
         {"$set": {"status": "removed"}}
     )
     

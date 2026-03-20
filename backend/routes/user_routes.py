@@ -2,11 +2,13 @@
 Routes pour l'onboarding utilisateur et la gestion du profil
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List, Union
 from datetime import datetime, timezone
 from bson import ObjectId
+
+from auth_utils import require_auth
 
 router = APIRouter(prefix="/api/users")
 
@@ -169,11 +171,14 @@ async def create_or_update_onboarding(data: OnboardingData):
 
 
 @router.put("/onboarding/{user_id}", response_model=UserProfile)
-async def update_onboarding(user_id: str, data: OnboardingUpdate):
-    """Update specific onboarding fields"""
+async def update_onboarding(user_id: str, data: OnboardingUpdate, user: dict = Depends(require_auth)):
+    """Update specific onboarding fields (must be the authenticated user)"""
     if db is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
-    
+
+    if user_id != user["user_id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+
     try:
         object_id = ObjectId(user_id)
     except:
@@ -210,11 +215,14 @@ class ProfileUpdate(BaseModel):
 
 
 @router.put("/profile/{user_id}", response_model=UserProfile)
-async def update_profile(user_id: str, data: ProfileUpdate):
-    """Update user profile fields"""
+async def update_profile(user_id: str, data: ProfileUpdate, user: dict = Depends(require_auth)):
+    """Update user profile fields (must be the authenticated user)"""
     if db is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
-    
+
+    if user_id != user["user_id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+
     try:
         object_id = ObjectId(user_id)
     except Exception:
@@ -244,44 +252,53 @@ async def update_profile(user_id: str, data: ProfileUpdate):
 
 
 @router.get("/profile/{user_id}", response_model=UserProfile)
-async def get_profile(user_id: str):
-    """Get user profile by ID"""
+async def get_profile(user_id: str, user: dict = Depends(require_auth)):
+    """Get user profile by ID (must be the authenticated user)"""
     if db is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
-    
+
+    if user_id != user["user_id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+
     try:
         object_id = ObjectId(user_id)
     except:
         raise HTTPException(status_code=400, detail="Invalid user ID")
-    
-    user = await db.users.find_one({"_id": object_id})
-    
-    if not user:
+
+    user_doc = await db.users.find_one({"_id": object_id})
+
+    if not user_doc:
         raise HTTPException(status_code=404, detail="User not found")
-    
-    return serialize_user(user)
+
+    return serialize_user(user_doc)
 
 
 @router.get("/profile/email/{email}", response_model=UserProfile)
-async def get_profile_by_email(email: str):
-    """Get user profile by email"""
+async def get_profile_by_email(email: str, user: dict = Depends(require_auth)):
+    """Get user profile by email (must be the authenticated user's own email)"""
     if db is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
-    
-    user = await db.users.find_one({"email": email})
-    
-    if not user:
+
+    if email != user["email"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    user_doc = await db.users.find_one({"email": email})
+
+    if not user_doc:
         raise HTTPException(status_code=404, detail="User not found")
-    
-    return serialize_user(user)
+
+    return serialize_user(user_doc)
 
 
 @router.post("/onboarding/complete/{user_id}")
-async def complete_onboarding(user_id: str):
-    """Mark onboarding as completed"""
+async def complete_onboarding(user_id: str, user: dict = Depends(require_auth)):
+    """Mark onboarding as completed (must be the authenticated user)"""
     if db is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
-    
+
+    if user_id != user["user_id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+
     try:
         object_id = ObjectId(user_id)
     except:
@@ -302,11 +319,14 @@ async def complete_onboarding(user_id: str):
 
 
 @router.post("/onboarding/step/{user_id}")
-async def update_onboarding_step(user_id: str, step: int):
-    """Update current onboarding step"""
+async def update_onboarding_step(user_id: str, step: int, user: dict = Depends(require_auth)):
+    """Update current onboarding step (must be the authenticated user)"""
     if db is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
-    
+
+    if user_id != user["user_id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+
     try:
         object_id = ObjectId(user_id)
     except:

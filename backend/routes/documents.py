@@ -3,7 +3,7 @@ Routes pour la gestion des documents (OCR + CRUD + Export PDF)
 Collection MongoDB: documents
 """
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Query
+from fastapi import APIRouter, HTTPException, UploadFile, File, Query, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from typing import Optional, List
@@ -14,6 +14,7 @@ import io
 
 # Import OCR service
 from services.ocr_service import analyze_document, analyze_document_with_ai, suggest_category_from_text
+from auth_utils import require_auth
 
 router = APIRouter(prefix="/api")
 
@@ -159,13 +160,13 @@ def serialize_document(doc: dict) -> dict:
 # ============ CRUD ENDPOINTS ============
 
 @router.post("/documents", response_model=DocumentResponse)
-async def create_document(doc: DocumentCreate):
-    """Create a new document"""
+async def create_document(doc: DocumentCreate, user: dict = Depends(require_auth)):
+    """Create a new document (userId always taken from session, not request body)"""
     if db is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
-    
+
     now = datetime.now(timezone.utc)
-    
+
     document = {
         "name": doc.name,
         "category": doc.category,
@@ -182,35 +183,32 @@ async def create_document(doc: DocumentCreate):
         "description": doc.description,
         "fileType": doc.fileType,
         "fileBase64": doc.fileBase64,
-        "userId": doc.userId,
+        "userId": user["user_id"],  # always from session
         "createdAt": now,
         "updatedAt": now,
     }
-    
+
     result = await db.documents.insert_one(document)
     document["_id"] = result.inserted_id
-    
+
     return serialize_document(document)
 
 
 @router.get("/documents", response_model=List[DocumentResponse])
 async def get_documents(
-    userId: Optional[str] = None,
     category: Optional[str] = None,
     startDate: Optional[str] = None,
     endDate: Optional[str] = None,
     limit: int = Query(default=100, le=500),
-    skip: int = Query(default=0, ge=0)
+    skip: int = Query(default=0, ge=0),
+    user: dict = Depends(require_auth)
 ):
-    """Get all documents with optional filters"""
+    """Get all documents for the authenticated player"""
     if db is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
-    
-    query = {}
-    
-    if userId:
-        query["userId"] = userId
-    
+
+    query = {"userId": user["user_id"]}
+
     if category:
         query["category"] = category
     
@@ -232,17 +230,15 @@ async def get_documents(
 
 @router.get("/documents/stats")
 async def get_documents_stats(
-    userId: Optional[str] = None,
     startDate: Optional[str] = None,
-    endDate: Optional[str] = None
+    endDate: Optional[str] = None,
+    user: dict = Depends(require_auth)
 ):
-    """Get documents statistics"""
+    """Get document statistics for the authenticated player"""
     if db is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
-    
-    query = {}
-    if userId:
-        query["userId"] = userId
+
+    query = {"userId": user["user_id"]}
     if startDate or endDate:
         date_query = {}
         if startDate:
@@ -298,34 +294,34 @@ async def get_categories():
 
 
 @router.get("/documents/{document_id}", response_model=DocumentResponse)
-async def get_document(document_id: str):
-    """Get a single document by ID"""
+async def get_document(document_id: str, user: dict = Depends(require_auth)):
+    """Get a single document by ID (must belong to authenticated player)"""
     if db is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
-    
+
     try:
         doc = await db.documents.find_one({"_id": ObjectId(document_id)}, {"fileBase64": 0})
     except:
         raise HTTPException(status_code=400, detail="Invalid document ID")
-    
-    if not doc:
+
+    if not doc or doc.get("userId") != user["user_id"]:
         raise HTTPException(status_code=404, detail="Document not found")
-    
+
     return serialize_document(doc)
 
 
 @router.get("/documents/{document_id}/file")
-async def get_document_file(document_id: str):
-    """Get the original file (image/PDF) of a document"""
+async def get_document_file(document_id: str, user: dict = Depends(require_auth)):
+    """Get the original file (image/PDF) of a document (must belong to authenticated player)"""
     if db is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
-    
+
     try:
-        doc = await db.documents.find_one({"_id": ObjectId(document_id)}, {"fileBase64": 1, "fileType": 1, "name": 1})
+        doc = await db.documents.find_one({"_id": ObjectId(document_id)}, {"fileBase64": 1, "fileType": 1, "name": 1, "userId": 1})
     except:
         raise HTTPException(status_code=400, detail="Invalid document ID")
-    
-    if not doc:
+
+    if not doc or doc.get("userId") != user["user_id"]:
         raise HTTPException(status_code=404, detail="Document not found")
     
     if not doc.get("fileBase64"):
@@ -347,52 +343,51 @@ async def get_document_file(document_id: str):
 
 
 @router.put("/documents/{document_id}", response_model=DocumentResponse)
-async def update_document(document_id: str, update: DocumentUpdate):
-    """Update a document"""
+async def update_document(document_id: str, update: DocumentUpdate, user: dict = Depends(require_auth)):
+    """Update a document (must belong to authenticated player)"""
     if db is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
-    
+
     try:
         object_id = ObjectId(document_id)
     except:
         raise HTTPException(status_code=400, detail="Invalid document ID")
-    
-    # Build update dict with only explicitly set (non-None) values
+
     update_dict = {k: v for k, v in update.dict(exclude_unset=True).items()}
-    
+
     if update_dict.get("lignes"):
         update_dict["lignes"] = [l.dict() if hasattr(l, 'dict') else l for l in update_dict["lignes"]]
-    
+
     update_dict["updatedAt"] = datetime.now(timezone.utc)
-    
+
     result = await db.documents.update_one(
-        {"_id": object_id},
+        {"_id": object_id, "userId": user["user_id"]},
         {"$set": update_dict}
     )
-    
+
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Document not found")
-    
+
     doc = await db.documents.find_one({"_id": object_id}, {"fileBase64": 0})
     return serialize_document(doc)
 
 
 @router.delete("/documents/{document_id}")
-async def delete_document(document_id: str):
-    """Delete a document"""
+async def delete_document(document_id: str, user: dict = Depends(require_auth)):
+    """Delete a document (must belong to authenticated player)"""
     if db is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
-    
+
     try:
         object_id = ObjectId(document_id)
     except:
         raise HTTPException(status_code=400, detail="Invalid document ID")
-    
-    result = await db.documents.delete_one({"_id": object_id})
-    
+
+    result = await db.documents.delete_one({"_id": object_id, "userId": user["user_id"]})
+
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Document not found")
-    
+
     return {"success": True, "message": "Document deleted"}
 
 
@@ -551,27 +546,25 @@ async def analyze_invoice_base64(request: AnalyzeDocumentRequest):
 
 @router.get("/documents/export/pdf")
 async def export_documents_pdf(
-    userId: Optional[str] = None,
     category: Optional[str] = None,
     startDate: Optional[str] = None,
     endDate: Optional[str] = None,
-    period: Optional[str] = None  # "month", "year", "all"
+    period: Optional[str] = None,  # "month", "year", "all"
+    user: dict = Depends(require_auth)
 ):
-    """Export documents as PDF report"""
+    """Export documents as PDF report for the authenticated player"""
     if db is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
-    
+
     from datetime import date
     from reportlab.lib.pagesizes import A4
     from reportlab.lib import colors
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib.units import cm
     from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-    
-    # Build query
-    query = {}
-    if userId:
-        query["userId"] = userId
+
+    # Build query scoped to the authenticated player
+    query = {"userId": user["user_id"]}
     if category:
         query["category"] = category
     

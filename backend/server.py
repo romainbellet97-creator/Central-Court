@@ -146,8 +146,10 @@ from routes.documents import router as documents_router, init_db as init_documen
 from routes.user_routes import router as user_router, init_db as init_user_db
 from routes.invitation_routes import router as invitation_router, init_db as init_invitation_db
 from routes.residence_routes import router as residence_router, init_db as init_residence_db
+import auth_utils
 
-# Initialize DB in all routes
+# Initialize DB in all routes (including shared auth_utils)
+auth_utils.init_db(db)
 init_event_db(db)
 init_tournament_db(db)
 init_alert_db(db)
