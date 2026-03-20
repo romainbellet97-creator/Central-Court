@@ -19,15 +19,15 @@ export default function AdminLogin() {
       const res = await fetch(`${API_BASE}/api/admin/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || 'Erreur de connexion');
+      if (!res.ok) throw new Error(res.status === 401 ? '401' : 'error');
       await AsyncStorage.setItem('admin_token', data.token);
       await AsyncStorage.setItem('admin_user', JSON.stringify(data.user));
       router.replace('/admin');
     } catch (e: any) {
-      setError(e.message || 'Erreur de connexion');
+      setError(e.message === '401' ? 'Email ou mot de passe incorrect' : 'Erreur de connexion. Réessayez.');
     } finally { setLoading(false); }
   };
 

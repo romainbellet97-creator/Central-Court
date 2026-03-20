@@ -3,8 +3,8 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LineChart, PieChart, ResponsiveContainer, Line, XAxis, YAxis, CartesianGrid, Tooltip, Pie, Cell, Legend } from 'recharts';
+import { adminFetch } from './adminApi';
 
-const API_BASE = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 const CIRCUIT_COLORS: Record<string, string> = { ATP: '#2D5016', WTA: '#E8B923', ITF: '#3B82F6', 'ITF Wheelchair': '#8B5CF6' };
 
 interface Metrics {
@@ -22,28 +22,27 @@ export default function AdminDashboard() {
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
-  const [token, setToken] = useState('');
+  const [error, setError] = useState<string | null>(null);
   const screenWidth = Dimensions.get('window').width;
 
-  useEffect(() => {
-    const init = async () => {
-      const t = await AsyncStorage.getItem('admin_token');
-      if (!t) { router.replace('/admin/login'); return; }
-      setToken(t);
-      try {
-        const [mRes, aRes] = await Promise.all([
-          fetch(`${API_BASE}/api/admin/metrics`),
-          fetch(`${API_BASE}/api/admin/activity/recent?limit=10`),
-        ]);
-        if (!mRes.ok || !aRes.ok) throw new Error('API error');
-        setMetrics(await mRes.json());
-        const aData = await aRes.json();
-        setActivities(aData.activities || []);
-      } catch (e) { console.error(e); }
-      setLoading(false);
-    };
-    init();
-  }, []);
+  const loadData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [m, aData] = await Promise.all([
+        adminFetch<Metrics>('/api/admin/metrics'),
+        adminFetch<{ activities: Activity[] }>('/api/admin/activity/recent?limit=10'),
+      ]);
+      setMetrics(m);
+      setActivities(aData.activities || []);
+    } catch (e: any) {
+      if (e.message === '401') { router.replace('/admin/login'); return; }
+      setError('Erreur de chargement. Vérifiez votre connexion.');
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => { loadData(); }, []);
 
   const handleLogout = async () => {
     await AsyncStorage.removeItem('admin_token');
@@ -64,9 +63,17 @@ export default function AdminDashboard() {
   };
 
   if (loading) return <View style={s.loadingContainer}><ActivityIndicator size="large" color="#2D5016" /></View>;
+  if (error) return (
+    <View style={s.loadingContainer}>
+      <Text style={{ color: '#EF4444', marginBottom: 12 }}>{error}</Text>
+      <TouchableOpacity onPress={loadData} style={{ backgroundColor: '#2D5016', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8 }}>
+        <Text style={{ color: '#fff', fontWeight: '600' }}>Réessayer</Text>
+      </TouchableOpacity>
+    </View>
+  );
   if (!metrics) return <View style={s.loadingContainer}><Text>Erreur de chargement</Text></View>;
 
-  const circuitData = Object.entries(metrics.users.byCircuit).map(([name, value]) => ({ name, value }));
+  const circuitData = Object.entries(metrics.users.byCircuit ?? {}).map(([name, value]) => ({ name, value }));
 
   return (
     <View style={s.container}>

@@ -1,10 +1,12 @@
 from fastapi import FastAPI, HTTPException, Depends, Request, Response, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime, timezone, timedelta
 from motor.motor_asyncio import AsyncIOMotorClient
 from dotenv import load_dotenv
+from collections import defaultdict
 import os
 import uuid
 import httpx
@@ -13,12 +15,35 @@ import base64
 import json
 import re
 import io
+import time
 import pytesseract
 from PIL import Image
 
 load_dotenv()
 
 app = FastAPI(title="Central Court API")
+
+# ─── Rate limiter (public endpoints: 60 req/min per IP) ──────────────────────
+_rl_counts: dict = defaultdict(list)
+_RL_LIMIT = 60
+_RL_WINDOW = 60  # seconds
+_RL_PATHS = ('/api/tournaments', '/api/invitations/token/')
+
+@app.middleware("http")
+async def rate_limit_public(request: Request, call_next):
+    path = request.url.path
+    if any(path == p or path.startswith(p) for p in _RL_PATHS):
+        ip = request.client.host if request.client else 'unknown'
+        key = f"{ip}:{path}"
+        now = time.time()
+        _rl_counts[key] = [t for t in _rl_counts[key] if now - t < _RL_WINDOW]
+        if len(_rl_counts[key]) >= _RL_LIMIT:
+            return JSONResponse(
+                status_code=429,
+                content={"detail": "Trop de requêtes. Réessayez dans une minute."},
+            )
+        _rl_counts[key].append(now)
+    return await call_next(request)
 
 # CORS
 app.add_middleware(
@@ -146,6 +171,7 @@ from routes.documents import router as documents_router, init_db as init_documen
 from routes.user_routes import router as user_router, init_db as init_user_db
 from routes.invitation_routes import router as invitation_router, init_db as init_invitation_db
 from routes.residence_routes import router as residence_router, init_db as init_residence_db
+from routes.staff_routes import router as staff_router, init_db as init_staff_db
 import auth_utils
 
 # Initialize DB in all routes (including shared auth_utils)
@@ -159,6 +185,7 @@ init_documents_db(db)
 init_user_db(db)
 init_invitation_db(db)
 init_residence_db(db)
+init_staff_db(db)
 
 app.include_router(email_router)
 app.include_router(event_router)
@@ -170,6 +197,7 @@ app.include_router(documents_router)
 app.include_router(user_router)
 app.include_router(invitation_router)
 app.include_router(residence_router)
+app.include_router(staff_router)
 
 # ============ MODELS ============
 

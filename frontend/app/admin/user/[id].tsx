@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Modal } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-
-const API_BASE = process.env.EXPO_PUBLIC_BACKEND_URL || '';
+import { adminFetch } from '../adminApi';
 
 export default function UserDetail() {
   const router = useRouter();
@@ -16,41 +14,47 @@ export default function UserDetail() {
   const [expandedStaff, setExpandedStaff] = useState<string | null>(null);
   const [actionModal, setActionModal] = useState<{ type: string; target: any }>({ type: '', target: null });
   const [actionLoading, setActionLoading] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const init = async () => {
-      const t = await AsyncStorage.getItem('admin_token');
-      if (!t) { router.replace('/admin/login'); return; }
-      try {
-        const res = await fetch(`${API_BASE}/api/admin/users/${id}`);
-        const data = await res.json();
-        setUser(data.user); setStaff(data.staff || []); setActivityChart(data.activityChart || []);
-      } catch (e) { console.error(e); }
-      setLoading(false);
-    };
-    if (id) init();
-  }, [id]);
+  const loadUser = async () => {
+    try {
+      const data = await adminFetch<{ user: any; staff: any[]; activityChart: any[] }>(`/api/admin/users/${id}`);
+      setUser(data.user); setStaff(data.staff || []); setActivityChart(data.activityChart || []);
+    } catch (e: any) {
+      if (e.message === '401') { router.replace('/admin/login'); return; }
+      setLoadError('Impossible de charger cet utilisateur.');
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => { if (id) loadUser(); }, [id]);
 
   const handleAction = async () => {
     if (!actionModal.target) return;
     setActionLoading(true);
+    setActionError(null);
     try {
       if (actionModal.type === 'reset_password_user') {
-        await fetch(`${API_BASE}/api/admin/users/${actionModal.target.id}/reset-password`, { method: 'POST' });
+        await adminFetch(`/api/admin/users/${actionModal.target.id}/reset-password`, { method: 'POST' });
       } else if (actionModal.type === 'suspend') {
-        await fetch(`${API_BASE}/api/admin/users/${actionModal.target.id}/status`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'suspended' }) });
+        await adminFetch(`/api/admin/users/${actionModal.target.id}/status`, { method: 'PUT', body: JSON.stringify({ status: 'suspended' }) });
       } else if (actionModal.type === 'delete') {
-        await fetch(`${API_BASE}/api/admin/users/${actionModal.target.id}`, { method: 'DELETE' });
+        await adminFetch(`/api/admin/users/${actionModal.target.id}`, { method: 'DELETE' });
         router.replace('/admin/users');
         return;
       } else if (actionModal.type === 'reset_password_staff') {
-        await fetch(`${API_BASE}/api/admin/staff/${actionModal.target.id}/reset-password`, { method: 'POST' });
+        await adminFetch(`/api/admin/staff/${actionModal.target.id}/reset-password`, { method: 'POST' });
       }
       // Reload
-      const res = await fetch(`${API_BASE}/api/admin/users/${id}`);
-      const data = await res.json();
+      const data = await adminFetch<{ user: any; staff: any[] }>(`/api/admin/users/${id}`);
       setUser(data.user); setStaff(data.staff || []);
-    } catch (e) { console.error(e); }
+    } catch (e: any) {
+      if (e.message === '401') { router.replace('/admin/login'); return; }
+      setActionError('Erreur lors de l\'action. Réessayez.');
+      setActionLoading(false);
+      return;
+    }
     setActionLoading(false);
     setActionModal({ type: '', target: null });
   };
@@ -72,6 +76,14 @@ export default function UserDetail() {
   };
 
   if (loading) return <View style={s.loadingContainer}><ActivityIndicator size="large" color="#2D5016" /></View>;
+  if (loadError) return (
+    <View style={s.loadingContainer}>
+      <Text style={{ color: '#EF4444', marginBottom: 12 }}>{loadError}</Text>
+      <TouchableOpacity onPress={() => { setLoading(true); setLoadError(null); loadUser(); }} style={{ backgroundColor: '#2D5016', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8 }}>
+        <Text style={{ color: '#fff', fontWeight: '600' }}>Réessayer</Text>
+      </TouchableOpacity>
+    </View>
+  );
   if (!user) return <View style={s.loadingContainer}><Text>Utilisateur introuvable</Text></View>;
 
   return (
@@ -157,7 +169,7 @@ export default function UserDetail() {
               <Text style={s.eventStat}>Acceptés: <Text style={[s.bold, { color: '#10B981' }]}>{user.events.accepted}</Text></Text>
               <Text style={s.eventStat}>Refusés: <Text style={[s.bold, { color: '#EF4444' }]}>{user.events.declined}</Text></Text>
               <Text style={s.eventStat}>Reportés: <Text style={[s.bold, { color: '#F59E0B' }]}>{user.events.rescheduled}</Text></Text>
-              <Text style={s.eventStat}>Avec notes: <Text style={s.bold}>{user.events.withNotes} ({user.events.total > 0 ? Math.round(user.events.withNotes / user.events.total * 100) : 0}%)</Text></Text>
+              <Text style={s.eventStat}>Avec notes: <Text style={s.bold}>{user.events.withNotes} ({user.events.total > 0 ? Math.round((user.events.withNotes / user.events.total) * 100) : 0}%)</Text></Text>
             </View>
           </View>
         )}
@@ -236,6 +248,7 @@ export default function UserDetail() {
               <Text style={s.modalUserEmail}>{actionModal.target?.email}</Text>
             </View>
             {actionModal.type === 'delete' && <Text style={s.modalWarning}>Action irréversible. Toutes les données et {staff.length} membre(s) staff seront supprimés.</Text>}
+            {actionError && <Text style={{ color: '#EF4444', fontSize: 13, marginBottom: 8, textAlign: 'center' }}>{actionError}</Text>}
             <View style={s.modalBtns}>
               <TouchableOpacity style={s.modalCancelBtn} onPress={() => setActionModal({ type: '', target: null })}>
                 <Text style={s.modalCancelText}>Annuler</Text>

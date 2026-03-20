@@ -2,8 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Modal } from 'react-native';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-const API_BASE = process.env.EXPO_PUBLIC_BACKEND_URL || '';
+import { adminFetch } from '../adminApi';
 
 interface User {
   id: string; prenom: string; nom?: string; email: string; circuits: string[];
@@ -24,32 +23,30 @@ export default function AdminUsers() {
   const [loading, setLoading] = useState(true);
   const [actionModal, setActionModal] = useState<{ type: string; user: User | null }>({ type: '', user: null });
   const [actionLoading, setActionLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const loadUsers = async () => {
     setLoading(true);
+    setError(null);
     try {
-      let url = `${API_BASE}/api/admin/users?page=${page}&limit=10`;
+      let url = `/api/admin/users?page=${page}&limit=10`;
       if (search) url += `&search=${encodeURIComponent(search)}`;
       if (circuit) url += `&circuit=${circuit}`;
       if (status) url += `&status=${status}`;
-      const res = await fetch(url);
-      const data = await res.json();
+      const data = await adminFetch<{ users: User[]; total: number; totalPages: number }>(url);
       setUsers(data.users || []); setTotal(data.total || 0); setTotalPages(data.totalPages || 1);
-    } catch (e) { console.error(e); }
+    } catch (e: any) {
+      if (e.message === '401') { router.replace('/admin/login'); return; }
+      setError('Erreur de chargement des utilisateurs.');
+    }
     setLoading(false);
   };
 
-  useEffect(() => {
-    const checkAuth = async () => {
-      const t = await AsyncStorage.getItem('admin_token');
-      if (!t) { router.replace('/admin/login'); return; }
-      loadUsers();
-    };
-    checkAuth();
-  }, [page, circuit, status]);
+  useEffect(() => { loadUsers(); }, [page, circuit, status]);
 
   useEffect(() => {
-    const timer = setTimeout(() => { setPage(1); loadUsers(); }, 300);
+    const timer = setTimeout(() => { setPage(1); }, 300);
     return () => clearTimeout(timer);
   }, [search]);
 
@@ -72,20 +69,24 @@ export default function AdminUsers() {
   const handleAction = async (type: string) => {
     if (!actionModal.user) return;
     setActionLoading(true);
+    setActionError(null);
     try {
       const uid = actionModal.user.id;
       if (type === 'reset_password') {
-        await fetch(`${API_BASE}/api/admin/users/${uid}/reset-password`, { method: 'POST' });
+        await adminFetch(`/api/admin/users/${uid}/reset-password`, { method: 'POST' });
       } else if (type === 'suspend') {
-        await fetch(`${API_BASE}/api/admin/users/${uid}/status`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'suspended' }) });
+        await adminFetch(`/api/admin/users/${uid}/status`, { method: 'PUT', body: JSON.stringify({ status: 'suspended' }) });
       } else if (type === 'activate') {
-        await fetch(`${API_BASE}/api/admin/users/${uid}/status`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'active' }) });
+        await adminFetch(`/api/admin/users/${uid}/status`, { method: 'PUT', body: JSON.stringify({ status: 'active' }) });
       } else if (type === 'delete') {
-        await fetch(`${API_BASE}/api/admin/users/${uid}`, { method: 'DELETE' });
+        await adminFetch(`/api/admin/users/${uid}`, { method: 'DELETE' });
       }
       setActionModal({ type: '', user: null });
       loadUsers();
-    } catch (e) { console.error(e); }
+    } catch (e: any) {
+      if (e.message === '401') { router.replace('/admin/login'); return; }
+      setActionError('Erreur lors de l\'action. Réessayez.');
+    }
     setActionLoading(false);
   };
 
@@ -119,6 +120,12 @@ export default function AdminUsers() {
       <ScrollView style={s.content} contentContainerStyle={s.contentInner}>
         <Text style={s.pageTitle}>👥 Utilisateurs</Text>
         <Text style={s.pageSubtitle}>{total} utilisateur{total > 1 ? 's' : ''} au total</Text>
+        {error && (
+          <View style={{ backgroundColor: '#FEE2E2', borderRadius: 8, padding: 12, marginBottom: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text style={{ color: '#B91C1C', fontSize: 13, flex: 1 }}>{error}</Text>
+            <TouchableOpacity onPress={loadUsers}><Text style={{ color: '#B91C1C', fontWeight: '700', marginLeft: 12 }}>↺</Text></TouchableOpacity>
+          </View>
+        )}
 
         {/* Filters */}
         <View style={s.filtersRow}>
@@ -220,6 +227,7 @@ export default function AdminUsers() {
             {actionModal.type === 'reset_password' && (
               <Text style={s.modalInfo}>Un email de réinitialisation sera envoyé à cette adresse.</Text>
             )}
+            {actionError && <Text style={{ color: '#EF4444', fontSize: 13, marginBottom: 8, textAlign: 'center' }}>{actionError}</Text>}
             <View style={s.modalBtns}>
               <TouchableOpacity style={s.modalCancelBtn} onPress={() => setActionModal({ type: '', user: null })}>
                 <Text style={s.modalCancelText}>Annuler</Text>
