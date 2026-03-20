@@ -15,6 +15,8 @@ import {
   Alert,
   Linking,
 } from 'react-native';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -134,6 +136,8 @@ export default function ResidenceScreen() {
   const [showNotesField, setShowNotesField] = useState(false);
   const [bulkNotes, setBulkNotes] = useState('');
   const [showBulkNotesField, setShowBulkNotesField] = useState(false);
+  const [countrySearch, setCountrySearch] = useState('');
+  const [exporting, setExporting] = useState(false);
 
   // Calculate days between two dates (INCLUSIVE)
   const calculateDaysBetween = (startDate: Date, endDate: Date): number => {
@@ -549,6 +553,37 @@ export default function ResidenceScreen() {
     }
   };
 
+  // Export residence days as CSV
+  const handleExportCSV = async () => {
+    setExporting(true);
+    try {
+      const days = await fetchDayPresences(currentYear);
+      if (!days || days.length === 0) {
+        Alert.alert('Aucune donnée', 'Aucun jour enregistré pour cette année.');
+        return;
+      }
+      const header = 'Date,Pays,Code,Statut,Notes';
+      const rows = days
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .map(d => [
+          d.date,
+          `"${(d.countryName || d.country || '').replace(/"/g, '""')}"`,
+          d.country || '',
+          d.status || '',
+          `"${(d.notes || '').replace(/"/g, '""')}"`,
+        ].join(','));
+      const csv = [header, ...rows].join('\n');
+      const path = `${FileSystem.documentDirectory}residence_${currentYear}.csv`;
+      await FileSystem.writeAsStringAsync(path, csv, { encoding: FileSystem.EncodingType.UTF8 });
+      await Sharing.shareAsync(path, { mimeType: 'text/csv', dialogTitle: `Résidence ${currentYear}` });
+    } catch (err) {
+      console.error('Export error:', err);
+      Alert.alert('Erreur', 'Impossible d\'exporter les données.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   // Quick add from GPS
   const handleQuickAddFromGps = () => {
     if (currentLocation?.countryCode) {
@@ -837,6 +872,16 @@ export default function ResidenceScreen() {
               <Ionicons name="calendar" size={18} color="#fff" />
               <Text style={styles.addBtnText}>Séjour</Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.addBtn, styles.exportBtn]}
+              onPress={handleExportCSV}
+              disabled={exporting}
+            >
+              {exporting
+                ? <ActivityIndicator size="small" color="#fff" />
+                : <><Ionicons name="download-outline" size={18} color="#fff" /><Text style={styles.addBtnText}>CSV</Text></>
+              }
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -963,7 +1008,7 @@ export default function ResidenceScreen() {
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Ajouter un jour</Text>
-              <TouchableOpacity onPress={() => setShowAddModal(false)}>
+              <TouchableOpacity onPress={() => { setShowAddModal(false); setCountrySearch(''); }}>
                 <Ionicons name="close" size={24} color={Colors.text.primary} />
               </TouchableOpacity>
             </View>
@@ -988,8 +1033,22 @@ export default function ResidenceScreen() {
             )}
 
             <Text style={styles.inputLabel}>Pays</Text>
+            <TextInput
+              style={styles.countrySearchInput}
+              placeholder="Rechercher un pays..."
+              value={countrySearch}
+              onChangeText={setCountrySearch}
+              placeholderTextColor={Colors.text.muted}
+              autoCorrect={false}
+            />
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.countrySelector}>
-              {countries.map(country => (
+              {countries
+                .filter(c =>
+                  !countrySearch ||
+                  c.name.toLowerCase().includes(countrySearch.toLowerCase()) ||
+                  c.code.toLowerCase().includes(countrySearch.toLowerCase())
+                )
+                .map(country => (
                 <TouchableOpacity
                   key={country.code}
                   style={[
@@ -1117,14 +1176,28 @@ export default function ResidenceScreen() {
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Ajouter un séjour</Text>
-              <TouchableOpacity onPress={() => setShowBulkModal(false)}>
+              <TouchableOpacity onPress={() => { setShowBulkModal(false); setCountrySearch(''); }}>
                 <Ionicons name="close" size={24} color={Colors.text.primary} />
               </TouchableOpacity>
             </View>
 
             <Text style={styles.inputLabel}>Pays</Text>
+            <TextInput
+              style={styles.countrySearchInput}
+              placeholder="Rechercher un pays..."
+              value={countrySearch}
+              onChangeText={setCountrySearch}
+              placeholderTextColor={Colors.text.muted}
+              autoCorrect={false}
+            />
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.countrySelector}>
-              {countries.map(country => (
+              {countries
+                .filter(c =>
+                  !countrySearch ||
+                  c.name.toLowerCase().includes(countrySearch.toLowerCase()) ||
+                  c.code.toLowerCase().includes(countrySearch.toLowerCase())
+                )
+                .map(country => (
                 <TouchableOpacity
                   key={country.code}
                   style={[
@@ -1450,6 +1523,7 @@ export default function ResidenceScreen() {
                 setEditingDay(null);
                 setEditCountry(null);
                 setEditNotes('');
+                setCountrySearch('');
               }}>
                 <Ionicons name="close" size={24} color={Colors.text.primary} />
               </TouchableOpacity>
@@ -1471,8 +1545,22 @@ export default function ResidenceScreen() {
                 </View>
 
                 <Text style={styles.inputLabel}>Pays</Text>
+                <TextInput
+                  style={styles.countrySearchInput}
+                  placeholder="Rechercher un pays..."
+                  value={countrySearch}
+                  onChangeText={setCountrySearch}
+                  placeholderTextColor={Colors.text.muted}
+                  autoCorrect={false}
+                />
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.countrySelector}>
-                  {countries.map(country => (
+                  {countries
+                    .filter(c =>
+                      !countrySearch ||
+                      c.name.toLowerCase().includes(countrySearch.toLowerCase()) ||
+                      c.code.toLowerCase().includes(countrySearch.toLowerCase())
+                    )
+                    .map(country => (
                     <TouchableOpacity
                       key={country.code}
                       style={[
@@ -1807,6 +1895,20 @@ const styles = StyleSheet.create({
   },
   bulkBtn: {
     backgroundColor: '#764ba2',
+  },
+  exportBtn: {
+    backgroundColor: '#0891b2',
+  },
+  countrySearchInput: {
+    backgroundColor: Colors.background.secondary,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 14,
+    color: Colors.text.primary,
+    borderWidth: 1,
+    borderColor: Colors.border.light,
+    marginBottom: 8,
   },
   addBtnText: {
     color: '#fff',
