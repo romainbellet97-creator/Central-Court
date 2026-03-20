@@ -128,16 +128,24 @@ export default function FiscalityScreen() {
   };
 
   const handleConfirmResidence = async () => {
-    if (!selectedResidence) return;
-    
-    await saveOnboardingState({
-      residenceCountry: {
-        country: selectedResidence.name,
-        countryCode: selectedResidence.code,
-        flag: selectedResidence.flag
-      }
-    });
-    
+    if (!selectedResidence) {
+      Alert.alert('Sélection requise', 'Veuillez choisir un pays de résidence.');
+      return;
+    }
+
+    try {
+      await saveOnboardingState({
+        residenceCountry: {
+          country: selectedResidence.name,
+          countryCode: selectedResidence.code,
+          flag: selectedResidence.flag
+        }
+      });
+    } catch {
+      Alert.alert('Erreur', 'Impossible de sauvegarder votre sélection. Réessayez.');
+      return;
+    }
+
     // Initialize tax history with residence country
     const residenceEntry: CountryDays = {
       country: selectedResidence.name,
@@ -147,12 +155,12 @@ export default function FiscalityScreen() {
       limit: TAX_LIMIT,
       isResidence: true,
     };
-    
+
     // Reset tax history with just the residence
     if (setTaxHistory) {
       setTaxHistory([residenceEntry]);
     }
-    
+
     setOnboardingStep('location');
   };
 

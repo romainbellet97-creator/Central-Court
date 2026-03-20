@@ -394,7 +394,7 @@ async def delete_document(document_id: str, user: dict = Depends(require_auth)):
 # ============ OCR ENDPOINTS ============
 
 @router.post("/documents/analyze", response_model=AnalyzeDocumentResponse)
-async def analyze_document_endpoint(request: AnalyzeDocumentRequest):
+async def analyze_document_endpoint(request: AnalyzeDocumentRequest, user: dict = Depends(require_auth)):
     """Analyze an image document with OCR (legacy endpoint)"""
     try:
         result = await analyze_document_with_ai(request.image_base64)
@@ -427,7 +427,7 @@ async def analyze_document_endpoint(request: AnalyzeDocumentRequest):
 
 
 @router.post("/invoices/upload", response_model=InvoiceUploadResponse)
-async def upload_invoice(file: UploadFile = File(...)):
+async def upload_invoice(file: UploadFile = File(...), user: dict = Depends(require_auth)):
     """Upload and analyze an invoice (image or PDF)"""
     try:
         # Validate file type
@@ -492,7 +492,7 @@ async def upload_invoice(file: UploadFile = File(...)):
 
 
 @router.post("/invoices/analyze-base64", response_model=InvoiceUploadResponse)
-async def analyze_invoice_base64(request: AnalyzeDocumentRequest):
+async def analyze_invoice_base64(request: AnalyzeDocumentRequest, user: dict = Depends(require_auth)):
     """Analyze a document from base64"""
     try:
         try:

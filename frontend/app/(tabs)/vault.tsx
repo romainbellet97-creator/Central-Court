@@ -312,13 +312,25 @@ export default function DocumentsScreen() {
     setPendingDocName(name);
 
     try {
+      // Guard: reject files larger than 10 MB before encoding
+      const fileInfo = await FileSystem.getInfoAsync(uri);
+      if (fileInfo.exists && (fileInfo as any).size > 10 * 1024 * 1024) {
+        Alert.alert('Fichier trop volumineux', 'La taille maximale est 10 MB.');
+        setIsUploading(false);
+        return;
+      }
+
       const base64 = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' });
       let ocrFailed = false;
       try {
-        const response = await api.post('/api/invoices/analyze-base64', {
+        const ocrPromise = api.post('/api/invoices/analyze-base64', {
           image_base64: base64,
           filename: name,
         });
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('OCR timeout')), 30000)
+        );
+        const response = await Promise.race([ocrPromise, timeoutPromise]) as any;
 
         if (response.data.success && response.data.data) {
           const data = response.data.data;

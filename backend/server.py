@@ -707,7 +707,7 @@ def categorize_receipt(text: str, merchant: Optional[str]) -> str:
     return 'invoices'
 
 @app.post("/api/ocr/analyze-receipt", response_model=OCRResult)
-async def analyze_receipt(request: OCRRequest):
+async def analyze_receipt(request: OCRRequest, user: User = Depends(require_auth)):
     """Analyze a receipt image or PDF using Tesseract OCR to extract date, amount, and category"""
     try:
         # Decode base64 data
@@ -818,7 +818,7 @@ class QuickReply(BaseModel):
     tone: str
 
 @app.post("/api/ai/quick-replies")
-async def generate_quick_replies(context: QuickReplyContext):
+async def generate_quick_replies(context: QuickReplyContext, user: User = Depends(require_auth)):
     """Generate AI-powered quick reply suggestions using OpenAI via Emergent LLM Key"""
     try:
         emergent_key = os.getenv("EMERGENT_LLM_KEY", "")

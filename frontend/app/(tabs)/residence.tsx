@@ -469,7 +469,13 @@ export default function ResidenceScreen() {
   // Add single day
   const handleAddDay = async () => {
     if (!selectedCountry) return;
-    
+
+    const currentTotal = stats?.totalDaysTracked ?? 0;
+    if (currentTotal >= 365) {
+      Alert.alert('Limite annuelle atteinte', 'Vous avez déjà 365 jours enregistrés pour cette année.');
+      return;
+    }
+
     setSubmitting(true);
     try {
       await addDayPresence({
@@ -496,12 +502,27 @@ export default function ResidenceScreen() {
   // Add bulk days
   const handleAddBulkDays = async () => {
     if (!selectedCountry) return;
-    
+
     if (bulkEndDate < bulkStartDate) {
       Alert.alert('Erreur', 'La date de fin doit être après la date de début.');
       return;
     }
-    
+
+    const newDays = calculateDaysBetween(bulkStartDate, bulkEndDate);
+    if (newDays > 90) {
+      Alert.alert('Période trop longue', 'Maximum 90 jours par séjour. Divisez en plusieurs séjours.');
+      return;
+    }
+
+    const currentTotal = stats?.totalDaysTracked ?? 0;
+    if (currentTotal + newDays > 365) {
+      Alert.alert(
+        'Limite annuelle',
+        `Vous avez déjà ${currentTotal} jour${currentTotal > 1 ? 's' : ''} enregistré${currentTotal > 1 ? 's' : ''}. Ajouter ${newDays} jours dépasserait la limite annuelle de 365 jours.`
+      );
+      return;
+    }
+
     setSubmitting(true);
     try {
       const result = await addBulkDays({

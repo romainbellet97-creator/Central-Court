@@ -127,16 +127,16 @@ def serialize_user(user: dict) -> dict:
 # ============ ENDPOINTS ============
 
 @router.post("/onboarding", response_model=UserProfile)
-async def create_or_update_onboarding(data: OnboardingData):
-    """Create or update user with onboarding data"""
+async def create_or_update_onboarding(data: OnboardingData, user: dict = Depends(require_auth)):
+    """Create or update user with onboarding data (must be authenticated)"""
     if db is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
-    
+
     now = datetime.now(timezone.utc)
-    
-    # Check if user already exists by email
-    existing = await db.users.find_one({"email": data.email})
-    
+
+    # Scope to the authenticated user only
+    existing = await db.users.find_one({"user_id": user["user_id"]})
+
     user_data = {
         "prenom": data.prenom,
         "email": data.email,
@@ -152,21 +152,22 @@ async def create_or_update_onboarding(data: OnboardingData):
         "onboardingStep": data.onboardingStep,
         "updatedAt": now,
     }
-    
+
     if existing:
         # Update existing user
         await db.users.update_one(
-            {"_id": existing["_id"]},
+            {"user_id": user["user_id"]},
             {"$set": user_data}
         )
         user_data["_id"] = existing["_id"]
         user_data["createdAt"] = existing.get("createdAt", now)
     else:
         # Create new user
+        user_data["user_id"] = user["user_id"]
         user_data["createdAt"] = now
         result = await db.users.insert_one(user_data)
         user_data["_id"] = result.inserted_id
-    
+
     return serialize_user(user_data)
 
 

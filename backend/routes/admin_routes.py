@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, Header
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timezone, timedelta
@@ -6,6 +6,7 @@ from jose import jwt, JWTError
 from passlib.context import CryptContext
 import os
 import math
+import secrets
 
 from services.email_service import send_email
 
@@ -36,7 +37,9 @@ def verify_token(token: str):
         return None
 
 
-async def get_current_admin(authorization: str = ""):
+async def get_current_admin(authorization: Optional[str] = Header(default=None)):
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Non autorisé")
     token = authorization.replace("Bearer ", "") if authorization.startswith("Bearer ") else authorization
     if not token:
         raise HTTPException(status_code=401, detail="Non autorisé")
@@ -69,15 +72,14 @@ async def admin_login(req: LoginRequest):
 
 
 @router.get("/me")
-async def get_me(authorization: str = ""):
-    admin = await get_current_admin(authorization)
-    return {"id": admin["id"], "email": admin["email"], "name": admin.get("name", "Admin")}
+async def get_me(current_admin: dict = Depends(get_current_admin)):
+    return {"id": current_admin["id"], "email": current_admin["email"], "name": current_admin.get("name", "Admin")}
 
 
 # ── Metrics ──
 
 @router.get("/metrics")
-async def get_metrics():
+async def get_metrics(current_admin: dict = Depends(get_current_admin)):
     total_users = await db.app_users.count_documents({"status": {"$ne": "deleted"}})
     active_users = await db.app_users.count_documents({"status": "active"})
     inactive_users = await db.app_users.count_documents({"status": "inactive"})
@@ -181,6 +183,7 @@ async def list_users(
     status: Optional[str] = None,
     sortBy: str = "createdAt",
     order: str = "desc",
+    current_admin: dict = Depends(get_current_admin),
 ):
     query = {"status": {"$ne": "deleted"}}
     if search:
@@ -212,7 +215,7 @@ async def list_users(
 
 
 @router.get("/users/{user_id}")
-async def get_user_detail(user_id: str):
+async def get_user_detail(user_id: str, current_admin: dict = Depends(get_current_admin)):
     user = await db.app_users.find_one({"id": user_id}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=404, detail="Utilisateur introuvable")
@@ -235,7 +238,7 @@ class StatusUpdateRequest(BaseModel):
 
 
 @router.put("/users/{user_id}/status")
-async def update_user_status(user_id: str, req: StatusUpdateRequest):
+async def update_user_status(user_id: str, req: StatusUpdateRequest, current_admin: dict = Depends(get_current_admin)):
     valid = ["active", "inactive", "suspended"]
     if req.status not in valid:
         raise HTTPException(status_code=400, detail=f"Statut invalide. Valeurs: {valid}")
@@ -247,10 +250,11 @@ async def update_user_status(user_id: str, req: StatusUpdateRequest):
 
 
 @router.post("/users/{user_id}/reset-password")
-async def reset_user_password(user_id: str):
+async def reset_user_password(user_id: str, current_admin: dict = Depends(get_current_admin)):
     user = await db.app_users.find_one({"id": user_id}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=404, detail="Utilisateur introuvable")
+    temp_password = secrets.token_urlsafe(12)
     # Send reset email
     try:
         html = f"""
@@ -258,7 +262,7 @@ async def reset_user_password(user_id: str):
           <h2>\U0001f3be Le Court Central</h2>
           <p>Bonjour {user.get('prenom','')},</p>
           <p>Un administrateur a r\u00e9initialis\u00e9 votre mot de passe.</p>
-          <p>Votre nouveau mot de passe temporaire : <strong>Tennis2026!</strong></p>
+          <p>Votre nouveau mot de passe temporaire : <strong>{temp_password}</strong></p>
           <p>Veuillez le changer d\u00e8s votre prochaine connexion.</p>
         </div>
         """
@@ -277,7 +281,7 @@ async def reset_user_password(user_id: str):
 
 
 @router.delete("/users/{user_id}")
-async def delete_user(user_id: str):
+async def delete_user(user_id: str, current_admin: dict = Depends(get_current_admin)):
     user = await db.app_users.find_one({"id": user_id}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=404, detail="Utilisateur introuvable")
@@ -295,16 +299,17 @@ async def delete_user(user_id: str):
 
 
 @router.post("/staff/{staff_id}/reset-password")
-async def reset_staff_password(staff_id: str):
+async def reset_staff_password(staff_id: str, current_admin: dict = Depends(get_current_admin)):
     staff = await db.staff_members.find_one({"id": staff_id}, {"_id": 0})
     if not staff:
         raise HTTPException(status_code=404, detail="Staff introuvable")
+    temp_password = secrets.token_urlsafe(12)
     try:
         html = f"""
         <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px">
           <h2>\U0001f3be Le Court Central</h2>
           <p>Bonjour {staff.get('prenom','')},</p>
-          <p>Votre mot de passe a \u00e9t\u00e9 r\u00e9initialis\u00e9. Nouveau mot de passe : <strong>Tennis2026!</strong></p>
+          <p>Votre mot de passe a \u00e9t\u00e9 r\u00e9initialis\u00e9. Nouveau mot de passe : <strong>{temp_password}</strong></p>
         </div>
         """
         await send_email(staff["email"], "\U0001f510 Mot de passe r\u00e9initialis\u00e9", html)
@@ -316,6 +321,6 @@ async def reset_staff_password(staff_id: str):
 # ── Activity ──
 
 @router.get("/activity/recent")
-async def get_recent_activity(limit: int = 20):
+async def get_recent_activity(limit: int = 20, current_admin: dict = Depends(get_current_admin)):
     activities = await db.activity_logs.find({}, {"_id": 0}).sort("timestamp", -1).limit(limit).to_list(limit)
     return {"activities": activities}

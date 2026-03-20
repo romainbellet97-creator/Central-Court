@@ -4,26 +4,55 @@
  */
 
 import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const API_BASE = process.env.EXPO_PUBLIC_BACKEND_URL || '';
+const SESSION_TOKEN_KEY = 'session_token';
 
 // Axios instance for use with api.get(), api.put(), etc.
 const api = axios.create({
   baseURL: API_BASE,
   headers: { 'Content-Type': 'application/json' },
+  timeout: 30000,
 });
+
+// Attach session token to every axios request
+api.interceptors.request.use(async (config) => {
+  const token = await AsyncStorage.getItem(SESSION_TOKEN_KEY);
+  if (token) {
+    config.headers = config.headers ?? {};
+    config.headers['Authorization'] = `Bearer ${token}`;
+  }
+  return config;
+});
+
+// On 401, clear stored session token
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    if (error.response?.status === 401) {
+      await AsyncStorage.removeItem(SESSION_TOKEN_KEY);
+    }
+    return Promise.reject(error);
+  }
+);
 
 export default api;
 
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
+  const token = await AsyncStorage.getItem(SESSION_TOKEN_KEY);
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
       ...(options?.headers || {}),
     },
   });
   if (!res.ok) {
+    if (res.status === 401) {
+      await AsyncStorage.removeItem(SESSION_TOKEN_KEY);
+    }
     const err = await res.text().catch(() => 'Unknown error');
     throw new Error(`API ${res.status}: ${err}`);
   }

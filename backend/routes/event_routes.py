@@ -141,7 +141,7 @@ async def add_observation(event_id: str, req: AddObservationRequest, user: dict 
         "createdAt": datetime.now(timezone.utc).isoformat(),
     }
     await db.events.update_one(
-        {"id": event_id},
+        {"id": event_id, "player_id": player_id},
         {"$push": {"observations": observation}}
     )
     return observation

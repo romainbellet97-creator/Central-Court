@@ -9,8 +9,11 @@ from datetime import datetime, timezone, timedelta
 from bson import ObjectId
 import secrets
 import string
+from passlib.context import CryptContext
 
 from auth_utils import require_auth
+
+_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 router = APIRouter(prefix="/api/invitations")
 
@@ -400,9 +403,8 @@ async def staff_signup(request: StaffSignupRequest):
     if existing_staff:
         raise HTTPException(status_code=400, detail="Un compte existe déjà avec cet email")
     
-    # Hash password (basic hash for now - should use bcrypt in production)
-    import hashlib
-    password_hash = hashlib.sha256(request.password.encode()).hexdigest()
+    # Hash password with bcrypt
+    password_hash = _pwd_context.hash(request.password)
     
     # Create staff member
     staff = {
