@@ -436,25 +436,39 @@ export default function EditProfileScreen() {
                 <Ionicons name="chevron-down" size={18} color={Colors.text.muted} />
               </TouchableOpacity>
               
-              {showDatePicker && (
-                <View style={styles.datePickerContainer}>
+              {showDatePicker && Platform.OS === 'ios' && (
+                <View style={styles.iosDatePickerContainer}>
+                  <View style={styles.iosDatePickerHeader}>
+                    <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                      <Text style={styles.iosDatePickerCancel}>Annuler</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.iosDatePickerTitle}>Date de naissance</Text>
+                    <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                      <Text style={styles.iosDatePickerDone}>OK</Text>
+                    </TouchableOpacity>
+                  </View>
                   <DateTimePicker
                     value={selectedDate}
                     mode="date"
-                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    display="spinner"
                     onChange={handleDateChange}
                     maximumDate={new Date()}
                     minimumDate={new Date(1970, 0, 1)}
+                    themeVariant="dark"
+                    textColor="#FFFFFF"
+                    style={styles.iosDatePicker}
                   />
-                  {Platform.OS === 'ios' && (
-                    <TouchableOpacity 
-                      style={styles.datePickerDoneBtn}
-                      onPress={() => setShowDatePicker(false)}
-                    >
-                      <Text style={styles.datePickerDoneBtnText}>Confirmer</Text>
-                    </TouchableOpacity>
-                  )}
                 </View>
+              )}
+              {showDatePicker && Platform.OS === 'android' && (
+                <DateTimePicker
+                  value={selectedDate}
+                  mode="date"
+                  display="default"
+                  onChange={handleDateChange}
+                  maximumDate={new Date()}
+                  minimumDate={new Date(1970, 0, 1)}
+                />
               )}
               
               <Text style={styles.inputLabel}>Email *</Text>
@@ -881,21 +895,40 @@ const styles = StyleSheet.create({
   datePickerPlaceholder: {
     color: Colors.text.muted,
   },
-  datePickerContainer: {
-    backgroundColor: Colors.background.secondary,
+  iosDatePickerContainer: {
+    backgroundColor: '#1A1A1A',
     borderRadius: 12,
     marginTop: 8,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#333333',
   },
-  datePickerDoneBtn: {
-    backgroundColor: Colors.primary,
-    padding: 12,
+  iosDatePickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333333',
+    backgroundColor: '#2A2A2A',
   },
-  datePickerDoneBtnText: {
-    color: '#fff',
+  iosDatePickerTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  iosDatePickerCancel: {
+    fontSize: 15,
+    color: '#FF6B6B',
+  },
+  iosDatePickerDone: {
     fontSize: 15,
     fontWeight: '600',
+    color: '#10B981',
+  },
+  iosDatePicker: {
+    height: 180,
+    backgroundColor: '#1A1A1A',
   },
   circuitGrid: {
     flexDirection: 'row',

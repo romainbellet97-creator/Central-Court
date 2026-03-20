@@ -649,12 +649,27 @@ export default function DocumentsScreen() {
             <Text style={s.sheetTitle}>Vérifier le reçu</Text>
             <ScrollView showsVerticalScrollIndicator={false}>
               <Text style={s.fieldLabel}>Fournisseur</Text>
-              <TextInput style={s.input} value={editedFournisseur} onChangeText={setEditedFournisseur} placeholder="Nom du fournisseur" />
+              <TextInput
+                style={s.input}
+                value={editedFournisseur}
+                onChangeText={setEditedFournisseur}
+                placeholder="Nom du fournisseur"
+                placeholderTextColor="#9CA3AF"
+                returnKeyType="next"
+              />
 
               <View style={s.amountRow}>
                 <View style={s.amountField}>
                   <Text style={s.fieldLabel}>Montant</Text>
-                  <TextInput style={s.input} value={editedMontant} onChangeText={setEditedMontant} placeholder="0.00" keyboardType="decimal-pad" />
+                  <TextInput
+                    style={s.input}
+                    value={editedMontant}
+                    onChangeText={setEditedMontant}
+                    placeholder="0.00"
+                    placeholderTextColor="#9CA3AF"
+                    keyboardType="decimal-pad"
+                    returnKeyType="next"
+                  />
                 </View>
                 <View style={s.currencyField}>
                   <Text style={s.fieldLabel}>Devise</Text>
@@ -673,7 +688,14 @@ export default function DocumentsScreen() {
               </View>
 
               <Text style={s.fieldLabel}>Date</Text>
-              <TextInput style={s.input} value={editedDate} onChangeText={setEditedDate} placeholder="AAAA-MM-JJ" />
+              <TextInput
+                style={s.input}
+                value={editedDate}
+                onChangeText={setEditedDate}
+                placeholder="AAAA-MM-JJ"
+                placeholderTextColor="#9CA3AF"
+                returnKeyType="done"
+              />
 
               <Text style={s.fieldLabel}>Catégorie</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.catPicker}>

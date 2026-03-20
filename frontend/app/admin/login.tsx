@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -11,6 +11,7 @@ export default function AdminLogin() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const passwordRef = useRef<TextInput>(null);
 
   const handleLogin = async () => {
     if (!email || !password) { setError('Veuillez remplir tous les champs'); return; }
@@ -38,8 +39,29 @@ export default function AdminLogin() {
         <Text style={s.title}>LE COURT CENTRAL</Text>
         <Text style={s.subtitle}>Tableau de bord administrateur</Text>
         {error ? <Text style={s.error}>{error}</Text> : null}
-        <TextInput style={s.input} placeholder="Email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" placeholderTextColor="#9CA3AF" />
-        <TextInput style={s.input} placeholder="Mot de passe" value={password} onChangeText={setPassword} secureTextEntry placeholderTextColor="#9CA3AF" />
+        <TextInput
+          style={s.input}
+          placeholder="Email"
+          value={email}
+          onChangeText={setEmail}
+          keyboardType="email-address"
+          autoCapitalize="none"
+          placeholderTextColor="#9CA3AF"
+          returnKeyType="next"
+          onSubmitEditing={() => passwordRef.current?.focus()}
+          blurOnSubmit={false}
+        />
+        <TextInput
+          ref={passwordRef}
+          style={s.input}
+          placeholder="Mot de passe"
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+          placeholderTextColor="#9CA3AF"
+          returnKeyType="done"
+          onSubmitEditing={handleLogin}
+        />
         <TouchableOpacity style={[s.btn, loading && s.btnDisabled]} onPress={handleLogin} disabled={loading}>
           {loading ? <ActivityIndicator color="#fff" size="small" /> : <Text style={s.btnText}>Se connecter</Text>}
         </TouchableOpacity>
