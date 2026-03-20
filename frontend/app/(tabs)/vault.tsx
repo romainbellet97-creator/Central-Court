@@ -94,6 +94,7 @@ export default function DocumentsScreen() {
   const [editedCategorie, setEditedCategorie] = useState('Autre');
   const [editedCurrency, setEditedCurrency] = useState('EUR');
   const [isSaving, setIsSaving] = useState(false);
+  const [editingDocId, setEditingDocId] = useState<string | null>(null);
 
   // Available currencies
   const CURRENCIES = ['EUR', 'USD', 'GBP', 'CHF', 'AUD', 'CAD', 'AED'];
@@ -358,7 +359,12 @@ export default function DocumentsScreen() {
 
   const handleSaveDocument = async () => {
     if (isSaving) return; // Prevent double submission
-    
+
+    if (editedDate && !/^\d{4}-\d{2}-\d{2}$/.test(editedDate)) {
+      Alert.alert('Date invalide', 'La date doit être au format AAAA-MM-JJ (ex: 2024-03-15).');
+      return;
+    }
+
     const parsedMontant = parseFloat(editedMontant.replace(',', '.')) || 0;
     const _ht = editedMontantHT.trim();
     const parsedHT = _ht !== '' ? (parseFloat(_ht.replace(',', '.')) || 0) : undefined;
@@ -367,41 +373,70 @@ export default function DocumentsScreen() {
 
     setIsSaving(true);
     try {
-      let base64Data = null;
-      if (pendingDocUri) {
-        base64Data = await FileSystem.readAsStringAsync(pendingDocUri, { encoding: 'base64' });
+      if (editingDocId) {
+        // Edit existing document
+        const response = await api.put(`/api/documents/${editingDocId}`, {
+          name: editedFournisseur,
+          fournisseur: editedFournisseur,
+          dateFacture: editedDate,
+          category: editedCategorie,
+          montantTotal: parsedMontant,
+          montantHT: parsedHT,
+          montantTVA: parsedTVA,
+          currency: editedCurrency,
+        });
+        const updated = response.data;
+        setDocuments(prev => prev.map(d => d.id === editingDocId ? {
+          ...d,
+          name: updated.name || editedFournisseur,
+          fournisseur: updated.fournisseur || editedFournisseur,
+          date: updated.dateFacture || editedDate,
+          category: updated.category || editedCategorie,
+          amount: updated.montantTotal ?? parsedMontant,
+          currency: updated.currency || editedCurrency,
+        } : d));
+        setEditingDocId(null);
+        setShowVerificationModal(false);
+        resetOCR();
+        Alert.alert('Succès', 'Document modifié avec succès');
+      } else {
+        // Create new document
+        let base64Data = null;
+        if (pendingDocUri) {
+          base64Data = await FileSystem.readAsStringAsync(pendingDocUri, { encoding: 'base64' });
+        }
+
+        const response = await api.post('/api/documents', {
+          userId: 'default-user',
+          name: editedFournisseur || pendingDocName,
+          fournisseur: editedFournisseur,
+          dateFacture: editedDate,
+          category: editedCategorie,
+          montantTotal: parsedMontant,
+          montantHT: parsedHT,
+          montantTVA: parsedTVA,
+          currency: editedCurrency,
+          fileBase64: base64Data,
+          fileType: pendingDocType,
+        });
+
+        const saved = response.data;
+        setDocuments(prev => [{
+          id: saved.id,
+          name: saved.name,
+          category: saved.category,
+          type: pendingDocType,
+          date: saved.dateFacture || editedDate,
+          amount: saved.montantTotal,
+          currency: saved.currency || editedCurrency,
+          fournisseur: saved.fournisseur,
+          createdAt: saved.createdAt,
+        }, ...prev]);
+
+        setShowVerificationModal(false);
+        resetOCR();
+        Alert.alert('Succès', 'Document enregistré avec succès');
       }
-
-      const response = await api.post('/api/documents', {
-        userId: 'default-user',
-        name: editedFournisseur || pendingDocName,
-        fournisseur: editedFournisseur,
-        dateFacture: editedDate,
-        category: editedCategorie,
-        montantTotal: parsedMontant,
-        montantHT: parsedHT,
-        montantTVA: parsedTVA,
-        currency: editedCurrency,
-        fileBase64: base64Data,
-        fileType: pendingDocType,
-      });
-
-      const saved = response.data;
-      setDocuments(prev => [{
-        id: saved.id,
-        name: saved.name,
-        category: saved.category,
-        type: pendingDocType,
-        date: saved.dateFacture || editedDate,
-        amount: saved.montantTotal,
-        currency: saved.currency || editedCurrency,
-        fournisseur: saved.fournisseur,
-        createdAt: saved.createdAt,
-      }, ...prev]);
-
-      setShowVerificationModal(false);
-      resetOCR();
-      Alert.alert('Succès', 'Document enregistré avec succès');
     } catch (error: any) {
       console.error('Save error:', error);
       const errorMsg = error?.response?.data?.detail || error?.message || "Échec de l'enregistrement. Vérifiez votre connexion.";
@@ -707,6 +742,21 @@ export default function DocumentsScreen() {
                     </View>
                   )}
 
+                  <TouchableOpacity style={s.editBtn} onPress={() => {
+                    setEditedFournisseur(showDocDetail.fournisseur || '');
+                    setEditedDate(showDocDetail.date || '');
+                    setEditedMontant(showDocDetail.amount != null ? String(showDocDetail.amount) : '');
+                    setEditedMontantHT('');
+                    setEditedMontantTVA('');
+                    setEditedCategorie(showDocDetail.category || 'Autre');
+                    setEditedCurrency(showDocDetail.currency || 'EUR');
+                    setEditingDocId(showDocDetail.id);
+                    setShowDocDetail(null);
+                    setShowVerificationModal(true);
+                  }}>
+                    <Ionicons name="pencil-outline" size={18} color="#1e3c72" />
+                    <Text style={s.editText}>Modifier</Text>
+                  </TouchableOpacity>
                   <TouchableOpacity style={s.deleteBtn} onPress={() => handleDeleteDoc(showDocDetail.id)}>
                     <Ionicons name="trash-outline" size={18} color="#E53935" />
                     <Text style={s.deleteText}>Supprimer</Text>
@@ -818,7 +868,9 @@ const s = StyleSheet.create({
   saveBtnText: { fontSize: 16, fontWeight: '700', color: '#fff' },
   cancelBtn: { padding: 14, alignItems: 'center', marginTop: 8 },
   cancelText: { fontSize: 15, fontWeight: '600', color: '#999' },
-  deleteBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 14, marginTop: 16, backgroundColor: '#ffebee', borderRadius: 12 },
+  editBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 14, marginTop: 16, backgroundColor: '#e8f0fe', borderRadius: 12 },
+  editText: { fontSize: 15, fontWeight: '600', color: '#1e3c72' },
+  deleteBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 14, marginTop: 8, backgroundColor: '#ffebee', borderRadius: 12 },
   deleteText: { fontSize: 15, fontWeight: '600', color: '#E53935' },
 
   // Detail

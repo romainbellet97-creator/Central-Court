@@ -567,6 +567,26 @@ export default function CalendarScreen() {
     }
   };
 
+  const handleDeleteEvent = (eventId: string, eventTitle: string) => {
+    Alert.alert(
+      'Supprimer l\'événement',
+      `Supprimer "${eventTitle}" ?`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer', style: 'destructive', onPress: async () => {
+            try {
+              await apiDeleteEvent(eventId);
+              setEvents(prev => prev.filter(e => e.id !== eventId));
+            } catch {
+              Alert.alert('Erreur', 'Impossible de supprimer l\'événement.');
+            }
+          }
+        },
+      ]
+    );
+  };
+
   // ============ RENDER HELPERS ============
 
   const renderTournamentWeekCard = (week: TournamentWeek) => {
@@ -702,6 +722,9 @@ export default function CalendarScreen() {
                 <Text style={styles.eventTitle}>{event.title}</Text>
                 {event.time && <Text style={styles.eventMeta}>{event.time}</Text>}
               </View>
+              <TouchableOpacity onPress={() => handleDeleteEvent(event.id, event.title)} style={styles.eventDeleteBtn}>
+                <Ionicons name="trash-outline" size={16} color="#E53935" />
+              </TouchableOpacity>
             </View>
           );
         })}
@@ -1207,6 +1230,7 @@ const styles = StyleSheet.create({
   eventInfo: { flex: 1 },
   eventTitle: { fontSize: 15, fontWeight: '600', color: '#1a1a1a' },
   eventMeta: { fontSize: 13, color: '#666', marginTop: 2 },
+  eventDeleteBtn: { padding: 6 },
   noEventsText: { fontSize: 14, color: '#999', textAlign: 'center', paddingVertical: 20 },
   tournamentsSection: { marginHorizontal: 16, marginTop: 8 },
   tournamentsSectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
