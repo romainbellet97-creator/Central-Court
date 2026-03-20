@@ -2,12 +2,14 @@
 Routes pour la géolocalisation et le suivi de résidence fiscale.
 Gère les présences par jour, les stats par pays et les rapports.
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, field_validator
 from typing import Optional, List
 from datetime import datetime, timezone
 import uuid
+
+from auth_utils import require_auth
 
 router = APIRouter(prefix="/api/residence", tags=["residence"])
 db = None
@@ -64,17 +66,18 @@ async def get_country_list():
 # ── Day Presence CRUD ──
 
 @router.post("/days")
-async def add_day_presence(data: DayPresenceCreate):
+async def add_day_presence(data: DayPresenceCreate, user: dict = Depends(require_auth)):
     """Add a day of presence in a country"""
-    # Check for duplicate
+    player_id = user["user_id"]
+    # Check for duplicate for this user
     existing = await db.day_presences.find_one(
-        {"date": data.date},
+        {"date": data.date, "player_id": player_id},
         {"_id": 0}
     )
     if existing:
         # Update existing
         await db.day_presences.update_one(
-            {"date": data.date},
+            {"date": data.date, "player_id": player_id},
             {"$set": {
                 "country": data.country,
                 "countryName": data.countryName,
@@ -83,11 +86,12 @@ async def add_day_presence(data: DayPresenceCreate):
                 "updatedAt": datetime.now(timezone.utc).isoformat(),
             }}
         )
-        updated = await db.day_presences.find_one({"date": data.date}, {"_id": 0})
+        updated = await db.day_presences.find_one({"date": data.date, "player_id": player_id}, {"_id": 0})
         return updated
 
     doc = {
         "id": str(uuid.uuid4())[:8],
+        "player_id": player_id,
         "date": data.date,
         "country": data.country,
         "countryName": data.countryName,
@@ -102,12 +106,13 @@ async def add_day_presence(data: DayPresenceCreate):
 
 
 @router.put("/days/{date}")
-async def update_day_presence(date: str, data: DayPresenceUpdate):
+async def update_day_presence(date: str, data: DayPresenceUpdate, user: dict = Depends(require_auth)):
     """Update a day of presence"""
-    existing = await db.day_presences.find_one({"date": date})
+    player_id = user["user_id"]
+    existing = await db.day_presences.find_one({"date": date, "player_id": player_id})
     if not existing:
         raise HTTPException(status_code=404, detail="Day not found")
-    
+
     update_fields = {}
     if data.country is not None:
         update_fields["country"] = data.country
@@ -117,31 +122,37 @@ async def update_day_presence(date: str, data: DayPresenceUpdate):
         update_fields["status"] = data.status
     if data.notes is not None:
         update_fields["notes"] = data.notes
-    
+
     update_fields["updatedAt"] = datetime.now(timezone.utc).isoformat()
-    
+
     await db.day_presences.update_one(
-        {"date": date},
+        {"date": date, "player_id": player_id},
         {"$set": update_fields}
     )
-    
-    updated = await db.day_presences.find_one({"date": date}, {"_id": 0})
+
+    updated = await db.day_presences.find_one({"date": date, "player_id": player_id}, {"_id": 0})
     return updated
 
 
 @router.delete("/days/{date}")
-async def delete_day_presence(date: str):
+async def delete_day_presence(date: str, user: dict = Depends(require_auth)):
     """Delete a day of presence"""
-    result = await db.day_presences.delete_one({"date": date})
+    player_id = user["user_id"]
+    result = await db.day_presences.delete_one({"date": date, "player_id": player_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Day not found")
     return {"success": True}
 
 
 @router.get("/days")
-async def get_day_presences(year: int = datetime.now().year, month: Optional[int] = None):
+async def get_day_presences(
+    year: int = datetime.now().year,
+    month: Optional[int] = None,
+    user: dict = Depends(require_auth)
+):
     """Get all day presences for a year (optionally filtered by month)"""
-    query = {"date": {"$regex": f"^{year}"}}
+    player_id = user["user_id"]
+    query = {"player_id": player_id, "date": {"$regex": f"^{year}"}}
     if month:
         query["date"] = {"$regex": f"^{year}-{month:02d}"}
 
@@ -152,10 +163,11 @@ async def get_day_presences(year: int = datetime.now().year, month: Optional[int
 # ── Stats ──
 
 @router.get("/stats")
-async def get_residence_stats(year: int = datetime.now().year):
+async def get_residence_stats(year: int = datetime.now().year, user: dict = Depends(require_auth)):
     """Calculate country stats for the year"""
+    player_id = user["user_id"]
     days = await db.day_presences.find(
-        {"date": {"$regex": f"^{year}"}},
+        {"player_id": player_id, "date": {"$regex": f"^{year}"}},
         {"_id": 0, "date": 1, "country": 1, "countryName": 1, "status": 1}
     ).to_list(400)
 
@@ -257,9 +269,10 @@ class BulkDaysCreate(BaseModel):
     notes: Optional[str] = None
 
 @router.post("/days/bulk")
-async def add_bulk_days(data: BulkDaysCreate):
+async def add_bulk_days(data: BulkDaysCreate, user: dict = Depends(require_auth)):
     """Add multiple days at once (date range)"""
     from datetime import timedelta
+    player_id = user["user_id"]
     start = datetime.strptime(data.startDate, "%Y-%m-%d")
     end = datetime.strptime(data.endDate, "%Y-%m-%d")
     if end < start:
@@ -271,10 +284,11 @@ async def add_bulk_days(data: BulkDaysCreate):
     current = start
     while current <= end:
         date_str = current.strftime("%Y-%m-%d")
-        existing = await db.day_presences.find_one({"date": date_str})
+        existing = await db.day_presences.find_one({"date": date_str, "player_id": player_id})
         if not existing:
             await db.day_presences.insert_one({
                 "id": str(uuid.uuid4())[:8],
+                "player_id": player_id,
                 "date": date_str,
                 "country": data.country,
                 "countryName": data.countryName,
