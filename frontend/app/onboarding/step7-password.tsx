@@ -88,8 +88,7 @@ export default function Step7Password() {
         password: password,  // hashed server-side
         dateNaissance: userData.dateNaissance || null,
         circuits: userData.circuits || [],
-        // step4 saves as niveauxTournois, backend field is niveaux
-        niveaux: userData.niveauxTournois || userData.niveaux || [],
+        niveaux: userData.niveaux || [],
         classement: userData.classement != null ? String(userData.classement) : null,
         residenceFiscale: userData.residenceFiscale || null,
         onboardingCompleted: true,

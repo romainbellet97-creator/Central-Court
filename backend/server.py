@@ -518,7 +518,7 @@ async def player_login(req: PlayerLoginRequest):
     Email + password login for players who registered via the onboarding flow.
     Returns a session_token and user object on success.
     """
-    import hashlib as _hashlib
+    import bcrypt as _bcrypt
 
     player = await db.users.find_one({"email": req.email.lower().strip()})
     if not player:
@@ -531,8 +531,7 @@ async def player_login(req: PlayerLoginRequest):
             detail="Ce compte utilise la connexion Google. Veuillez vous connecter avec Google."
         )
 
-    incoming_hash = _hashlib.sha256(req.password.encode()).hexdigest()
-    if stored_hash != incoming_hash:
+    if not _bcrypt.checkpw(req.password.encode(), stored_hash.encode()):
         raise HTTPException(status_code=401, detail="Email ou mot de passe incorrect")
 
     player_user_id = player.get("user_id", str(player["_id"]))

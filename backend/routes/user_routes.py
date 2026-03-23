@@ -2,7 +2,7 @@
 Routes pour l'onboarding utilisateur et la gestion du profil
 """
 
-import hashlib
+import bcrypt
 import uuid
 import secrets
 from datetime import datetime, timezone, timedelta
@@ -154,7 +154,7 @@ async def create_or_update_onboarding(data: OnboardingData):
     # Hash password if provided
     password_hash = None
     if data.password:
-        password_hash = hashlib.sha256(data.password.encode()).hexdigest()
+        password_hash = bcrypt.hashpw(data.password.encode(), bcrypt.gensalt()).decode()
 
     user_data = {
         "prenom": data.prenom,
@@ -257,32 +257,27 @@ async def update_profile(user_id: str, data: ProfileUpdate, user: dict = Depends
     if user_id != user["user_id"]:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    try:
-        object_id = ObjectId(user_id)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid user ID")
-    
     # Build update dict with only non-None values
     update_dict = {}
     for key, value in data.dict().items():
         if value is not None:
             update_dict[key] = value
-    
+
     if not update_dict:
         raise HTTPException(status_code=400, detail="No fields to update")
-    
+
     update_dict["updatedAt"] = datetime.now(timezone.utc)
-    
+
     result = await db.users.update_one(
-        {"_id": object_id},
+        {"user_id": user_id},
         {"$set": update_dict}
     )
-    
+
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="User not found")
-    
-    user = await db.users.find_one({"_id": object_id})
-    return serialize_user(user)
+
+    updated_user = await db.users.find_one({"user_id": user_id})
+    return serialize_user(updated_user)
 
 
 @router.get("/profile/{user_id}", response_model=UserProfile)
@@ -294,12 +289,7 @@ async def get_profile(user_id: str, user: dict = Depends(require_auth)):
     if user_id != user["user_id"]:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    try:
-        object_id = ObjectId(user_id)
-    except:
-        raise HTTPException(status_code=400, detail="Invalid user ID")
-
-    user_doc = await db.users.find_one({"_id": object_id})
+    user_doc = await db.users.find_one({"user_id": user_id})
 
     if not user_doc:
         raise HTTPException(status_code=404, detail="User not found")
