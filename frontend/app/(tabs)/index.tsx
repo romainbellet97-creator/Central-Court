@@ -177,6 +177,7 @@ export default function CalendarScreen() {
   const [unreadAlertCount, setUnreadAlertCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [userCircuits, setUserCircuits] = useState<string[]>(['ATP']);
+  const [userNiveaux, setUserNiveaux] = useState<string[]>([]);
 
   // Event Modals
   const [showAddEventModal, setShowAddEventModal] = useState(false);
@@ -314,8 +315,24 @@ export default function CalendarScreen() {
 
   // ============ DATA LOADING ============
 
+  // Map onboarding niveaux IDs → backend category names
+  const NIVEAUX_TO_CATEGORY: Record<string, string> = {
+    grand_slam: 'Grand Chelem',
+    atp_1000: 'Masters 1000',
+    atp_500: 'ATP 500',
+    atp_250: 'ATP 250',
+    atp_challenger: 'ATP Challenger',
+    itf_m15: 'ITF M15',
+    wta_1000: 'WTA 1000',
+    wta_500: 'WTA 500',
+    wta_250: 'WTA 250',
+    wta_125: 'WTA 125',
+    itf_w15: 'ITF W15',
+    itf_wheelchair: 'ITF Wheelchair',
+  };
+
   useEffect(() => {
-    const loadUserCircuits = async () => {
+    const loadUserPreferences = async () => {
       try {
         const stored = await AsyncStorage.getItem(ONBOARDING_DATA_KEY);
         if (stored) {
@@ -323,12 +340,15 @@ export default function CalendarScreen() {
           if (data.circuits && Array.isArray(data.circuits) && data.circuits.length > 0) {
             setUserCircuits(data.circuits);
           }
+          if (data.niveaux && Array.isArray(data.niveaux) && data.niveaux.length > 0) {
+            setUserNiveaux(data.niveaux);
+          }
         }
       } catch (e) {
-        console.error('Failed to load user circuits:', e);
+        console.error('Failed to load user preferences:', e);
       }
     };
-    loadUserCircuits();
+    loadUserPreferences();
   }, []);
 
   useEffect(() => {
@@ -336,10 +356,13 @@ export default function CalendarScreen() {
       setLoading(true);
       try {
         const circuitsParam = userCircuits.join(',');
-        
+        const categoriesParam = userNiveaux.length > 0
+          ? userNiveaux.map(n => NIVEAUX_TO_CATEGORY[n]).filter(Boolean).join(',')
+          : undefined;
+
         const [eventsData, weeksData, alertsData] = await Promise.all([
           fetchEvents(currentMonth).catch(() => []),
-          fetchTournamentWeeks(circuitsParam).catch(() => ({ weeks: [] })),
+          fetchTournamentWeeks(circuitsParam, categoriesParam).catch(() => ({ weeks: [] })),
           fetchAlerts(true).catch(() => []),
         ]);
         
@@ -364,7 +387,7 @@ export default function CalendarScreen() {
     };
     
     loadData();
-  }, [currentMonth, userCircuits]);
+  }, [currentMonth, userCircuits, userNiveaux]);
 
   // ============ CALENDAR MARKS ============
 

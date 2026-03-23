@@ -63,8 +63,9 @@ def serialize_tournament(t: dict) -> dict:
 
 
 @router.get("/conflicts/{tournament_id}")
-async def check_tournament_conflicts(tournament_id: str):
-    """Check if a tournament conflicts with calendar events"""
+async def check_tournament_conflicts(tournament_id: str, request: Request):
+    """Check if a tournament conflicts with calendar events (scoped to current user)"""
+    user_id = await get_current_user_id(request)
     tournament = await db.tournaments.find_one({"id": tournament_id}, {"_id": 0})
     if not tournament:
         raise HTTPException(status_code=404, detail="Tournament not found")
@@ -89,17 +90,19 @@ async def check_tournament_conflicts(tournament_id: str):
     buffer_start = t_start - timedelta(days=1)
     buffer_end = t_end + timedelta(days=1)
     
-    # Find overlapping events
+    # Find overlapping events scoped to current user
+    user_filter = {"userId": user_id} if user_id != "default-user" else {}
     events = await db.events.find({
+        **user_filter,
         "$or": [
             {"date": {"$gte": buffer_start.isoformat()[:10], "$lte": buffer_end.isoformat()[:10]}},
         ]
     }, {"_id": 0}).to_list(100)
-    
+
     # Also check string date comparisons (fallback with date range filter)
     if not events:
         all_events = await db.events.find(
-            {},
+            user_filter,
             {"_id": 0, "id": 1, "title": 1, "date": 1, "time": 1, "type": 1, "location": 1}
         ).limit(200).to_list(200)
         events = []
@@ -109,11 +112,14 @@ async def check_tournament_conflicts(tournament_id: str):
             ev_date = ev.get("date", "")
             if isinstance(ev_date, str) and bs <= ev_date[:10] <= be:
                 events.append(ev)
-    
-    # Also check for other tournaments in the same period that are registered
+
+    # Also check for other tournaments in the same period that are registered (user-scoped)
     conflicting_tournaments = []
+    reg_filter = {"status": {"$in": ["pending", "participating", "interested"]}}
+    if user_id != "default-user":
+        reg_filter["userId"] = user_id
     regs = await db.tournament_registrations.find(
-        {"status": {"$in": ["pending", "participating", "interested"]}},
+        reg_filter,
         {"_id": 0}
     ).to_list(200)
     

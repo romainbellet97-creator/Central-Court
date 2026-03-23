@@ -5,6 +5,8 @@
 
 import axios from 'axios';
 import Constants from 'expo-constants';
+import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 
 function getApiBase(): string {
   if (process.env.EXPO_PUBLIC_BACKEND_URL) {
@@ -28,20 +30,42 @@ function getApiBase(): string {
 const API_BASE = getApiBase();
 if (__DEV__) console.log('[API] Base URL:', API_BASE);
 
-// Axios instance for use with api.get(), api.put(), etc.
+// Retrieve stored session token (works on web + native)
+async function getStoredToken(): Promise<string | null> {
+  try {
+    if (Platform.OS === 'web') {
+      return typeof localStorage !== 'undefined' ? localStorage.getItem('session_token') : null;
+    }
+    return await SecureStore.getItemAsync('session_token');
+  } catch {
+    return null;
+  }
+}
+
+// Axios instance — with auth interceptor
 const api = axios.create({
   baseURL: API_BASE,
   headers: { 'Content-Type': 'application/json' },
   timeout: 30000,
 });
 
+api.interceptors.request.use(async (config) => {
+  const token = await getStoredToken();
+  if (token) {
+    config.headers['Authorization'] = `Bearer ${token}`;
+  }
+  return config;
+});
+
 export default api;
 
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
+  const token = await getStoredToken();
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
       ...(options?.headers || {}),
     },
   });
@@ -82,8 +106,13 @@ export const fetchTournaments = (circuits?: string) =>
 export const fetchTournamentsByUser = (userId: string) =>
   apiFetch<any[]>(`/api/tournaments/user/${userId}`);
 
-export const fetchTournamentWeeks = (circuits?: string) =>
-  apiFetch<any>(circuits ? `/api/tournaments/weeks?circuits=${circuits}` : '/api/tournaments/weeks');
+export const fetchTournamentWeeks = (circuits?: string, categories?: string) => {
+  const params = new URLSearchParams();
+  if (circuits) params.set('circuits', circuits);
+  if (categories) params.set('categories', categories);
+  const qs = params.toString();
+  return apiFetch<any>(qs ? `/api/tournaments/weeks?${qs}` : '/api/tournaments/weeks');
+};
 
 export const fetchTournamentStats = () =>
   apiFetch<{ total: number; byCircuit: Record<string, number> }>('/api/tournaments/stats');
