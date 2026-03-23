@@ -21,9 +21,10 @@ import Colors from '../src/constants/colors';
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user, isLoading, isAuthenticated, login, loginStaff } = useAuth();
+  const { user, isLoading, isAuthenticated, login, loginStaff, loginPlayer } = useAuth();
   
-  // Staff login form
+  // Mode: 'main' | 'player' | 'staff'
+  const [loginMode, setLoginMode] = useState<'main' | 'player' | 'staff'>('main');
   const [showStaffLogin, setShowStaffLogin] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -40,6 +41,24 @@ export default function LoginScreen() {
       }
     }
   }, [isAuthenticated, user]);
+
+  const handlePlayerLogin = async () => {
+    if (!email.trim()) { Alert.alert('Erreur', 'Veuillez entrer votre email'); return; }
+    if (!password) { Alert.alert('Erreur', 'Veuillez entrer votre mot de passe'); return; }
+    setIsSubmitting(true);
+    try {
+      const success = await loginPlayer(email.trim().toLowerCase(), password);
+      if (success) {
+        router.replace('/(tabs)');
+      } else {
+        Alert.alert('Erreur', 'Email ou mot de passe incorrect');
+      }
+    } catch {
+      Alert.alert('Erreur', 'Impossible de se connecter');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const handleStaffLogin = async () => {
     if (!email.trim()) {
@@ -212,64 +231,77 @@ export default function LoginScreen() {
 
         {/* Login Section */}
         <View style={styles.loginSection}>
-          {/* Player login (Google) */}
-          <TouchableOpacity style={styles.googleButton} onPress={login}>
-            <Ionicons name="logo-google" size={22} color="#333" />
-            <Text style={styles.googleButtonText}>Joueur — Connexion Google</Text>
-          </TouchableOpacity>
+          {loginMode === 'main' && (
+            <>
+              {/* Player login with email/password */}
+              <TouchableOpacity style={styles.playerLoginBtn} onPress={() => { setLoginMode('player'); setEmail(''); setPassword(''); }}>
+                <Ionicons name="person-outline" size={22} color="#fff" />
+                <Text style={styles.playerLoginBtnText}>Joueur — Se connecter</Text>
+              </TouchableOpacity>
 
-          {/* Divider */}
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>ou</Text>
-            <View style={styles.dividerLine} />
-          </View>
+              {/* Divider */}
+              <View style={styles.divider}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>ou</Text>
+                <View style={styles.dividerLine} />
+              </View>
 
-          {/* Staff login form inline */}
-          <View style={styles.staffFormInline}>
-            <Text style={styles.staffFormTitle}>Connexion Staff</Text>
-            <View style={styles.inlineInputWrapper}>
-              <Ionicons name="mail-outline" size={18} color="#6B7280" />
-              <TextInput
-                style={styles.inlineTextInput}
-                placeholder="Email"
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                placeholderTextColor="#9CA3AF"
-              />
-            </View>
-            <View style={styles.inlineInputWrapper}>
-              <Ionicons name="lock-closed-outline" size={18} color="#6B7280" />
-              <TextInput
-                style={styles.inlineTextInput}
-                placeholder="Mot de passe"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
-                placeholderTextColor="#9CA3AF"
-              />
-              <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-                <Ionicons 
-                  name={showPassword ? "eye-off-outline" : "eye-outline"} 
-                  size={18} 
-                  color="#6B7280" 
+              {/* Staff login */}
+              <TouchableOpacity style={styles.staffButton} onPress={() => { setLoginMode('staff'); setEmail(''); setPassword(''); }}>
+                <Ionicons name="people-outline" size={22} color="#fff" />
+                <Text style={styles.staffButtonText}>Connexion Staff</Text>
+              </TouchableOpacity>
+            </>
+          )}
+
+          {(loginMode === 'player' || loginMode === 'staff') && (
+            <View style={styles.staffFormInline}>
+              <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16, gap: 6 }} onPress={() => setLoginMode('main')}>
+                <Ionicons name="arrow-back" size={18} color="rgba(255,255,255,0.8)" />
+                <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 14 }}>Retour</Text>
+              </TouchableOpacity>
+              <Text style={styles.staffFormTitle}>
+                {loginMode === 'player' ? 'Connexion Joueur' : 'Connexion Staff'}
+              </Text>
+              <View style={styles.inlineInputWrapper}>
+                <Ionicons name="mail-outline" size={18} color="#6B7280" />
+                <TextInput
+                  style={styles.inlineTextInput}
+                  placeholder="Email"
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  placeholderTextColor="#9CA3AF"
                 />
+              </View>
+              <View style={styles.inlineInputWrapper}>
+                <Ionicons name="lock-closed-outline" size={18} color="#6B7280" />
+                <TextInput
+                  style={styles.inlineTextInput}
+                  placeholder="Mot de passe"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
+                  placeholderTextColor="#9CA3AF"
+                />
+                <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+                  <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={18} color="#6B7280" />
+                </TouchableOpacity>
+              </View>
+              <TouchableOpacity
+                style={[styles.staffLoginBtn, isSubmitting && styles.buttonDisabled]}
+                onPress={loginMode === 'player' ? handlePlayerLogin : handleStaffLogin}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.staffLoginBtnText}>Se connecter</Text>
+                )}
               </TouchableOpacity>
             </View>
-            <TouchableOpacity
-              style={[styles.staffLoginBtn, isSubmitting && styles.buttonDisabled]}
-              onPress={handleStaffLogin}
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? (
-                <ActivityIndicator color="#fff" size="small" />
-              ) : (
-                <Text style={styles.staffLoginBtnText}>Se connecter</Text>
-              )}
-            </TouchableOpacity>
-          </View>
+          )}
 
           <Text style={styles.disclaimer}>
             En continuant, vous acceptez nos conditions d'utilisation
@@ -360,6 +392,20 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#333',
   },
+  playerLoginBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    backgroundColor: '#2D5016',
+    paddingVertical: 16,
+    borderRadius: 12,
+  },
+  playerLoginBtnText: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#fff',
+  },
   staffButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -368,7 +414,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.15)',
     paddingVertical: 16,
     borderRadius: 12,
-    marginTop: 12,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.3)',
   },

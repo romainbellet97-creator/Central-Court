@@ -26,6 +26,7 @@ function getApiBase(): string {
 }
 
 const API_BASE = getApiBase();
+if (__DEV__) console.log('[API] Base URL:', API_BASE);
 
 // Axios instance for use with api.get(), api.put(), etc.
 const api = axios.create({

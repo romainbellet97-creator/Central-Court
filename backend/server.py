@@ -295,7 +295,19 @@ async def get_current_user(request: Request) -> Optional[User]:
     )
     
     if user_doc:
-        return User(**user_doc)
+        try:
+            return User(**user_doc)
+        except Exception:
+            # Onboarding users have 'prenom' instead of 'name' and 'createdAt' instead of 'created_at'
+            return User(
+                user_id=user_doc.get("user_id", str(user_doc.get("_id", ""))),
+                email=user_doc.get("email", ""),
+                name=user_doc.get("name") or user_doc.get("prenom", ""),
+                picture=user_doc.get("picture"),
+                role=user_doc.get("role", "player"),
+                player_id=user_doc.get("player_id"),
+                created_at=user_doc.get("created_at") or user_doc.get("createdAt") or datetime.now(timezone.utc),
+            )
     return None
 
 async def require_auth(request: Request) -> User:
@@ -647,6 +659,50 @@ async def staff_login(req: StaffLoginRequest):
             "role": staff.get("role", "agent"),
             "player_id": staff.get("playerId"),
             "isStaff": True,
+        }
+    }
+
+
+class PlayerLoginRequest(BaseModel):
+    email: str
+    password: str
+
+@app.post("/api/auth/player-login")
+async def player_login(req: PlayerLoginRequest, response: Response):
+    """Login for players with email + password (onboarding-created accounts)"""
+    import bcrypt as _bcrypt
+
+    player = await db.users.find_one({"email": req.email.lower(), "role": "player"})
+    if not player:
+        raise HTTPException(status_code=401, detail="Email ou mot de passe incorrect")
+
+    stored_hash = player.get("password_hash")
+    if not stored_hash:
+        raise HTTPException(status_code=401, detail="Compte sans mot de passe — utilisez la connexion Google")
+
+    if not _bcrypt.checkpw(req.password.encode(), stored_hash.encode()):
+        raise HTTPException(status_code=401, detail="Email ou mot de passe incorrect")
+
+    user_id = player.get("user_id") or str(player["_id"])
+
+    session_token = f"session_{secrets.token_urlsafe(32)}"
+    expires_at = datetime.now(timezone.utc) + timedelta(days=30)
+
+    await db.user_sessions.insert_one({
+        "user_id": user_id,
+        "session_token": session_token,
+        "expires_at": expires_at,
+        "created_at": datetime.now(timezone.utc),
+    })
+
+    return {
+        "session_token": session_token,
+        "user": {
+            "user_id": user_id,
+            "email": player.get("email", ""),
+            "name": player.get("prenom", player.get("name", "")),
+            "role": "player",
+            "isStaff": False,
         }
     }
 

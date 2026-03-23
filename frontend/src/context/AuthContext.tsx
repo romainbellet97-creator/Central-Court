@@ -24,6 +24,8 @@ interface AuthContextType {
   login: () => Promise<void>;
   loginWithInvitation: (invitationCode: string) => Promise<void>;
   loginStaff: (email: string, password: string) => Promise<boolean>;
+  loginPlayer: (email: string, password: string) => Promise<boolean>;
+  setUserSession: (token: string, userData: Partial<User>) => Promise<void>;
   setUserFromStaffSignup: (userData: User, token: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -31,9 +33,22 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_BACKEND_URL || 
-                process.env.EXPO_PUBLIC_BACKEND_URL || 
-                '';
+function getApiBase(): string {
+  if (process.env.EXPO_PUBLIC_BACKEND_URL) return process.env.EXPO_PUBLIC_BACKEND_URL;
+  if (__DEV__) {
+    const debuggerHost =
+      Constants.expoGoConfig?.debuggerHost ??
+      (Constants as any).manifest2?.extra?.expoClient?.hostUri ??
+      (Constants as any).manifest?.debuggerHost;
+    if (debuggerHost) {
+      const host = debuggerHost.split(':')[0];
+      if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return `http://${host}:8001`;
+    }
+  }
+  return 'http://127.0.0.1:8001';
+}
+
+const API_URL = getApiBase();
 
 // Helper to get/set session token
 const getSessionToken = async (): Promise<string | null> => {
@@ -231,6 +246,43 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setUser(userData);
   };
 
+  // Set session directly (used after onboarding account creation)
+  const setUserSession = async (token: string, userData: Partial<User>): Promise<void> => {
+    await setSessionToken(token);
+    setUser({
+      user_id: userData.user_id || '',
+      email: userData.email || '',
+      name: userData.name || '',
+      role: userData.role || 'player',
+      picture: userData.picture,
+      isStaff: false,
+    });
+  };
+
+  // Login player with email + password
+  const loginPlayer = async (email: string, password: string): Promise<boolean> => {
+    setIsLoading(true);
+    try {
+      const response = await fetch(`${API_URL}/api/auth/player-login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        await setSessionToken(data.session_token);
+        setUser(data.user);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Player login error:', error);
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const logout = async () => {
     try {
       const token = await getSessionToken();
@@ -263,6 +315,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         login,
         loginWithInvitation,
         loginStaff,
+        loginPlayer,
+        setUserSession,
         setUserFromStaffSignup,
         logout,
         refreshUser,

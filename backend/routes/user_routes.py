@@ -5,8 +5,11 @@ Routes pour l'onboarding utilisateur et la gestion du profil
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List, Union
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from bson import ObjectId
+import bcrypt
+import uuid
+import secrets
 
 router = APIRouter(prefix="/api/users")
 
@@ -47,6 +50,7 @@ class OnboardingData(BaseModel):
     niveaux: Optional[List[str]] = []  # Tournament levels
     classement: Optional[str] = None
     email: str
+    password: Optional[str] = None  # Plain password — hashed before storage
     residenceFiscale: Optional[str] = None  # Desired tax residence
     
     # Progressive modules
@@ -124,17 +128,17 @@ def serialize_user(user: dict) -> dict:
 
 # ============ ENDPOINTS ============
 
-@router.post("/onboarding", response_model=UserProfile)
+@router.post("/onboarding")
 async def create_or_update_onboarding(data: OnboardingData):
     """Create or update user with onboarding data"""
     if db is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
-    
+
     now = datetime.now(timezone.utc)
-    
+
     # Check if user already exists by email
     existing = await db.users.find_one({"email": data.email})
-    
+
     user_data = {
         "prenom": data.prenom,
         "email": data.email,
@@ -149,23 +153,45 @@ async def create_or_update_onboarding(data: OnboardingData):
         "onboardingCompleted": data.onboardingCompleted,
         "onboardingStep": data.onboardingStep,
         "updatedAt": now,
+        "role": "player",
     }
-    
+
+    # Hash password if provided
+    if data.password:
+        user_data["password_hash"] = bcrypt.hashpw(data.password.encode(), bcrypt.gensalt()).decode()
+
     if existing:
-        # Update existing user
+        user_id = existing.get("user_id") or f"player_{uuid.uuid4().hex[:12]}"
+        user_data["user_id"] = user_id
+        # Don't overwrite password_hash if no new password provided
+        update_fields = {k: v for k, v in user_data.items() if k != "password_hash" or data.password}
         await db.users.update_one(
             {"_id": existing["_id"]},
-            {"$set": user_data}
+            {"$set": update_fields}
         )
         user_data["_id"] = existing["_id"]
         user_data["createdAt"] = existing.get("createdAt", now)
     else:
-        # Create new user
+        user_id = f"player_{uuid.uuid4().hex[:12]}"
+        user_data["user_id"] = user_id
         user_data["createdAt"] = now
         result = await db.users.insert_one(user_data)
         user_data["_id"] = result.inserted_id
-    
-    return serialize_user(user_data)
+
+    # Create a session token
+    session_token = f"session_{secrets.token_urlsafe(32)}"
+    expires_at = now + timedelta(days=30)
+    await db.user_sessions.insert_one({
+        "user_id": user_id,
+        "session_token": session_token,
+        "expires_at": expires_at,
+        "created_at": now,
+    })
+
+    serialized = serialize_user(user_data)
+    serialized["user_id"] = user_id
+    serialized["session_token"] = session_token
+    return serialized
 
 
 @router.put("/onboarding/{user_id}", response_model=UserProfile)
