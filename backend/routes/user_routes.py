@@ -2,10 +2,14 @@
 Routes pour l'onboarding utilisateur et la gestion du profil
 """
 
+import hashlib
+import uuid
+import secrets
+from datetime import datetime, timezone, timedelta
+
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List, Union
-from datetime import datetime, timezone
 from bson import ObjectId
 
 from auth_utils import require_auth
@@ -56,6 +60,9 @@ class OnboardingData(BaseModel):
     hotelPreferences: Optional[HotelPreferences] = None
     foodPreferences: Optional[FoodPreferences] = None
     
+    # Auth
+    password: Optional[str] = None  # Hashed server-side before storage
+
     # Metadata
     onboardingCompleted: bool = False
     onboardingStep: int = 1
@@ -85,6 +92,7 @@ class OnboardingUpdate(BaseModel):
 
 class UserProfile(BaseModel):
     id: str
+    user_id: Optional[str] = None
     prenom: str
     email: str
     dateNaissance: Optional[str] = None
@@ -99,6 +107,7 @@ class UserProfile(BaseModel):
     onboardingStep: int = 1
     createdAt: Optional[str] = None
     updatedAt: Optional[str] = None
+    session_token: Optional[str] = None  # Only returned on registration/login
 
 
 # ============ HELPER FUNCTIONS ============
@@ -107,6 +116,7 @@ def serialize_user(user: dict) -> dict:
     """Convert MongoDB user to API response"""
     return {
         "id": str(user["_id"]),
+        "user_id": user.get("user_id"),
         "prenom": user.get("prenom", ""),
         "email": user.get("email", ""),
         "dateNaissance": user.get("dateNaissance"),
@@ -127,15 +137,24 @@ def serialize_user(user: dict) -> dict:
 # ============ ENDPOINTS ============
 
 @router.post("/onboarding", response_model=UserProfile)
-async def create_or_update_onboarding(data: OnboardingData, user: dict = Depends(require_auth)):
-    """Create or update user with onboarding data (must be authenticated)"""
+async def create_or_update_onboarding(data: OnboardingData):
+    """
+    Public endpoint: create or update a player account during onboarding.
+    No session required — this IS the registration step.
+    Returns a session_token on success so the frontend can authenticate immediately.
+    """
     if db is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
 
     now = datetime.now(timezone.utc)
 
-    # Scope to the authenticated user only
-    existing = await db.users.find_one({"user_id": user["user_id"]})
+    # Check if player already exists by email
+    existing = await db.users.find_one({"email": data.email})
+
+    # Hash password if provided
+    password_hash = None
+    if data.password:
+        password_hash = hashlib.sha256(data.password.encode()).hexdigest()
 
     user_data = {
         "prenom": data.prenom,
@@ -154,21 +173,43 @@ async def create_or_update_onboarding(data: OnboardingData, user: dict = Depends
     }
 
     if existing:
-        # Update existing user
+        player_user_id = existing.get("user_id", str(existing["_id"]))
+        update_fields = {**user_data}
+        update_fields["user_id"] = player_user_id
+        if password_hash:
+            update_fields["password_hash"] = password_hash
         await db.users.update_one(
-            {"user_id": user["user_id"]},
-            {"$set": user_data}
+            {"_id": existing["_id"]},
+            {"$set": update_fields}
         )
         user_data["_id"] = existing["_id"]
+        user_data["user_id"] = player_user_id
         user_data["createdAt"] = existing.get("createdAt", now)
     else:
-        # Create new user
-        user_data["user_id"] = user["user_id"]
+        # New player — generate auth-compatible fields
+        player_user_id = f"user_{uuid.uuid4().hex[:12]}"
+        user_data["user_id"] = player_user_id
+        user_data["name"] = data.prenom        # for /api/auth/me
+        user_data["role"] = "player"           # for /api/auth/me
+        user_data["created_at"] = now          # for /api/auth/me (server.py User model)
         user_data["createdAt"] = now
+        if password_hash:
+            user_data["password_hash"] = password_hash
         result = await db.users.insert_one(user_data)
         user_data["_id"] = result.inserted_id
 
-    return serialize_user(user_data)
+    # Create a session so the frontend is immediately authenticated
+    session_token = f"session_{secrets.token_urlsafe(32)}"
+    await db.user_sessions.insert_one({
+        "user_id": player_user_id,
+        "session_token": session_token,
+        "expires_at": now + timedelta(days=30),
+        "created_at": now,
+    })
+
+    serialized = serialize_user(user_data)
+    serialized["session_token"] = session_token
+    return serialized
 
 
 @router.put("/onboarding/{user_id}", response_model=UserProfile)
@@ -180,32 +221,24 @@ async def update_onboarding(user_id: str, data: OnboardingUpdate, user: dict = D
     if user_id != user["user_id"]:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    try:
-        object_id = ObjectId(user_id)
-    except:
-        raise HTTPException(status_code=400, detail="Invalid user ID")
-    
     # Build update dict with only non-None values
     update_dict = {}
     for key, value in data.dict().items():
         if value is not None:
-            if key in ["travelPreferences", "hotelPreferences", "foodPreferences"] and isinstance(value, dict):
-                update_dict[key] = value
-            else:
-                update_dict[key] = value
-    
+            update_dict[key] = value
+
     update_dict["updatedAt"] = datetime.now(timezone.utc)
-    
+
     result = await db.users.update_one(
-        {"_id": object_id},
+        {"user_id": user_id},
         {"$set": update_dict}
     )
-    
+
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="User not found")
-    
-    user = await db.users.find_one({"_id": object_id})
-    return serialize_user(user)
+
+    updated = await db.users.find_one({"user_id": user_id})
+    return serialize_user(updated)
 
 
 class ProfileUpdate(BaseModel):

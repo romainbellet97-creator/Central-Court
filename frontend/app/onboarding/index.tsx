@@ -94,11 +94,15 @@ export default function OnboardingStart() {
         {/* CTA */}
         <View style={[styles.ctaContainer, { paddingBottom: insets.bottom + 24 }]}>
           <TouchableOpacity style={styles.ctaButton} onPress={startOnboarding}>
-            <Text style={styles.ctaButtonText}>Commencer</Text>
+            <Text style={styles.ctaButtonText}>Créer un compte</Text>
             <Ionicons name="arrow-forward" size={20} color={COLORS.primary} />
           </TouchableOpacity>
-          
-          <Text style={styles.timeEstimate}>⏱️ Environ 2 minutes</Text>
+
+          <TouchableOpacity style={styles.loginButton} onPress={() => router.push('/login')}>
+            <Text style={styles.loginButtonText}>Déjà un compte ? Se connecter</Text>
+          </TouchableOpacity>
+
+          <Text style={styles.timeEstimate}>⏱️ Inscription en 2 minutes</Text>
         </View>
       </LinearGradient>
     </View>
@@ -182,6 +186,17 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: COLORS.primary,
+  },
+  loginButton: {
+    alignItems: 'center',
+    paddingVertical: 14,
+    marginBottom: 8,
+  },
+  loginButtonText: {
+    fontSize: 15,
+    color: 'rgba(255,255,255,0.85)',
+    fontWeight: '500',
+    textDecorationLine: 'underline',
   },
   timeEstimate: {
     textAlign: 'center',

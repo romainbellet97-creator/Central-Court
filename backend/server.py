@@ -298,10 +298,21 @@ async def get_current_user(request: Request) -> Optional[User]:
         {"user_id": session["user_id"]},
         {"_id": 0}
     )
-    
-    if user_doc:
-        return User(**user_doc)
-    return None
+
+    if not user_doc:
+        return None
+
+    # Normalise fields — onboarding users use camelCase / prenom instead of name/created_at
+    normalised = {
+        "user_id": user_doc.get("user_id", session["user_id"]),
+        "email": user_doc.get("email", ""),
+        "name": user_doc.get("name") or user_doc.get("prenom", ""),
+        "picture": user_doc.get("picture"),
+        "role": user_doc.get("role", "player"),
+        "player_id": user_doc.get("player_id"),
+        "created_at": user_doc.get("created_at") or user_doc.get("createdAt"),
+    }
+    return User(**normalised)
 
 async def require_auth(request: Request) -> User:
     """Require authentication"""
@@ -485,11 +496,67 @@ async def get_me(user: User = Depends(require_auth)):
 async def logout(request: Request, response: Response):
     """Logout current user"""
     session_token = request.cookies.get("session_token")
+    if not session_token:
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            session_token = auth_header.split(" ")[1]
     if session_token:
         await db.user_sessions.delete_one({"session_token": session_token})
-    
+
     response.delete_cookie(key="session_token", path="/")
     return {"success": True}
+
+
+class PlayerLoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+@app.post("/api/auth/player-login")
+async def player_login(req: PlayerLoginRequest):
+    """
+    Email + password login for players who registered via the onboarding flow.
+    Returns a session_token and user object on success.
+    """
+    import hashlib as _hashlib
+
+    player = await db.users.find_one({"email": req.email.lower().strip()})
+    if not player:
+        raise HTTPException(status_code=401, detail="Email ou mot de passe incorrect")
+
+    stored_hash = player.get("password_hash")
+    if not stored_hash:
+        raise HTTPException(
+            status_code=401,
+            detail="Ce compte utilise la connexion Google. Veuillez vous connecter avec Google."
+        )
+
+    incoming_hash = _hashlib.sha256(req.password.encode()).hexdigest()
+    if stored_hash != incoming_hash:
+        raise HTTPException(status_code=401, detail="Email ou mot de passe incorrect")
+
+    player_user_id = player.get("user_id", str(player["_id"]))
+
+    session_token = f"session_{secrets.token_urlsafe(32)}"
+    now = datetime.now(timezone.utc)
+    await db.user_sessions.insert_one({
+        "user_id": player_user_id,
+        "session_token": session_token,
+        "expires_at": now + timedelta(days=30),
+        "created_at": now,
+    })
+
+    return {
+        "session_token": session_token,
+        "user": {
+            "user_id": player_user_id,
+            "email": player.get("email", ""),
+            "name": player.get("name") or player.get("prenom", ""),
+            "picture": player.get("picture"),
+            "role": player.get("role", "player"),
+            "player_id": player.get("player_id"),
+        },
+    }
 
 # ============ INVITATION ENDPOINTS ============
 

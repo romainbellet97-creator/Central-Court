@@ -19,6 +19,8 @@ interface AuthContextType {
   isAuthenticated: boolean;
   login: () => Promise<void>;
   loginWithInvitation: (invitationCode: string) => Promise<void>;
+  loginPlayer: (email: string, password: string) => Promise<boolean>;
+  setUserSession: (token: string, userData: User) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -167,6 +169,36 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     await login();
   };
 
+  /** Email + password login for players registered via onboarding */
+  const loginPlayer = async (email: string, password: string): Promise<boolean> => {
+    setIsLoading(true);
+    try {
+      const response = await fetch(`${API_URL}/api/auth/player-login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        await setSessionToken(data.session_token);
+        setUser(data.user);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Player login error:', error);
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  /** Persist an externally-obtained session (e.g. right after onboarding registration) */
+  const setUserSession = async (token: string, userData: User): Promise<void> => {
+    await setSessionToken(token);
+    setUser(userData);
+  };
+
   const logout = async () => {
     try {
       const token = await getSessionToken();
@@ -198,6 +230,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         isAuthenticated: !!user,
         login,
         loginWithInvitation,
+        loginPlayer,
+        setUserSession,
         logout,
         refreshUser,
       }}
