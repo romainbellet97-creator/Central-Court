@@ -1,0 +1,19 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Backend (FastAPI)",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["/Users/romain/Desktop/central-court/backend/server.py"],
+      "port": 8001
+    },
+    {
+      "name": "Frontend (Expo)",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["expo", "start", "--tunnel"],
+      "cwd": "frontend",
+      "port": 8081,
+      "autoPort": true
+    }
+  ]
+}
