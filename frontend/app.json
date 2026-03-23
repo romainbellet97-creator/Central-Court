@@ -13,7 +13,10 @@
       "infoPlist": {
         "NSCameraUsageDescription": "L'app a besoin d'accéder à l'appareil photo pour scanner les factures",
         "NSPhotoLibraryUsageDescription": "L'app a besoin d'accéder à vos photos pour sélectionner des factures",
-        "NSPhotoLibraryAddUsageDescription": "L'app a besoin de sauvegarder des photos"
+        "NSPhotoLibraryAddUsageDescription": "L'app a besoin de sauvegarder des photos",
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        }
       }
     },
     "android": {
@@ -22,6 +25,7 @@
         "backgroundColor": "#000"
       },
       "edgeToEdgeEnabled": true,
+      "usesCleartextTraffic": true,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",

@@ -6,7 +6,7 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_BASE = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8000';
+const API_BASE = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8001';
 const SESSION_TOKEN_KEY = 'session_token';
 
 // Axios instance for use with api.get(), api.put(), etc.

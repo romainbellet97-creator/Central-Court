@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Modal } from 'react-native';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { adminFetch } from '../adminApi';
+import { adminFetch } from '../../src/services/adminApi';
 
 interface User {
   id: string; prenom: string; nom?: string; email: string; circuits: string[];

@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LineChart, PieChart, ResponsiveContainer, Line, XAxis, YAxis, CartesianGrid, Tooltip, Pie, Cell, Legend } from 'recharts';
-import { adminFetch } from './adminApi';
+import { adminFetch } from '../../src/services/adminApi';
 
 const CIRCUIT_COLORS: Record<string, string> = { ATP: '#2D5016', WTA: '#E8B923', ITF: '#3B82F6', 'ITF Wheelchair': '#8B5CF6' };
 
