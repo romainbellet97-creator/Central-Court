@@ -24,6 +24,7 @@ const COLORS = {
 
 const TOURNAMENT_LEVELS: Record<string, { id: string; name: string; points: string }[]> = {
   ATP: [
+    { id: 'grand_slam', name: 'Grand Chelem', points: '2000 pts' },
     { id: 'atp_1000', name: 'ATP Masters 1000', points: '1000 pts' },
     { id: 'atp_500', name: 'ATP 500', points: '500 pts' },
     { id: 'atp_250', name: 'ATP 250', points: '250 pts' },
@@ -31,6 +32,7 @@ const TOURNAMENT_LEVELS: Record<string, { id: string; name: string; points: stri
     { id: 'itf_m15', name: 'ITF M15-M25', points: 'Points ITF' },
   ],
   WTA: [
+    { id: 'grand_slam', name: 'Grand Chelem', points: '2000 pts' },
     { id: 'wta_1000', name: 'WTA 1000', points: '1000 pts' },
     { id: 'wta_500', name: 'WTA 500', points: '500 pts' },
     { id: 'wta_250', name: 'WTA 250', points: '250 pts' },
@@ -86,7 +88,7 @@ export default function Step4Niveaux() {
   };
   
   const saveAndContinue = async () => {
-    await saveOnboardingStep(4, { niveauxTournois: selectedLevels });
+    await saveOnboardingStep(4, { niveaux: selectedLevels });
     setTimeout(() => {
       router.push('/onboarding/step5-classement');
     }, 300);

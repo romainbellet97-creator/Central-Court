@@ -7,7 +7,7 @@ export interface OnboardingData {
   prenom?: string;
   dateNaissance?: string;
   circuits?: string[];
-  niveauxTournois?: string[];
+  niveaux?: string[];
   classement?: number | null;
   email?: string;
   password?: string;

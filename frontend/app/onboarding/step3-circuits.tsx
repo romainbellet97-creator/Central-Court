@@ -60,11 +60,13 @@ export default function Step3Circuits() {
   const [selectedCircuits, setSelectedCircuits] = useState<string[]>([]);
   
   const toggleCircuit = (circuitId: string) => {
-    setSelectedCircuits(prev =>
-      prev.includes(circuitId)
-        ? prev.filter(c => c !== circuitId)
-        : [...prev, circuitId]
-    );
+    setSelectedCircuits(prev => {
+      if (prev.includes(circuitId)) return prev.filter(c => c !== circuitId);
+      // ATP and WTA are gender-exclusive — selecting one deselects the other
+      if (circuitId === 'ATP') return [...prev.filter(c => c !== 'WTA'), 'ATP'];
+      if (circuitId === 'WTA') return [...prev.filter(c => c !== 'ATP'), 'WTA'];
+      return [...prev, circuitId];
+    });
   };
   
   const saveAndContinue = async () => {
@@ -87,7 +89,7 @@ export default function Step3Circuits() {
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.content}>
           <Text style={styles.question}>Sur quel(s) circuit(s) jouez-vous ?</Text>
-          <Text style={styles.hint}>Sélection multiple possible</Text>
+          <Text style={styles.hint}>ATP et WTA sont exclusifs · ITF combinable</Text>
           
           <View style={styles.cardsContainer}>
             {CIRCUITS.map(circuit => {
