@@ -58,7 +58,7 @@ export default function Step6Email() {
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [email]);
+  }, [email, hasAutoProgressed]);
   
   const saveAndContinue = async () => {
     await saveOnboardingStep(6, { email: email.trim().toLowerCase() });

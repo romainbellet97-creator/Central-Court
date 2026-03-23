@@ -51,7 +51,7 @@ export default function Step1Prenom() {
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [prenom]);
+  }, [prenom, hasAutoProgressed]);
   
   const saveAndContinue = async () => {
     await saveOnboardingStep(1, { prenom: prenom.trim() });

@@ -52,7 +52,7 @@ export default function Step5Classement() {
       }, 700);
       return () => clearTimeout(timer);
     }
-  }, [classement]);
+  }, [classement, hasAutoProgressed]);
   
   const saveAndContinue = async (value: number | null) => {
     await saveOnboardingStep(5, { classement: value });
