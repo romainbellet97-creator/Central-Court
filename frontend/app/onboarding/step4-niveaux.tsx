@@ -88,7 +88,7 @@ export default function Step4Niveaux() {
   };
   
   const saveAndContinue = async () => {
-    await saveOnboardingStep(4, { niveauxTournois: selectedLevels });
+    await saveOnboardingStep(4, { niveaux: selectedLevels });
     setTimeout(() => {
       router.push('/onboarding/step5-classement');
     }, 300);
