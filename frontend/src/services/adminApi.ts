@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_BASE_URL } from '../utils/apiUrl';
 
-const API_BASE = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8001';
+const API_BASE = API_BASE_URL;
 const ADMIN_TOKEN_KEY = 'admin_token';
 
 export async function adminFetch<T>(path: string, options: RequestInit = {}): Promise<T> {

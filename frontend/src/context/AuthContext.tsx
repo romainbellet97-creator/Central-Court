@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
-import Constants from 'expo-constants';
 import { getSessionToken, setSessionToken, removeSessionToken } from '../utils/tokenStorage';
+import { API_BASE_URL } from '../utils/apiUrl';
 
 export interface User {
   user_id: string;
@@ -25,9 +25,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_BACKEND_URL ||
-                process.env.EXPO_PUBLIC_BACKEND_URL ||
-                'http://127.0.0.1:8001';
+const API_URL = API_BASE_URL;
 
 // Parse session_id from URL
 const parseSessionIdFromUrl = (url: string): string | null => {

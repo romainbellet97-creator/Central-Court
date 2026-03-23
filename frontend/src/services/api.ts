@@ -5,8 +5,9 @@
 
 import axios from 'axios';
 import { getSessionToken, removeSessionToken } from '../utils/tokenStorage';
+import { API_BASE_URL } from '../utils/apiUrl';
 
-const API_BASE = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8001';
+const API_BASE = API_BASE_URL;
 
 // Axios instance for use with api.get(), api.put(), etc.
 const api = axios.create({
