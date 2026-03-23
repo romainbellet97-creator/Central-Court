@@ -4,10 +4,9 @@
  */
 
 import axios from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getSessionToken, removeSessionToken } from '../utils/tokenStorage';
 
 const API_BASE = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8001';
-const SESSION_TOKEN_KEY = 'session_token';
 
 // Axios instance for use with api.get(), api.put(), etc.
 const api = axios.create({
@@ -16,9 +15,9 @@ const api = axios.create({
   timeout: 30000,
 });
 
-// Attach session token to every axios request
+// Attach session token to every axios request (reads from SecureStore on mobile)
 api.interceptors.request.use(async (config) => {
-  const token = await AsyncStorage.getItem(SESSION_TOKEN_KEY);
+  const token = await getSessionToken();
   if (token) {
     config.headers = config.headers ?? {};
     config.headers['Authorization'] = `Bearer ${token}`;
@@ -31,7 +30,7 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     if (error.response?.status === 401) {
-      await AsyncStorage.removeItem(SESSION_TOKEN_KEY);
+      await removeSessionToken();
     }
     return Promise.reject(error);
   }
@@ -40,7 +39,7 @@ api.interceptors.response.use(
 export default api;
 
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
-  const token = await AsyncStorage.getItem(SESSION_TOKEN_KEY);
+  const token = await getSessionToken();
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers: {
@@ -51,7 +50,7 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     if (res.status === 401) {
-      await AsyncStorage.removeItem(SESSION_TOKEN_KEY);
+      await removeSessionToken();
     }
     const err = await res.text().catch(() => 'Unknown error');
     throw new Error(`API ${res.status}: ${err}`);

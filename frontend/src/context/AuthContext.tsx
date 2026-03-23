@@ -1,9 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
-import * as SecureStore from 'expo-secure-store';
-import { Platform } from 'react-native';
 import Constants from 'expo-constants';
+import { getSessionToken, setSessionToken, removeSessionToken } from '../utils/tokenStorage';
 
 export interface User {
   user_id: string;
@@ -26,33 +25,9 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_BACKEND_URL || 
-                process.env.EXPO_PUBLIC_BACKEND_URL || 
-                '';
-
-// Helper to get/set session token
-const getSessionToken = async (): Promise<string | null> => {
-  if (Platform.OS === 'web') {
-    return localStorage.getItem('session_token');
-  }
-  return await SecureStore.getItemAsync('session_token');
-};
-
-const setSessionToken = async (token: string): Promise<void> => {
-  if (Platform.OS === 'web') {
-    localStorage.setItem('session_token', token);
-  } else {
-    await SecureStore.setItemAsync('session_token', token);
-  }
-};
-
-const removeSessionToken = async (): Promise<void> => {
-  if (Platform.OS === 'web') {
-    localStorage.removeItem('session_token');
-  } else {
-    await SecureStore.deleteItemAsync('session_token');
-  }
-};
+const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_BACKEND_URL ||
+                process.env.EXPO_PUBLIC_BACKEND_URL ||
+                'http://127.0.0.1:8001';
 
 // Parse session_id from URL
 const parseSessionIdFromUrl = (url: string): string | null => {

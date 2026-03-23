@@ -1,12 +1,51 @@
 // Types globaux pour Central Court
 
-export interface User {
-  id: string;
-  name: string;
+/**
+ * Identité de session OAuth (auth.emergentagent.com).
+ * Champs fixes retournés par le provider — ne pas modifier.
+ */
+export interface AuthUser {
+  user_id: string;
   email: string;
-  phone?: string;
-  role: 'player' | 'agent' | 'physio' | 'coach';
-  avatar?: string;
+  name: string;
+  picture?: string;
+  role: 'player' | 'agent' | 'medical' | 'technical' | 'logistics';
+  player_id?: string;
+}
+
+/**
+ * Profil joueur stocké dans notre backend.
+ * Source de vérité unique — nommage aligné sur le backend FastAPI.
+ */
+export interface PlayerProfile {
+  id: string;
+  prenom: string;
+  email: string;
+  dateNaissance?: string;
+  circuits?: string[];
+  niveaux?: string[];
+  classement?: string;
+  residenceFiscale?: string;
+  travelPreferences?: {
+    flightClass?: string;
+    preferredAirlines?: string[];
+    seatPreference?: string;
+    mealPreference?: string;
+  };
+  hotelPreferences?: {
+    essentialAmenities?: string[];
+    roomType?: string;
+    floorPreference?: string;
+  };
+  foodPreferences?: {
+    cuisines?: string[];
+    restrictions?: string[];
+    allergies?: string[];
+  };
+  onboardingCompleted: boolean;
+  onboardingStep: number;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 // Types d'équipe pour le partage de documents
