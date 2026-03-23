@@ -4,13 +4,34 @@
  */
 
 import axios from 'axios';
+import Constants from 'expo-constants';
 
-const API_BASE = process.env.EXPO_PUBLIC_BACKEND_URL || '';
+function getApiBase(): string {
+  if (process.env.EXPO_PUBLIC_BACKEND_URL) {
+    return process.env.EXPO_PUBLIC_BACKEND_URL;
+  }
+  if (__DEV__) {
+    const debuggerHost =
+      Constants.expoGoConfig?.debuggerHost ??
+      (Constants as any).manifest2?.extra?.expoClient?.hostUri ??
+      (Constants as any).manifest?.debuggerHost;
+    if (debuggerHost) {
+      const host = debuggerHost.split(':')[0];
+      if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host)) {
+        return `http://${host}:8001`;
+      }
+    }
+  }
+  return 'http://127.0.0.1:8001';
+}
+
+const API_BASE = getApiBase();
 
 // Axios instance for use with api.get(), api.put(), etc.
 const api = axios.create({
   baseURL: API_BASE,
   headers: { 'Content-Type': 'application/json' },
+  timeout: 30000,
 });
 
 export default api;

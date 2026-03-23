@@ -14,12 +14,12 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import axios from 'axios';
 import OnboardingProgressBar from '../../src/components/OnboardingProgressBar';
 import { saveOnboardingStep, getOnboardingData } from '../../src/utils/onboardingStorage';
+import api from '../../src/services/api';
+import { useAuth } from '../../src/context/AuthContext';
 
 const USER_EMAIL_KEY = '@central_court_user_email';
-const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 
 const COLORS = {
   primary: '#2D5016',
@@ -34,6 +34,7 @@ const COLORS = {
 export default function Step7Password() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { setUserSession } = useAuth();
   const inputRef = useRef<TextInput>(null);
   const successAnim = useRef(new Animated.Value(0)).current;
   
@@ -79,21 +80,32 @@ export default function Step7Password() {
         return;
       }
       
-      // Send to backend API
-      const response = await axios.post(`${API_URL}/api/users/onboarding`, {
+      // Send to backend API — public endpoint, no auth token needed
+      const response = await api.post('/api/users/onboarding', {
         prenom: userData.prenom,
         email: userData.email,
+        password: password,
         dateNaissance: userData.dateNaissance || null,
         circuits: userData.circuits || [],
-        niveaux: userData.niveaux || userData.niveauxTournois || [],
+        niveaux: userData.niveaux || [],
         classement: userData.classement != null ? String(userData.classement) : null,
         residenceFiscale: userData.residenceFiscale || null,
         onboardingCompleted: true,
         onboardingStep: 7,
       }, { timeout: 15000 });
-      
+
       console.log('User saved to backend:', response.data);
-      
+
+      // Store session token and authenticate immediately
+      if (response.data.session_token) {
+        await setUserSession(response.data.session_token, {
+          user_id: response.data.user_id || response.data.id,
+          email: response.data.email,
+          name: response.data.prenom,
+          role: 'player',
+        });
+      }
+
       // Store email for future session lookups
       await AsyncStorage.setItem(USER_EMAIL_KEY, userData.email);
       
