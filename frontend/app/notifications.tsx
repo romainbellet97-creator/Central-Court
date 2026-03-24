@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,10 +19,15 @@ import Colors from '../src/constants/colors';
 import {
   Alert,
   ALERT_TYPE_CONFIG,
-  DEMO_ALERTS,
   createSlotSuggestion,
 } from '../src/data/alertsV1';
 import { DEMO_STAFF } from '../src/data/staffV1';
+import {
+  fetchAlerts,
+  markAlertRead,
+  dismissAlert as apiDismissAlert,
+  markAllAlertsRead,
+} from '../src/services/api';
 
 // ============================================
 // GÉNÉRATEURS DE LIENS INTELLIGENTS
@@ -81,9 +87,17 @@ function generateSkyscannerUrl(destinationCity: string, tournamentStart: string,
 export default function NotificationsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  
-  const [alerts, setAlerts] = useState<Alert[]>(DEMO_ALERTS);
+
+  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
+
+  useEffect(() => {
+    fetchAlerts()
+      .then(data => setAlerts(data as Alert[]))
+      .catch(err => console.warn('Failed to load alerts:', err))
+      .finally(() => setLoading(false));
+  }, []);
   
   // Modals
   const [showSuggestionModal, setShowSuggestionModal] = useState(false);
@@ -126,14 +140,17 @@ export default function NotificationsScreen() {
   
   const markAsRead = (alertId: string) => {
     setAlerts(prev => prev.map(a => a.id === alertId ? { ...a, read: true } : a));
+    markAlertRead(alertId).catch(err => console.warn('markAlertRead failed:', err));
   };
-  
+
   const dismissAlert = (alertId: string) => {
     setAlerts(prev => prev.map(a => a.id === alertId ? { ...a, dismissed: true } : a));
+    apiDismissAlert(alertId).catch(err => console.warn('dismissAlert failed:', err));
   };
-  
+
   const markAllAsRead = () => {
     setAlerts(prev => prev.map(a => ({ ...a, read: true })));
+    markAllAlertsRead().catch(err => console.warn('markAllAlertsRead failed:', err));
   };
   
   // Action intelligente selon le type d'alerte
@@ -400,7 +417,9 @@ export default function NotificationsScreen() {
       
       {/* Liste */}
       <ScrollView style={styles.list} showsVerticalScrollIndicator={false} contentContainerStyle={styles.listContent}>
-        {filteredAlerts.length > 0 ? (
+        {loading ? (
+          <ActivityIndicator style={{ marginTop: 40 }} color={Colors.primary} />
+        ) : filteredAlerts.length > 0 ? (
           filteredAlerts.map(renderAlertCard)
         ) : (
           <View style={styles.emptyState}>

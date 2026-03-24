@@ -262,6 +262,45 @@ async def generate_alerts(request: Request):
                 await db.alerts.insert_one(alert)
                 new_alerts.append(alert)
 
+    # Check fiscal residence: warn if tournament is outside declared residence country
+    year = today.year
+    residence_query = {"userId": current_user_id, "date": {"$regex": f"^{year}-"}}
+    day_presences = await db.day_presences.find(residence_query, {"_id": 0, "country": 1}).to_list(400)
+    if day_presences:
+        from collections import Counter
+        country_counts = Counter(d["country"] for d in day_presences)
+        primary_country = country_counts.most_common(1)[0][0] if country_counts else None
+
+        if primary_country:
+            for reg in registrations:
+                tournament = tournaments_map.get(reg["tournamentId"])
+                if not tournament:
+                    continue
+                t_country = tournament.get("country", "")
+                if t_country and t_country.upper() != primary_country.upper():
+                    tid = tournament["id"]
+                    existing = await db.alerts.find_one({"id": f"alert-residence-{tid}"}, {"_id": 0})
+                    if not existing:
+                        alert = {
+                            "id": f"alert-residence-{tid}",
+                            "userId": current_user_id,
+                            "type": "residence_warning",
+                            "priority": "medium",
+                            "title": "Tournoi hors résidence fiscale",
+                            "message": f"{tournament['name']} se déroule en {t_country} (résidence: {primary_country})",
+                            "tournamentId": tid,
+                            "tournamentName": tournament["name"],
+                            "tournamentCity": tournament.get("city", ""),
+                            "tournamentCountry": t_country,
+                            "tournamentStartDate": tournament.get("startDate"),
+                            "tournamentEndDate": tournament.get("endDate"),
+                            "read": False,
+                            "dismissed": False,
+                            "createdAt": datetime.now(timezone.utc).isoformat(),
+                        }
+                        await db.alerts.insert_one(alert)
+                        new_alerts.append(alert)
+
     # Send email for high priority alerts (fire and forget)
     for alert in new_alerts:
         if alert["priority"] == "high" and alert.get("tournamentName"):

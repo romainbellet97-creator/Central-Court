@@ -31,6 +31,7 @@ import {
   fetchEvents,
   fetchTournamentWeeks,
   fetchAlerts,
+  generateAlerts,
   createEvent as apiCreateEvent,
   updateEvent as apiUpdateEvent,
   deleteEvent as apiDeleteEvent,
@@ -57,6 +58,7 @@ const EVENT_TYPES: Record<string, { label: string; color: string; icon: string }
   meeting: { label: '📋 Réunion', color: '#6B7280', icon: 'people-outline' },
   medical: { label: '🏥 Médical', color: '#E91E63', icon: 'medkit-outline' },
   travel: { label: '✈️ Voyage', color: '#9C27B0', icon: 'airplane-outline' },
+  hotel: { label: '🏨 Hôtel', color: '#FF7043', icon: 'bed-outline' },
   other: { label: '📌 Autre', color: '#607D8B', icon: 'ellipsis-horizontal-outline' },
 };
 
@@ -887,6 +889,11 @@ export default function CalendarScreen() {
         });
       }
       
+      // Déclencher la génération d'alertes (vol/hôtel/résidence) en arrière-plan
+      if (status === 'pending' || status === 'participating') {
+        generateAlerts().catch(err => console.warn('generateAlerts failed:', err));
+      }
+
       // Message de confirmation
       if (status === 'participating') {
         Alert.alert(

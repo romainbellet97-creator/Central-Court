@@ -1,12 +1,13 @@
 // Système d'alertes et notifications V1 - Style Notion minimaliste
 
-export type AlertType = 
+export type AlertType =
   | 'flight_missing'      // Vol non réservé
-  | 'hotel_missing'       // Hôtel non réservé  
+  | 'hotel_missing'       // Hôtel non réservé
   | 'registration_pending' // Inscription non confirmée
   | 'observation_new'     // Nouvelle observation
   | 'slot_suggestion'     // Suggestion de créneau
-  | 'reminder';           // Rappel général
+  | 'reminder'            // Rappel général
+  | 'residence_warning';  // Tournoi hors résidence fiscale
 
 export type AlertPriority = 'high' | 'medium' | 'low';
 
@@ -93,6 +94,12 @@ export const ALERT_TYPE_CONFIG: Record<AlertType, {
     icon: '⏰',
     color: '#828282',
     label: 'Rappel',
+    actionLabel: 'Voir'
+  },
+  residence_warning: {
+    icon: '🌍',
+    color: '#e67e22',
+    label: 'Résidence fiscale',
     actionLabel: 'Voir'
   }
 };
