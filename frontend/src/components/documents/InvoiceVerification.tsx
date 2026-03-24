@@ -57,14 +57,21 @@ interface InvoiceVerificationProps {
 
 // Catégories disponibles
 const CATEGORIES = [
-  { id: 'Transport', label: 'Transport', icon: 'airplane' as const, color: '#00796b' },
-  { id: 'Hébergement', label: 'Hébergement', icon: 'bed' as const, color: '#1976d2' },
-  { id: 'Restauration', label: 'Restauration', icon: 'restaurant' as const, color: '#e64a19' },
-  { id: 'Médical', label: 'Médical', icon: 'medkit' as const, color: '#c2185b' },
-  { id: 'Matériel', label: 'Matériel', icon: 'tennisball' as const, color: '#7b1fa2' },
-  { id: 'Services', label: 'Services', icon: 'briefcase' as const, color: '#0097a7' },
-  { id: 'Autre', label: 'Autre', icon: 'document' as const, color: '#757575' },
+  { id: 'travel',         label: 'Transport',    icon: 'airplane' as const,    color: '#00796b' },
+  { id: 'accommodation',  label: 'Hébergement',  icon: 'bed' as const,         color: '#1976d2' },
+  { id: 'restaurant',     label: 'Restauration', icon: 'restaurant' as const,  color: '#e64a19' },
+  { id: 'medical',        label: 'Médical',      icon: 'medkit' as const,      color: '#c2185b' },
+  { id: 'equipment',      label: 'Matériel',     icon: 'tennisball' as const,  color: '#7b1fa2' },
+  { id: 'services',       label: 'Services',     icon: 'briefcase' as const,   color: '#0097a7' },
+  { id: 'other',          label: 'Autre',        icon: 'document' as const,    color: '#757575' },
 ];
+
+// Map legacy French OCR category names → English IDs
+const CATEGORY_NORMALIZE: Record<string, string> = {
+  Transport: 'travel', Hébergement: 'accommodation', Restauration: 'restaurant',
+  Médical: 'medical', Matériel: 'equipment', Équipement: 'equipment',
+  Services: 'services', Autre: 'other',
+};
 
 export default function InvoiceVerification({
   data,
@@ -74,11 +81,16 @@ export default function InvoiceVerification({
   onCancel,
   isLoading = false,
 }: InvoiceVerificationProps) {
-  const [editedData, setEditedData] = useState<InvoiceData>(data);
+  const normalizeData = (d: InvoiceData): InvoiceData => ({
+    ...d,
+    categorie: d.categorie ? (CATEGORY_NORMALIZE[d.categorie] ?? d.categorie) : 'other',
+  });
+
+  const [editedData, setEditedData] = useState<InvoiceData>(() => normalizeData(data));
   const [showPreview, setShowPreview] = useState(true);
 
   useEffect(() => {
-    setEditedData(data);
+    setEditedData(normalizeData(data));
   }, [data]);
 
   const updateField = (field: keyof InvoiceData, value: string | number | null) => {

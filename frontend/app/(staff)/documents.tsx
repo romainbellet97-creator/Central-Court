@@ -8,77 +8,106 @@ import {
   ActivityIndicator,
   RefreshControl,
   Alert,
+  TextInput,
+  Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
+import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 import { useAuth } from '../../src/context/AuthContext';
 import { PermissionGate, RestrictedScreen } from '../../src/components/PermissionGate';
 import { getStaffPermissions } from '../../src/types/staff';
 import Constants from 'expo-constants';
 
-const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_BACKEND_URL || 
-                process.env.EXPO_PUBLIC_BACKEND_URL || '';
+function getApiBase(): string {
+  if (process.env.EXPO_PUBLIC_BACKEND_URL) return process.env.EXPO_PUBLIC_BACKEND_URL;
+  const debuggerHost =
+    Constants.expoGoConfig?.debuggerHost ??
+    (Constants as any).manifest2?.extra?.expoClient?.hostUri ??
+    (Constants as any).manifest?.debuggerHost;
+  if (debuggerHost) {
+    const host = debuggerHost.split(':')[0];
+    if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host)) return `http://${host}:8001`;
+  }
+  return 'http://127.0.0.1:8001';
+}
+
+const API_URL = getApiBase();
+
+async function getStoredToken(): Promise<string | null> {
+  try {
+    if (Platform.OS === 'web') return typeof localStorage !== 'undefined' ? localStorage.getItem('session_token') : null;
+    return await SecureStore.getItemAsync('session_token');
+  } catch {
+    return null;
+  }
+}
+
+async function authFetch(path: string, options: RequestInit = {}): Promise<Response> {
+  const token = await getStoredToken();
+  return fetch(`${API_URL}${path}`, {
+    ...options,
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options.headers || {}),
+    },
+  });
+}
 
 interface Document {
   id: string;
-  title: string;
-  type: string;
+  name: string;
+  fournisseur?: string;
   category: string;
   dateFacture?: string;
-  montant?: number;
+  montantTotal?: number;
   currency?: string;
-  merchant?: string;
+  uploadedByName?: string;
+  fileType?: string;
   createdAt: string;
 }
 
-const CATEGORY_ICONS: Record<string, string> = {
-  'Transport': 'airplane',
-  'Hébergement': 'bed',
-  'Équipement': 'tennisball',
-  'Matériel': 'tennisball',
-  'Médical': 'medkit',
-  'Administratif': 'document',
-  'Autre': 'document-text',
-};
-
-const CATEGORY_COLORS: Record<string, string> = {
-  'Transport': '#3B82F6',
-  'Hébergement': '#8B5CF6',
-  'Équipement': '#10B981',
-  'Matériel': '#10B981',
-  'Médical': '#EF4444',
-  'Administratif': '#F59E0B',
-  'Autre': '#6B7280',
+const CATEGORY_MAP: Record<string, { icon: string; color: string; label: string }> = {
+  travel:         { icon: 'airplane',      color: '#3B82F6', label: 'Transport' },
+  accommodation:  { icon: 'bed',           color: '#8B5CF6', label: 'Hébergement' },
+  restaurant:     { icon: 'restaurant',    color: '#F59E0B', label: 'Restauration' },
+  medical:        { icon: 'medkit',        color: '#EF4444', label: 'Médical' },
+  equipment:      { icon: 'tennisball',    color: '#10B981', label: 'Matériel' },
+  services:       { icon: 'briefcase',     color: '#6366F1', label: 'Services' },
+  other:          { icon: 'document-text', color: '#6B7280', label: 'Autre' },
+  // Legacy French names
+  Transport:      { icon: 'airplane',      color: '#3B82F6', label: 'Transport' },
+  Hébergement:    { icon: 'bed',           color: '#8B5CF6', label: 'Hébergement' },
+  Médical:        { icon: 'medkit',        color: '#EF4444', label: 'Médical' },
+  Matériel:       { icon: 'tennisball',    color: '#10B981', label: 'Matériel' },
+  Autre:          { icon: 'document-text', color: '#6B7280', label: 'Autre' },
 };
 
 export default function StaffDocuments() {
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
-  
+
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
-  const linkedPlayerId = user?.player_id;
+  // RIB modal
+  const [showRibModal, setShowRibModal] = useState(false);
+  const [ribValue, setRibValue] = useState('');
+  const [ribBankName, setRibBankName] = useState('');
+  const [savingRib, setSavingRib] = useState(false);
+
   const permissions = getStaffPermissions(user?.role);
   const canViewFinances = permissions?.canViewFinances ?? false;
-  const canUpload = permissions?.canUploadDocuments ?? false;
 
   const loadDocuments = useCallback(async () => {
-    if (!linkedPlayerId) {
-      setIsLoading(false);
-      return;
-    }
-
     try {
-      const response = await fetch(
-        `${API_URL}/api/documents?userId=${linkedPlayerId}`
-      );
-
-      if (response.ok) {
-        const data = await response.json();
+      const res = await authFetch('/api/documents');
+      if (res.ok) {
+        const data = await res.json();
         setDocuments(Array.isArray(data) ? data : []);
       }
     } catch (error) {
@@ -87,7 +116,7 @@ export default function StaffDocuments() {
       setIsLoading(false);
       setRefreshing(false);
     }
-  }, [linkedPlayerId]);
+  }, []);
 
   useEffect(() => {
     loadDocuments();
@@ -104,35 +133,34 @@ export default function StaffDocuments() {
         type: ['image/*', 'application/pdf'],
         copyToCacheDirectory: true,
       });
-
       if (result.canceled) return;
 
       const file = result.assets[0];
       setIsUploading(true);
 
-      // Create form data
       const formData = new FormData();
       formData.append('file', {
         uri: file.uri,
         name: file.name,
         type: file.mimeType || 'application/octet-stream',
       } as any);
-      formData.append('userId', linkedPlayerId || '');
-      formData.append('uploadedBy', user?.name || 'Staff');
 
-      const response = await fetch(`${API_URL}/api/documents/upload`, {
+      const token = await getStoredToken();
+      const res = await fetch(`${API_URL}/api/documents/upload`, {
         method: 'POST',
         body: formData,
         headers: {
-          'Content-Type': 'multipart/form-data',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          // Note: do NOT set Content-Type for multipart — browser/RN sets it with boundary
         },
       });
 
-      if (response.ok) {
+      if (res.ok) {
         Alert.alert('Succès', 'Document ajouté avec succès');
         loadDocuments();
       } else {
-        Alert.alert('Erreur', 'Impossible d\'ajouter le document');
+        const err = await res.text().catch(() => 'Erreur inconnue');
+        Alert.alert('Erreur', err || 'Impossible d\'ajouter le document');
       }
     } catch (error) {
       console.error('Upload error:', error);
@@ -142,49 +170,54 @@ export default function StaffDocuments() {
     }
   };
 
+  const handleSaveRib = async () => {
+    if (!ribValue.trim()) return;
+    setSavingRib(true);
+    try {
+      const res = await authFetch('/api/staff/me/rib', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rib: ribValue.trim(), bankName: ribBankName.trim() }),
+      });
+      if (res.ok) {
+        Alert.alert('RIB enregistré', 'Votre RIB est maintenant visible par le joueur');
+        setShowRibModal(false);
+      } else {
+        Alert.alert('Erreur', 'Impossible d\'enregistrer le RIB');
+      }
+    } catch {
+      Alert.alert('Erreur', 'Une erreur est survenue');
+    } finally {
+      setSavingRib(false);
+    }
+  };
+
   const formatDate = (dateStr?: string) => {
     if (!dateStr) return '';
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('fr-FR', { 
-      day: 'numeric', 
-      month: 'short',
-      year: 'numeric'
-    });
+    return new Date(dateStr).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
   };
 
   const formatAmount = (amount?: number, currency?: string) => {
     if (!amount) return '';
-    return `${amount.toLocaleString()} ${currency || '€'}`;
+    return `${amount.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} ${currency || '€'}`;
   };
 
-  // Check permission to view documents
   if (!permissions?.canViewDocuments) {
-    return (
-      <RestrictedScreen
-        message="Votre rôle ne permet pas d'accéder aux documents"
-        icon="folder-open"
-      />
-    );
-  }
-
-  if (!linkedPlayerId) {
-    return (
-      <View style={[styles.errorContainer, { paddingTop: insets.top }]}>
-        <Ionicons name="alert-circle" size={64} color="#EF4444" />
-        <Text style={styles.errorTitle}>Aucun joueur associé</Text>
-        <Text style={styles.errorText}>
-          Votre compte n'est pas encore lié à un joueur.
-        </Text>
-      </View>
-    );
+    return <RestrictedScreen message="Votre rôle ne permet pas d'accéder aux documents" icon="folder-open" />;
   }
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Documents</Text>
-        <Text style={styles.headerSubtitle}>{documents.length} documents</Text>
+        <View>
+          <Text style={styles.headerTitle}>Documents</Text>
+          <Text style={styles.headerSubtitle}>{documents.length} document{documents.length !== 1 ? 's' : ''}</Text>
+        </View>
+        <TouchableOpacity style={styles.ribBtn} onPress={() => setShowRibModal(true)}>
+          <Ionicons name="card-outline" size={18} color="#1e3c72" />
+          <Text style={styles.ribBtnText}>Mon RIB</Text>
+        </TouchableOpacity>
       </View>
 
       {isLoading ? (
@@ -195,62 +228,51 @@ export default function StaffDocuments() {
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#1e3c72" />
-          }
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#1e3c72" />}
           showsVerticalScrollIndicator={false}
         >
           {documents.length === 0 ? (
             <View style={styles.emptyState}>
               <Ionicons name="folder-open-outline" size={64} color="#D1D5DB" />
               <Text style={styles.emptyTitle}>Aucun document</Text>
-              <Text style={styles.emptyText}>
-                Les documents du joueur apparaîtront ici
-              </Text>
+              <Text style={styles.emptyText}>Les documents du joueur apparaîtront ici</Text>
             </View>
           ) : (
-            documents.map(doc => (
-              <TouchableOpacity 
-                key={doc.id} 
-                style={styles.documentCard}
-                activeOpacity={0.7}
-              >
-                <View 
-                  style={[
-                    styles.documentIcon, 
-                    { backgroundColor: (CATEGORY_COLORS[doc.category] || '#6B7280') + '20' }
-                  ]}
-                >
-                  <Ionicons 
-                    name={(CATEGORY_ICONS[doc.category] || 'document-text') as any}
-                    size={24} 
-                    color={CATEGORY_COLORS[doc.category] || '#6B7280'} 
-                  />
-                </View>
-                <View style={styles.documentInfo}>
-                  <Text style={styles.documentTitle} numberOfLines={1}>
-                    {doc.title || doc.merchant || 'Document'}
-                  </Text>
-                  <View style={styles.documentMeta}>
-                    <Text style={styles.documentCategory}>{doc.category}</Text>
-                    {doc.dateFacture && (
-                      <Text style={styles.documentDate}>
-                        · {formatDate(doc.dateFacture)}
-                      </Text>
+            documents.map(doc => {
+              const cat = CATEGORY_MAP[doc.category] || CATEGORY_MAP.other;
+              const isStaffUploaded = !!doc.uploadedByName;
+              return (
+                <TouchableOpacity key={doc.id} style={styles.documentCard} activeOpacity={0.7}>
+                  <View style={[styles.documentIcon, { backgroundColor: cat.color + '20' }]}>
+                    <Ionicons name={cat.icon as any} size={24} color={cat.color} />
+                  </View>
+                  <View style={styles.documentInfo}>
+                    <Text style={styles.documentTitle} numberOfLines={1}>
+                      {doc.fournisseur || doc.name || 'Document'}
+                    </Text>
+                    <View style={styles.documentMeta}>
+                      <Text style={styles.documentCategory}>{cat.label}</Text>
+                      {doc.dateFacture && (
+                        <Text style={styles.documentDate}>· {formatDate(doc.dateFacture)}</Text>
+                      )}
+                    </View>
+                    {isStaffUploaded && (
+                      <View style={styles.staffBadge}>
+                        <Ionicons name="person-outline" size={10} color="#6B7280" />
+                        <Text style={styles.staffBadgeText}>Ajouté par {doc.uploadedByName}</Text>
+                      </View>
                     )}
                   </View>
-                </View>
-                {/* Show amount only if user has finance permission */}
-                {canViewFinances && doc.montant && (
-                  <Text style={styles.documentAmount}>
-                    {formatAmount(doc.montant, doc.currency)}
-                  </Text>
-                )}
-                <Ionicons name="chevron-forward" size={20} color="#D1D5DB" />
-              </TouchableOpacity>
-            ))
+                  {canViewFinances && doc.montantTotal != null && (
+                    <Text style={styles.documentAmount}>
+                      {formatAmount(doc.montantTotal, doc.currency)}
+                    </Text>
+                  )}
+                  <Ionicons name="chevron-forward" size={20} color="#D1D5DB" />
+                </TouchableOpacity>
+              );
+            })
           )}
-
           <View style={{ height: 100 }} />
         </ScrollView>
       )}
@@ -262,87 +284,82 @@ export default function StaffDocuments() {
           onPress={handleUpload}
           disabled={isUploading}
           activeOpacity={0.8}
-          accessibilityLabel="Ajouter un document"
-          accessibilityRole="button"
         >
-          {isUploading ? (
-            <ActivityIndicator color="#FFFFFF" />
-          ) : (
-            <Ionicons name="add" size={28} color="#FFFFFF" />
-          )}
+          {isUploading ? <ActivityIndicator color="#FFFFFF" /> : <Ionicons name="add" size={28} color="#FFFFFF" />}
         </TouchableOpacity>
       </PermissionGate>
+
+      {/* RIB Modal */}
+      <Modal visible={showRibModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowRibModal(false)}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Mon RIB</Text>
+            <TouchableOpacity onPress={() => setShowRibModal(false)}>
+              <Ionicons name="close" size={24} color="#1F2937" />
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.modalSubtitle}>
+            Enregistrez votre IBAN / RIB pour que le joueur puisse vous rembourser facilement depuis ses factures.
+          </Text>
+          <Text style={styles.fieldLabel}>IBAN / RIB *</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="FR76 3000 1007 9412 3456 7890 185"
+            value={ribValue}
+            onChangeText={setRibValue}
+            autoCapitalize="characters"
+            autoCorrect={false}
+          />
+          <Text style={styles.fieldLabel}>Nom de la banque</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="BNP Paribas"
+            value={ribBankName}
+            onChangeText={setRibBankName}
+          />
+          <TouchableOpacity
+            style={[styles.saveBtn, (!ribValue.trim() || savingRib) && styles.saveBtnDisabled]}
+            onPress={handleSaveRib}
+            disabled={!ribValue.trim() || savingRib}
+          >
+            {savingRib ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Enregistrer</Text>}
+          </TouchableOpacity>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F3F4F6',
-  },
+  container: { flex: 1, backgroundColor: '#F3F4F6' },
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 16,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
   },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#1F2937',
-  },
-  headerSubtitle: {
-    fontSize: 13,
-    color: '#6B7280',
-    marginTop: 2,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
+  headerTitle: { fontSize: 20, fontWeight: '700', color: '#1F2937' },
+  headerSubtitle: { fontSize: 13, color: '#6B7280', marginTop: 2 },
+  ribBtn: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
   },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F3F4F6',
-    padding: 32,
-  },
-  errorTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#1F2937',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  errorText: {
-    fontSize: 15,
-    color: '#6B7280',
-    textAlign: 'center',
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 16,
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 60,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1F2937',
-    marginTop: 16,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: '#9CA3AF',
-    marginTop: 4,
-  },
+  ribBtnText: { fontSize: 13, fontWeight: '600', color: '#1e3c72' },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  scrollView: { flex: 1 },
+  scrollContent: { padding: 16 },
+  emptyState: { alignItems: 'center', paddingVertical: 60 },
+  emptyTitle: { fontSize: 18, fontWeight: '600', color: '#1F2937', marginTop: 16 },
+  emptyText: { fontSize: 14, color: '#9CA3AF', marginTop: 4 },
   documentCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -356,42 +373,15 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 1,
   },
-  documentIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  documentInfo: {
-    flex: 1,
-  },
-  documentTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#1F2937',
-  },
-  documentMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  documentCategory: {
-    fontSize: 12,
-    color: '#6B7280',
-  },
-  documentDate: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    marginLeft: 4,
-  },
-  documentAmount: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1e3c72',
-    marginRight: 8,
-  },
+  documentIcon: { width: 48, height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  documentInfo: { flex: 1 },
+  documentTitle: { fontSize: 15, fontWeight: '600', color: '#1F2937' },
+  documentMeta: { flexDirection: 'row', alignItems: 'center', marginTop: 3 },
+  documentCategory: { fontSize: 12, color: '#6B7280' },
+  documentDate: { fontSize: 12, color: '#9CA3AF', marginLeft: 4 },
+  staffBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 4 },
+  staffBadgeText: { fontSize: 11, color: '#9CA3AF' },
+  documentAmount: { fontSize: 14, fontWeight: '600', color: '#1e3c72', marginRight: 8 },
   fab: {
     position: 'absolute',
     right: 20,
@@ -407,4 +397,29 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 8,
   },
+  modalContainer: { flex: 1, padding: 24, backgroundColor: '#fff' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  modalTitle: { fontSize: 20, fontWeight: '700', color: '#1F2937' },
+  modalSubtitle: { fontSize: 14, color: '#6B7280', marginBottom: 24, lineHeight: 20 },
+  fieldLabel: { fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 6 },
+  input: {
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: '#1F2937',
+    marginBottom: 16,
+    backgroundColor: '#F9FAFB',
+  },
+  saveBtn: {
+    backgroundColor: '#1e3c72',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  saveBtnDisabled: { opacity: 0.5 },
+  saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
 });

@@ -33,6 +33,7 @@ interface Document {
   currency?: string;
   fournisseur?: string;
   description?: string;
+  uploadedByName?: string;  // Set when a staff member uploaded this document
   createdAt?: string;
 }
 
@@ -272,6 +273,7 @@ export default function DocumentsScreen() {
         currency: doc.currency || 'EUR',
         fournisseur: doc.fournisseur,
         description: doc.description,
+        uploadedByName: doc.uploadedByName,
         createdAt: doc.createdAt,
       }));
       setDocuments(docs);
@@ -592,7 +594,6 @@ export default function DocumentsScreen() {
     
     try {
       const response = await api.post('/api/documents', {
-        userId: 'default-user',
         name: editedFournisseur || pendingDocName,
         fournisseur: editedFournisseur,
         dateFacture: editedDate, // BUG #1 FIX: Utiliser la date extraite par l'IA, PAS new Date()
@@ -834,6 +835,9 @@ export default function DocumentsScreen() {
                         <Text style={s.receiptName} numberOfLines={1}>{doc.name}</Text>
                         {doc.fournisseur && doc.fournisseur !== doc.name && (
                           <Text style={s.receiptSub} numberOfLines={1}>{doc.fournisseur}</Text>
+                        )}
+                        {doc.uploadedByName && (
+                          <Text style={s.receiptUploadedBy}>↑ {doc.uploadedByName}</Text>
                         )}
                       </View>
                       <View style={s.receiptRight}>
@@ -1180,6 +1184,7 @@ const s = StyleSheet.create({
   receiptInfo: { flex: 1 },
   receiptName: { fontSize: 15, fontWeight: '600', color: '#1a1a1a' },
   receiptSub: { fontSize: 12, color: '#999', marginTop: 2 },
+  receiptUploadedBy: { fontSize: 11, color: '#9CA3AF', marginTop: 2, fontStyle: 'italic' },
   receiptRight: { alignItems: 'flex-end' },
   receiptAmount: { fontSize: 15, fontWeight: '700', color: '#1a1a1a' },
 

@@ -610,6 +610,87 @@ async def remove_team_member(user_id: str, user: User = Depends(require_player))
     return {"success": True}
 
 
+# ============ STAFF RIB ============
+
+@app.get("/api/staff/me")
+async def get_my_staff_profile(request: Request):
+    """Get current staff member's own profile (including RIB if set)."""
+    from routes.auth_helpers import get_staff_context
+    staff_ctx = await get_staff_context(request)
+    if not staff_ctx:
+        raise HTTPException(status_code=401, detail="Staff authentication required")
+
+    staff_id = staff_ctx["user_id"].replace("staff_", "")
+    from bson import ObjectId
+    staff = await db.staff_members.find_one({"_id": ObjectId(staff_id)})
+    if not staff:
+        raise HTTPException(status_code=404, detail="Staff not found")
+
+    return {
+        "user_id": staff_ctx["user_id"],
+        "name": staff_ctx["name"],
+        "role": staff_ctx["role"],
+        "email": staff.get("email", ""),
+        "rib": staff.get("rib"),  # IBAN or RIB string
+        "ribBankName": staff.get("ribBankName"),
+    }
+
+
+@app.put("/api/staff/me/rib")
+async def update_my_rib(request: Request):
+    """Staff member saves their RIB/IBAN so the player can see it next to invoices."""
+    from routes.auth_helpers import get_staff_context
+    staff_ctx = await get_staff_context(request)
+    if not staff_ctx:
+        raise HTTPException(status_code=401, detail="Staff authentication required")
+
+    body = await request.json()
+    rib = body.get("rib", "").strip()
+    bank_name = body.get("bankName", "").strip()
+
+    if not rib:
+        raise HTTPException(status_code=400, detail="RIB/IBAN requis")
+
+    staff_id = staff_ctx["user_id"].replace("staff_", "")
+    from bson import ObjectId
+    await db.staff_members.update_one(
+        {"_id": ObjectId(staff_id)},
+        {"$set": {"rib": rib, "ribBankName": bank_name, "ribUpdatedAt": datetime.now(timezone.utc)}}
+    )
+    return {"success": True, "rib": rib, "bankName": bank_name}
+
+
+@app.get("/api/staff/{staff_id}/rib")
+async def get_staff_rib(staff_id: str, request: Request):
+    """Player fetches a specific staff member's RIB (to display next to their invoice)."""
+    from routes.auth_helpers import get_current_user_id
+    from bson import ObjectId
+    user_id = await get_current_user_id(request)
+    if user_id == "default-user":
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    try:
+        staff = await db.staff_members.find_one(
+            {"_id": ObjectId(staff_id)},
+            {"_id": 0, "rib": 1, "ribBankName": 1, "firstName": 1, "lastName": 1, "playerId": 1}
+        )
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid staff ID")
+
+    if not staff:
+        raise HTTPException(status_code=404, detail="Staff not found")
+
+    # Only return if staff is linked to the requesting player
+    if staff.get("playerId") != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    return {
+        "name": f"{staff.get('firstName', '')} {staff.get('lastName', '')}".strip(),
+        "rib": staff.get("rib"),
+        "bankName": staff.get("ribBankName"),
+    }
+
+
 # ============ STAFF AUTH (proxy to invitation routes) ============
 
 class StaffLoginRequest(BaseModel):

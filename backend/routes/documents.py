@@ -14,7 +14,7 @@ import io
 
 # Import OCR service
 from services.ocr_service import analyze_document, analyze_document_with_ai, suggest_category_from_text
-from .auth_helpers import get_current_user_id
+from .auth_helpers import get_current_user_id, get_staff_context
 
 router = APIRouter(prefix="/api")
 
@@ -52,6 +52,8 @@ class DocumentCreate(BaseModel):
     fileType: str = "image"
     fileBase64: Optional[str] = None  # Store original file
     userId: Optional[str] = None
+    # Staff upload fields (ignored for player uploads)
+    uploadedByName: Optional[str] = None
 
 
 class DocumentUpdate(BaseModel):
@@ -83,6 +85,7 @@ class DocumentResponse(BaseModel):
     fileType: str = "image"
     hasFile: bool = False
     userId: Optional[str] = None
+    uploadedByName: Optional[str] = None  # Name of staff who uploaded, None if player
     createdAt: Optional[str] = None
     updatedAt: Optional[str] = None
 
@@ -152,6 +155,7 @@ def serialize_document(doc: dict) -> dict:
         "fileType": doc.get("fileType", "image"),
         "hasFile": bool(doc.get("fileBase64")),
         "userId": doc.get("userId"),
+        "uploadedByName": doc.get("uploadedByName"),
         "createdAt": doc.get("createdAt").isoformat() if doc.get("createdAt") else None,
         "updatedAt": doc.get("updatedAt").isoformat() if doc.get("updatedAt") else None,
     }
@@ -161,13 +165,22 @@ def serialize_document(doc: dict) -> dict:
 
 @router.post("/documents", response_model=DocumentResponse)
 async def create_document(request: Request, doc: DocumentCreate):
-    """Create a new document. SECURITY FIX: Use auth userId."""
+    """Create a new document. SECURITY FIX: Use auth userId.
+    Staff uploads set userId to their linked player and record uploadedByName."""
     if db is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
-    
-    current_user_id = await get_current_user_id(request)
+
+    staff_ctx = await get_staff_context(request)
     now = datetime.now(timezone.utc)
-    
+
+    if staff_ctx:
+        # Staff uploading on behalf of their linked player
+        target_user_id = staff_ctx["player_id"]
+        uploaded_by_name = staff_ctx["name"]
+    else:
+        target_user_id = await get_current_user_id(request)
+        uploaded_by_name = None
+
     document = {
         "name": doc.name,
         "category": doc.category,
@@ -184,14 +197,15 @@ async def create_document(request: Request, doc: DocumentCreate):
         "description": doc.description,
         "fileType": doc.fileType,
         "fileBase64": doc.fileBase64,
-        "userId": current_user_id,
+        "userId": target_user_id,
+        "uploadedByName": uploaded_by_name,
         "createdAt": now,
         "updatedAt": now,
     }
-    
+
     result = await db.documents.insert_one(document)
     document["_id"] = result.inserted_id
-    
+
     return serialize_document(document)
 
 
@@ -205,13 +219,21 @@ async def get_documents(
     limit: int = Query(default=100, le=500),
     skip: int = Query(default=0, ge=0)
 ):
-    """Get documents. SECURITY FIX: Filter by auth user (or explicit userId for staff)."""
+    """Get documents. Staff can view their linked player's documents."""
     if db is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
-    
-    # Use explicit userId (staff viewing player) or authenticated user
-    if userId:
-        target_user_id = userId
+
+    staff_ctx = await get_staff_context(request)
+
+    if staff_ctx:
+        # Staff: always fetch their linked player's documents
+        target_user_id = staff_ctx["player_id"]
+        if not target_user_id:
+            return []
+    elif userId:
+        # Legacy param or admin use — only allow if matches auth user
+        current_user_id = await get_current_user_id(request)
+        target_user_id = userId if current_user_id == "default-user" else current_user_id
     else:
         target_user_id = await get_current_user_id(request)
     
@@ -439,6 +461,94 @@ async def delete_document(request: Request, document_id: str):
         raise HTTPException(status_code=404, detail="Document not found")
     
     return {"success": True, "message": "Document deleted"}
+
+
+# ============ STAFF MULTIPART UPLOAD ============
+
+@router.post("/documents/upload")
+async def upload_document_multipart(
+    request: Request,
+    file: UploadFile = File(...),
+):
+    """Multipart upload endpoint used by staff to add documents to a player's vault.
+    Runs OCR automatically, stores result with uploadedByName set to staff member's name."""
+    if db is None:
+        raise HTTPException(status_code=500, detail="Database not initialized")
+
+    staff_ctx = await get_staff_context(request)
+    if staff_ctx:
+        target_user_id = staff_ctx["player_id"]
+        uploaded_by_name = staff_ctx["name"]
+        if not target_user_id:
+            raise HTTPException(status_code=400, detail="Aucun joueur lié à ce compte staff")
+    else:
+        target_user_id = await get_current_user_id(request)
+        uploaded_by_name = None
+
+    # Validate file type
+    allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'application/pdf']
+    content_type = file.content_type or ''
+    filename = file.filename or 'document'
+    file_extension = filename.lower().split('.')[-1] if '.' in filename else ''
+
+    if content_type not in allowed_types:
+        ext_map = {'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png', 'webp': 'image/webp', 'pdf': 'application/pdf'}
+        content_type = ext_map.get(file_extension, content_type)
+
+    if content_type not in allowed_types:
+        raise HTTPException(status_code=400, detail=f"Type non supporté: {content_type}")
+
+    file_bytes = await file.read()
+    if len(file_bytes) == 0:
+        raise HTTPException(status_code=400, detail="Fichier vide")
+    if len(file_bytes) > 20 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Fichier trop volumineux (max 20 MB)")
+
+    # Run OCR
+    try:
+        ocr_result = await analyze_document(file_bytes, filename, content_type)
+        invoice_data = ocr_result.get("data", {}) if ocr_result.get("success") else {}
+    except Exception:
+        invoice_data = {}
+
+    file_type = "pdf" if content_type == "application/pdf" else "image"
+    file_base64 = base64.b64encode(file_bytes).decode("utf-8")
+    now = datetime.now(timezone.utc)
+
+    # Normalize category
+    raw_cat = invoice_data.get("categorie", "other") or "other"
+    CAT_MAP = {
+        "Transport": "travel", "Hébergement": "accommodation", "Restauration": "restaurant",
+        "Médical": "medical", "Matériel": "equipment", "Équipement": "equipment",
+        "Services": "services", "Autre": "other",
+    }
+    category = CAT_MAP.get(raw_cat, raw_cat)
+
+    document = {
+        "name": filename,
+        "category": category,
+        "montantTotal": invoice_data.get("montantTotal"),
+        "montantHT": invoice_data.get("montantHT"),
+        "montantTVA": invoice_data.get("montantTVA"),
+        "currency": invoice_data.get("currency", "EUR"),
+        "numeroFacture": invoice_data.get("numeroFacture"),
+        "dateFacture": invoice_data.get("dateFacture"),
+        "fournisseur": invoice_data.get("fournisseur"),
+        "adresse": invoice_data.get("adresse"),
+        "lignes": invoice_data.get("lignes", []),
+        "confidence": invoice_data.get("confidence", 0.0),
+        "description": invoice_data.get("description"),
+        "fileType": file_type,
+        "fileBase64": file_base64,
+        "userId": target_user_id,
+        "uploadedByName": uploaded_by_name,
+        "createdAt": now,
+        "updatedAt": now,
+    }
+
+    result = await db.documents.insert_one(document)
+    document["_id"] = result.inserted_id
+    return serialize_document(document)
 
 
 # ============ OCR ENDPOINTS ============
