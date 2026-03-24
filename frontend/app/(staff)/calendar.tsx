@@ -24,7 +24,7 @@ const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_BACKEND_URL ||
                 process.env.EXPO_PUBLIC_BACKEND_URL || '';
 
 async function getStoredToken(): Promise<string | null> {
-  return SecureStore.getItemAsync('auth_token');
+  return SecureStore.getItemAsync('session_token');
 }
 
 async function authFetch(path: string, options: RequestInit = {}): Promise<Response> {

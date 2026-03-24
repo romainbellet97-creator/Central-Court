@@ -14,9 +14,30 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../../src/context/AuthContext';
 import { getStaffRoleLabel, getStaffRoleEmoji } from '../../src/types/staff';
 import Constants from 'expo-constants';
+import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 
-const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_BACKEND_URL || 
+const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_BACKEND_URL ||
                 process.env.EXPO_PUBLIC_BACKEND_URL || '';
+
+async function getStoredToken(): Promise<string | null> {
+  try {
+    if (Platform.OS === 'web') return typeof localStorage !== 'undefined' ? localStorage.getItem('session_token') : null;
+    return await SecureStore.getItemAsync('session_token');
+  } catch { return null; }
+}
+
+async function authFetch(path: string, options: RequestInit = {}): Promise<Response> {
+  const token = await getStoredToken();
+  return fetch(`${API_URL}${path}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options.headers as Record<string, string> || {}),
+    },
+  });
+}
 
 interface WeekEvent {
   id: string;
@@ -91,46 +112,35 @@ export default function StaffDashboard() {
 
     try {
       const { monday, sunday } = getWeekBounds();
-      const headers = { 'Content-Type': 'application/json' };
 
-      // Fetch events for the week
-      const eventsRes = await fetch(
-        `${API_URL}/api/events?userId=${linkedPlayerId}&startDate=${monday.toISOString().split('T')[0]}&endDate=${sunday.toISOString().split('T')[0]}`,
-        { headers }
+      // Fetch events for the week (player's events, staff has access via linked player)
+      const eventsRes = await authFetch(
+        `/api/events?userId=${linkedPlayerId}&startDate=${monday.toISOString().split('T')[0]}&endDate=${sunday.toISOString().split('T')[0]}`
       );
-      
+
       if (eventsRes.ok) {
         const eventsData = await eventsRes.json();
         setWeekEvents(Array.isArray(eventsData) ? eventsData.slice(0, 5) : []);
       }
 
-      // Fetch alerts
-      const alertsRes = await fetch(
-        `${API_URL}/api/alerts?userId=${linkedPlayerId}&unread=true&limit=5`,
-        { headers }
-      );
-      
+      // Fetch staff's OWN alerts (event responses from player, comments, etc.)
+      const alertsRes = await authFetch(`/api/alerts?unread_only=true`);
+
       if (alertsRes.ok) {
         const alertsData = await alertsRes.json();
-        setAlerts(Array.isArray(alertsData) ? alertsData : []);
+        setAlerts(Array.isArray(alertsData) ? alertsData.slice(0, 5) : []);
       }
 
       // Fetch player profile
-      const profileRes = await fetch(
-        `${API_URL}/api/users/${linkedPlayerId}`,
-        { headers }
-      );
-      
+      const profileRes = await authFetch(`/api/users/${linkedPlayerId}`);
+
       if (profileRes.ok) {
         const profileData = await profileRes.json();
         setPlayerProfile(profileData);
       }
 
       // Fetch tournaments count
-      const tournamentsRes = await fetch(
-        `${API_URL}/api/tournaments/weeks?circuits=ATP,WTA`,
-        { headers }
-      );
+      const tournamentsRes = await authFetch(`/api/tournaments/weeks?circuits=ATP,WTA`);
       
       if (tournamentsRes.ok) {
         const tournamentsData = await tournamentsRes.json();
