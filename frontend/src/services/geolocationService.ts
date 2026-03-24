@@ -20,6 +20,7 @@ const STORAGE_KEYS = {
   LAST_RECORDED_DATE: '@tax_last_recorded_date',
   LAST_COUNTRY: '@tax_last_country',
   AUTO_RECORD: '@tax_auto_record',
+  WEEKLY_NOTIF_SCHEDULED: '@tax_weekly_notif_scheduled',
 };
 
 // Country name to code mapping
@@ -202,6 +203,61 @@ const sendNotification = async (title: string, body: string, data?: any) => {
 };
 
 /**
+ * Schedule a weekly notification every Sunday at 19:00 asking the user
+ * to verify automatically-recorded days. Works even when the app is closed.
+ */
+export const scheduleWeeklyVerificationNotification = async (): Promise<void> => {
+  try {
+    // Cancel any existing weekly verification notifications
+    const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+    for (const notif of scheduled) {
+      if (notif.content.data?.type === 'weekly_verification') {
+        await Notifications.cancelScheduledNotificationAsync(notif.identifier);
+      }
+    }
+
+    // Schedule recurring weekly notification every Sunday at 19:00
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: '📍 Vérification de résidence fiscale',
+        body: 'Vérifiez et confirmez vos jours de présence automatiques de cette semaine.',
+        data: { type: 'weekly_verification' },
+        sound: true,
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
+        weekday: 1, // Sunday (1=Sunday, 2=Monday … 7=Saturday)
+        hour: 19,
+        minute: 0,
+      } as any,
+    });
+
+    await AsyncStorage.setItem(STORAGE_KEYS.WEEKLY_NOTIF_SCHEDULED, 'true');
+    console.log('✅ Weekly verification notification scheduled (Sundays 19:00)');
+  } catch (error) {
+    console.error('❌ Failed to schedule weekly notification:', error);
+  }
+};
+
+/**
+ * Cancel the weekly verification notification
+ */
+export const cancelWeeklyVerificationNotification = async (): Promise<void> => {
+  try {
+    const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+    for (const notif of scheduled) {
+      if (notif.content.data?.type === 'weekly_verification') {
+        await Notifications.cancelScheduledNotificationAsync(notif.identifier);
+      }
+    }
+    await AsyncStorage.setItem(STORAGE_KEYS.WEEKLY_NOTIF_SCHEDULED, 'false');
+    console.log('✅ Weekly verification notification cancelled');
+  } catch (error) {
+    console.error('❌ Failed to cancel weekly notification:', error);
+  }
+};
+
+/**
  * Define the daily background task
  */
 TaskManager.defineTask(DAILY_LOCATION_TASK, async () => {
@@ -262,6 +318,11 @@ export const startDailyTracking = async (): Promise<boolean> => {
     await AsyncStorage.setItem(STORAGE_KEYS.TRACKING_ENABLED, 'true');
     await AsyncStorage.setItem(STORAGE_KEYS.AUTO_RECORD, 'true');
 
+    // Schedule weekly verification notification (works even when app is closed)
+    if (notifStatus === 'granted') {
+      await scheduleWeeklyVerificationNotification();
+    }
+
     console.log('✅ Daily tracking started');
     return true;
   } catch (error) {
@@ -280,6 +341,8 @@ export const stopDailyTracking = async (): Promise<void> => {
       await BackgroundFetch.unregisterTaskAsync(DAILY_LOCATION_TASK);
     }
     await AsyncStorage.setItem(STORAGE_KEYS.TRACKING_ENABLED, 'false');
+    // Cancel weekly verification notification
+    await cancelWeeklyVerificationNotification();
     console.log('✅ Daily tracking stopped');
   } catch (error) {
     console.error('❌ Stop tracking error:', error);
@@ -405,4 +468,6 @@ export default {
   getLastRecordedInfo,
   requestAllPermissions,
   sendNotification,
+  scheduleWeeklyVerificationNotification,
+  cancelWeeklyVerificationNotification,
 };

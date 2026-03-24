@@ -269,6 +269,54 @@ async def get_residence_stats(request: Request, year: int = None):
     }
 
 
+# ── Tax Alerts ──
+
+@router.get("/alerts")
+async def get_residence_alerts(request: Request, year: int = None):
+    """Get tax threshold alerts for current user (used by mobile background service)"""
+    if year is None:
+        year = datetime.now().year
+
+    userId = await get_current_user_id(request)
+    days = await db.day_presences.find(
+        {"date": {"$regex": f"^{year}"}, "userId": userId},
+        {"_id": 0, "date": 1, "country": 1, "countryName": 1}
+    ).to_list(400)
+
+    # Count days per country
+    country_days: dict = {}
+    for d in days:
+        cc = d["country"]
+        if cc not in country_days:
+            country_days[cc] = {"country": cc, "countryName": d.get("countryName", cc), "count": 0}
+        country_days[cc]["count"] += 1
+
+    alerts = []
+    for cc, info in country_days.items():
+        threshold = TAX_THRESHOLDS.get(cc, 183)
+        pct = (info["count"] / threshold) * 100
+        if pct >= 100:
+            alerts.append({
+                "type": "threshold_exceeded",
+                "country": cc,
+                "countryName": info["countryName"],
+                "days": info["count"],
+                "threshold": threshold,
+                "severity": "critical",
+            })
+        elif pct >= 75:
+            alerts.append({
+                "type": "approaching_threshold",
+                "country": cc,
+                "countryName": info["countryName"],
+                "days": info["count"],
+                "threshold": threshold,
+                "severity": "warning",
+            })
+
+    return {"alerts": alerts, "year": year, "totalDays": sum(c["count"] for c in country_days.values())}
+
+
 # ── Bulk add days (range) ──
 
 class BulkDaysCreate(BaseModel):

@@ -13,7 +13,9 @@ import {
   RefreshControl,
   Switch,
   Alert,
+  Linking,
 } from 'react-native';
+import * as Notifications from 'expo-notifications';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -97,6 +99,7 @@ export default function ResidenceScreen() {
   // GPS Tracking state
   const [gpsEnabled, setGpsEnabled] = useState(false);
   const [locationPermission, setLocationPermission] = useState<'granted' | 'denied' | 'undetermined'>('undetermined');
+  const [notifPermission, setNotifPermission] = useState<'granted' | 'denied' | 'undetermined'>('undetermined');
   const [currentLocation, setCurrentLocation] = useState<LocationInfo | null>(null);
   const [isLocating, setIsLocating] = useState(false);
   const [lastLogDate, setLastLogDate] = useState<string | null>(null);
@@ -257,14 +260,18 @@ export default function ResidenceScreen() {
         AsyncStorage.getItem(STORAGE_KEY_TRACKING),
         AsyncStorage.getItem(STORAGE_KEY_LAST_LOG),
       ]);
-      
+
+      // Check notification permission status
+      const { status: notifStatus } = await Notifications.getPermissionsAsync();
+      setNotifPermission(notifStatus === 'granted' ? 'granted' : notifStatus === 'undetermined' ? 'undetermined' : 'denied');
+
       if (trackingEnabled === 'true') {
         setGpsEnabled(true);
         // Check permission and get location immediately
         const { status } = await Location.getForegroundPermissionsAsync();
         const permGranted = status === 'granted';
         setLocationPermission(permGranted ? 'granted' : 'denied');
-        
+
         // Fetch location right away if permission granted
         if (permGranted) {
           console.log('Permission granted, fetching location...');
@@ -336,18 +343,35 @@ export default function ResidenceScreen() {
 
   const toggleGpsTracking = async (enabled: boolean) => {
     if (enabled) {
+      // If already denied, the system won't show the dialog again — open Settings directly
+      if (locationPermission === 'denied') {
+        Alert.alert(
+          'Localisation refusée',
+          'Vous avez refusé l\'accès à la localisation. Veuillez l\'activer dans les Réglages de l\'appareil.',
+          [
+            { text: 'Annuler', style: 'cancel' },
+            { text: 'Ouvrir les Réglages', onPress: () => Linking.openSettings() },
+          ]
+        );
+        return;
+      }
+
       const granted = await requestLocationPermission();
       if (!granted) {
+        // Permission was just denied for the first time
         Alert.alert(
           'Permission requise',
-          'Veuillez autoriser l\'accès à la localisation pour activer le tracking GPS.',
-          [{ text: 'OK' }]
+          'Le tracking GPS nécessite l\'accès à votre localisation. Vous pouvez l\'activer dans les Réglages.',
+          [
+            { text: 'Plus tard', style: 'cancel' },
+            { text: 'Ouvrir les Réglages', onPress: () => Linking.openSettings() },
+          ]
         );
         return;
       }
       await getCurrentLocation();
     }
-    
+
     setGpsEnabled(enabled);
     await AsyncStorage.setItem(STORAGE_KEY_TRACKING, enabled ? 'true' : 'false');
   };
@@ -917,11 +941,56 @@ export default function ResidenceScreen() {
                 </View>
 
                 {locationPermission !== 'granted' && (
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={styles.requestPermissionBtn}
-                    onPress={requestLocationPermission}
+                    onPress={locationPermission === 'denied'
+                      ? () => Linking.openSettings()
+                      : requestLocationPermission
+                    }
                   >
-                    <Text style={styles.requestPermissionBtnText}>Autoriser la localisation</Text>
+                    <Ionicons name="settings-outline" size={16} color="#fff" style={{ marginRight: 6 }} />
+                    <Text style={styles.requestPermissionBtnText}>
+                      {locationPermission === 'denied' ? 'Ouvrir les Réglages' : 'Autoriser la localisation'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+
+                <View style={styles.settingDivider} />
+
+                {/* Notification permission status */}
+                <View style={styles.permissionStatus}>
+                  <Text style={styles.permissionLabel}>Notifications :</Text>
+                  <View style={[
+                    styles.permissionBadge,
+                    notifPermission === 'granted' ? styles.permissionGranted : styles.permissionDenied
+                  ]}>
+                    <Ionicons
+                      name={notifPermission === 'granted' ? 'notifications' : 'notifications-off'}
+                      size={14}
+                      color="#fff"
+                    />
+                    <Text style={styles.permissionBadgeText}>
+                      {notifPermission === 'granted' ? 'Activées' : 'Désactivées'}
+                    </Text>
+                  </View>
+                </View>
+
+                {notifPermission !== 'granted' && (
+                  <TouchableOpacity
+                    style={[styles.requestPermissionBtn, { backgroundColor: '#e67e22' }]}
+                    onPress={async () => {
+                      if (notifPermission === 'denied') {
+                        Linking.openSettings();
+                      } else {
+                        const { status } = await Notifications.requestPermissionsAsync();
+                        setNotifPermission(status === 'granted' ? 'granted' : 'denied');
+                      }
+                    }}
+                  >
+                    <Ionicons name="notifications-outline" size={16} color="#fff" style={{ marginRight: 6 }} />
+                    <Text style={styles.requestPermissionBtnText}>
+                      {notifPermission === 'denied' ? 'Activer dans les Réglages' : 'Activer les notifications'}
+                    </Text>
                   </TouchableOpacity>
                 )}
               </>
@@ -2061,7 +2130,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     paddingVertical: 12,
     borderRadius: 10,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     marginTop: 16,
   },
   requestPermissionBtnText: {

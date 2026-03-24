@@ -13,7 +13,11 @@
       "infoPlist": {
         "NSCameraUsageDescription": "L'app a besoin d'accéder à l'appareil photo pour scanner les factures",
         "NSPhotoLibraryUsageDescription": "L'app a besoin d'accéder à vos photos pour sélectionner des factures",
-        "NSPhotoLibraryAddUsageDescription": "L'app a besoin de sauvegarder des photos"
+        "NSPhotoLibraryAddUsageDescription": "L'app a besoin de sauvegarder des photos",
+        "NSLocationWhenInUseUsageDescription": "Le Court Central utilise votre position pour enregistrer automatiquement vos jours de présence dans chaque pays, conformément au suivi de résidence fiscale.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Le Court Central utilise votre position en arrière-plan pour enregistrer automatiquement vos jours de présence, même lorsque l'app est fermée.",
+        "NSLocationAlwaysUsageDescription": "Le Court Central utilise votre position en arrière-plan pour enregistrer automatiquement vos jours de présence, même lorsque l'app est fermée.",
+        "UIBackgroundModes": ["location", "fetch"]
       }
     },
     "android": {
@@ -26,7 +30,13 @@
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
-        "android.permission.READ_MEDIA_IMAGES"
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_LOCATION",
+        "android.permission.RECEIVE_BOOT_COMPLETED"
       ]
     },
     "web": {
@@ -64,6 +74,25 @@
         "expo-document-picker",
         {
           "iCloudContainerEnvironment": "Production"
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Le Court Central utilise votre position en arrière-plan pour enregistrer automatiquement vos jours de présence pour le suivi fiscal.",
+          "locationAlwaysPermission": "Le Court Central utilise votre position en arrière-plan pour enregistrer automatiquement vos jours de présence, même lorsque l'app est fermée.",
+          "locationWhenInUsePermission": "Le Court Central utilise votre position pour enregistrer vos jours de présence dans chaque pays.",
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": true
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#2D5016",
+          "sounds": [],
+          "enableBackgroundRemoteNotifications": false
         }
       ]
     ],
