@@ -211,8 +211,8 @@ export default function StaffDocuments() {
       {/* Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.headerTitle}>Documents</Text>
-          <Text style={styles.headerSubtitle}>{documents.length} document{documents.length !== 1 ? 's' : ''}</Text>
+          <Text style={styles.headerTitle}>Mes justificatifs</Text>
+          <Text style={styles.headerSubtitle}>{documents.length} document{documents.length !== 1 ? 's' : ''} · visibles par le joueur</Text>
         </View>
         <TouchableOpacity style={styles.ribBtn} onPress={() => setShowRibModal(true)}>
           <Ionicons name="card-outline" size={18} color="#1e3c72" />
@@ -235,7 +235,7 @@ export default function StaffDocuments() {
             <View style={styles.emptyState}>
               <Ionicons name="folder-open-outline" size={64} color="#D1D5DB" />
               <Text style={styles.emptyTitle}>Aucun document</Text>
-              <Text style={styles.emptyText}>Les documents du joueur apparaîtront ici</Text>
+              <Text style={styles.emptyText}>Ajoutez vos justificatifs de frais — ils seront visibles par le joueur</Text>
             </View>
           ) : (
             documents.map(doc => {

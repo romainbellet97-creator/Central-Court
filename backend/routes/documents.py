@@ -52,8 +52,6 @@ class DocumentCreate(BaseModel):
     fileType: str = "image"
     fileBase64: Optional[str] = None  # Store original file
     userId: Optional[str] = None
-    # Staff upload fields (ignored for player uploads)
-    uploadedByName: Optional[str] = None
 
 
 class DocumentUpdate(BaseModel):
@@ -85,7 +83,8 @@ class DocumentResponse(BaseModel):
     fileType: str = "image"
     hasFile: bool = False
     userId: Optional[str] = None
-    uploadedByName: Optional[str] = None  # Name of staff who uploaded, None if player
+    playerId: Optional[str] = None       # Set on staff docs: which player can see this
+    uploadedByName: Optional[str] = None # Set on staff docs: staff member's name
     createdAt: Optional[str] = None
     updatedAt: Optional[str] = None
 
@@ -155,6 +154,7 @@ def serialize_document(doc: dict) -> dict:
         "fileType": doc.get("fileType", "image"),
         "hasFile": bool(doc.get("fileBase64")),
         "userId": doc.get("userId"),
+        "playerId": doc.get("playerId"),
         "uploadedByName": doc.get("uploadedByName"),
         "createdAt": doc.get("createdAt").isoformat() if doc.get("createdAt") else None,
         "updatedAt": doc.get("updatedAt").isoformat() if doc.get("updatedAt") else None,
@@ -165,8 +165,10 @@ def serialize_document(doc: dict) -> dict:
 
 @router.post("/documents", response_model=DocumentResponse)
 async def create_document(request: Request, doc: DocumentCreate):
-    """Create a new document. SECURITY FIX: Use auth userId.
-    Staff uploads set userId to their linked player and record uploadedByName."""
+    """Create a new document.
+    - Player: userId = player, playerId = None
+    - Staff: userId = staff's own ID, playerId = linked player's ID (visible to player)
+    """
     if db is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
 
@@ -174,11 +176,12 @@ async def create_document(request: Request, doc: DocumentCreate):
     now = datetime.now(timezone.utc)
 
     if staff_ctx:
-        # Staff uploading on behalf of their linked player
-        target_user_id = staff_ctx["player_id"]
+        owner_user_id = staff_ctx["user_id"]    # staff owns the document
+        player_id = staff_ctx["player_id"]      # player can see it
         uploaded_by_name = staff_ctx["name"]
     else:
-        target_user_id = await get_current_user_id(request)
+        owner_user_id = await get_current_user_id(request)
+        player_id = None
         uploaded_by_name = None
 
     document = {
@@ -197,7 +200,8 @@ async def create_document(request: Request, doc: DocumentCreate):
         "description": doc.description,
         "fileType": doc.fileType,
         "fileBase64": doc.fileBase64,
-        "userId": target_user_id,
+        "userId": owner_user_id,
+        "playerId": player_id,
         "uploadedByName": uploaded_by_name,
         "createdAt": now,
         "updatedAt": now,
@@ -219,43 +223,49 @@ async def get_documents(
     limit: int = Query(default=100, le=500),
     skip: int = Query(default=0, ge=0)
 ):
-    """Get documents. Staff can view their linked player's documents."""
+    """Get documents.
+    - Staff: only their OWN submissions (userId = staff_id).
+    - Player: their own docs + staff submissions visible to them (playerId = player_id).
+    """
     if db is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
 
     staff_ctx = await get_staff_context(request)
 
     if staff_ctx:
-        # Staff: always fetch their linked player's documents
-        target_user_id = staff_ctx["player_id"]
-        if not target_user_id:
-            return []
-    elif userId:
-        # Legacy param or admin use — only allow if matches auth user
-        current_user_id = await get_current_user_id(request)
-        target_user_id = userId if current_user_id == "default-user" else current_user_id
+        # Staff sees only documents THEY uploaded
+        base_query: dict = {"userId": staff_ctx["user_id"]}
     else:
-        target_user_id = await get_current_user_id(request)
-    
-    query = {"userId": target_user_id}
-    
+        current_user_id = await get_current_user_id(request)
+        # Player sees their own docs AND staff submissions addressed to them
+        base_query = {"$or": [
+            {"userId": current_user_id, "playerId": None},
+            {"userId": current_user_id, "playerId": {"$exists": False}},
+            {"playerId": current_user_id},
+        ]}
+
+    # Apply optional filters on top
+    extra: dict = {}
     if category:
-        query["category"] = category
-    
-    # Date filtering
+        extra["category"] = category
     if startDate or endDate:
-        date_query = {}
+        date_q: dict = {}
         if startDate:
-            date_query["$gte"] = startDate
+            date_q["$gte"] = startDate
         if endDate:
-            date_query["$lte"] = endDate
-        if date_query:
-            query["dateFacture"] = date_query
-    
-    print(f"[DEBUG] Documents query: {query}")
+            date_q["$lte"] = endDate
+        extra["dateFacture"] = date_q
+
+    if extra:
+        if "$or" in base_query:
+            query = {"$and": [base_query, extra]}
+        else:
+            query = {**base_query, **extra}
+    else:
+        query = base_query
+
     cursor = db.documents.find(query, {"fileBase64": 0}).sort("createdAt", -1).skip(skip).limit(limit)
     documents = await cursor.to_list(length=limit)
-    print(f"[DEBUG] Found {len(documents)} documents")
     
     return [serialize_document(doc) for doc in documents]
 
@@ -470,19 +480,20 @@ async def upload_document_multipart(
     request: Request,
     file: UploadFile = File(...),
 ):
-    """Multipart upload endpoint used by staff to add documents to a player's vault.
-    Runs OCR automatically, stores result with uploadedByName set to staff member's name."""
+    """Multipart upload with OCR. Works for both players and staff.
+    Staff: document owned by staff (userId=staff_id), visible to linked player (playerId=player_id).
+    Player: document owned by player, no playerId."""
     if db is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
 
     staff_ctx = await get_staff_context(request)
     if staff_ctx:
-        target_user_id = staff_ctx["player_id"]
+        owner_user_id = staff_ctx["user_id"]   # staff owns the document
+        player_id = staff_ctx["player_id"]     # player can see it
         uploaded_by_name = staff_ctx["name"]
-        if not target_user_id:
-            raise HTTPException(status_code=400, detail="Aucun joueur lié à ce compte staff")
     else:
-        target_user_id = await get_current_user_id(request)
+        owner_user_id = await get_current_user_id(request)
+        player_id = None
         uploaded_by_name = None
 
     # Validate file type
@@ -504,10 +515,10 @@ async def upload_document_multipart(
     if len(file_bytes) > 20 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="Fichier trop volumineux (max 20 MB)")
 
-    # Run OCR
+    # Run OCR — use data even on partial success (OCR may fail but still return category/date)
     try:
         ocr_result = await analyze_document(file_bytes, filename, content_type)
-        invoice_data = ocr_result.get("data", {}) if ocr_result.get("success") else {}
+        invoice_data = ocr_result.get("data") or {}
     except Exception:
         invoice_data = {}
 
@@ -524,6 +535,16 @@ async def upload_document_multipart(
     }
     category = CAT_MAP.get(raw_cat, raw_cat)
 
+    # Normalize date to YYYY-MM-DD (OCR may return DD/MM/YYYY)
+    raw_date = invoice_data.get("dateFacture")
+    if raw_date and "/" in str(raw_date):
+        try:
+            parts = raw_date.split("/")
+            if len(parts) == 3 and len(parts[2]) == 4:
+                raw_date = f"{parts[2]}-{parts[1].zfill(2)}-{parts[0].zfill(2)}"
+        except Exception:
+            pass
+
     document = {
         "name": filename,
         "category": category,
@@ -532,7 +553,7 @@ async def upload_document_multipart(
         "montantTVA": invoice_data.get("montantTVA"),
         "currency": invoice_data.get("currency", "EUR"),
         "numeroFacture": invoice_data.get("numeroFacture"),
-        "dateFacture": invoice_data.get("dateFacture"),
+        "dateFacture": raw_date,
         "fournisseur": invoice_data.get("fournisseur"),
         "adresse": invoice_data.get("adresse"),
         "lignes": invoice_data.get("lignes", []),
@@ -540,7 +561,8 @@ async def upload_document_multipart(
         "description": invoice_data.get("description"),
         "fileType": file_type,
         "fileBase64": file_base64,
-        "userId": target_user_id,
+        "userId": owner_user_id,
+        "playerId": player_id,
         "uploadedByName": uploaded_by_name,
         "createdAt": now,
         "updatedAt": now,
