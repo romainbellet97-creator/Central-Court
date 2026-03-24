@@ -53,6 +53,15 @@ api.interceptors.request.use(async (config) => {
   const token = await getStoredToken();
   if (token) {
     config.headers['Authorization'] = `Bearer ${token}`;
+    // Pass active player for multi-player staff members
+    try {
+      const activePlayer = Platform.OS === 'web'
+        ? (typeof localStorage !== 'undefined' ? localStorage.getItem('active_player_id') : null)
+        : await SecureStore.getItemAsync('active_player_id');
+      if (activePlayer) {
+        config.headers['X-Active-Player-Id'] = activePlayer;
+      }
+    } catch { /* ignore */ }
   }
   return config;
 });

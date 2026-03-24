@@ -101,9 +101,12 @@ def serialize_invitation(inv: dict) -> dict:
 
 def serialize_staff(staff: dict) -> dict:
     """Convert MongoDB staff member to API response"""
+    player_id = staff.get("playerId", "")
+    player_ids = staff.get("playerIds") or ([player_id] if player_id else [])
     return {
         "id": str(staff["_id"]),
-        "playerId": staff.get("playerId", ""),
+        "playerId": player_id,
+        "playerIds": player_ids,
         "invitationId": staff.get("invitationId"),
         "email": staff.get("email", ""),
         "firstName": staff.get("firstName", ""),
@@ -386,23 +389,56 @@ async def staff_signup(request: StaffSignupRequest):
     if expires_at and expires_at < now:
         raise HTTPException(status_code=400, detail="Invitation expirée")
     
-    # Check if email already registered as staff
+    import hashlib
+    player_id = invitation["playerId"]
+
+    # Check if a staff member with this email already exists (any player)
     existing_staff = await db.staff_members.find_one({
         "email": invitation["inviteeEmail"],
-        "playerId": invitation["playerId"],
         "status": {"$ne": "removed"}
     })
-    
+
     if existing_staff:
-        raise HTTPException(status_code=400, detail="Un compte existe déjà avec cet email")
-    
-    # Hash password (basic hash for now - should use bcrypt in production)
-    import hashlib
+        # Check if already linked to THIS player
+        existing_player_ids = existing_staff.get("playerIds") or (
+            [existing_staff["playerId"]] if existing_staff.get("playerId") else []
+        )
+        if player_id in existing_player_ids:
+            raise HTTPException(status_code=400, detail="Vous êtes déjà membre de l'équipe de ce joueur")
+
+        # Link existing staff account to the new player (multi-player)
+        new_player_ids = existing_player_ids + [player_id]
+        auth_token = f"staff_{generate_token(48)}"
+        await db.staff_members.update_one(
+            {"_id": existing_staff["_id"]},
+            {"$set": {
+                "playerIds": new_player_ids,
+                "authToken": auth_token,
+                "lastLoginAt": now,
+            }}
+        )
+        await db.invitations.update_one(
+            {"_id": invitation["_id"]},
+            {"$set": {"status": "accepted", "acceptedAt": now}}
+        )
+        existing_staff["playerIds"] = new_player_ids
+        existing_staff["authToken"] = auth_token
+        return {
+            "success": True,
+            "staff": serialize_staff(existing_staff),
+            "authToken": auth_token,
+        }
+
+    # New staff member — hash password
     password_hash = hashlib.sha256(request.password.encode()).hexdigest()
-    
+
+    # Generate auth token with staff_ prefix (required by auth_helpers.py)
+    auth_token = f"staff_{generate_token(48)}"
+
     # Create staff member
     staff = {
-        "playerId": invitation["playerId"],
+        "playerId": player_id,
+        "playerIds": [player_id],
         "invitationId": str(invitation["_id"]),
         "email": invitation["inviteeEmail"],
         "firstName": request.firstName,
@@ -413,31 +449,21 @@ async def staff_signup(request: StaffSignupRequest):
         "roleCustom": invitation.get("roleCustom"),
         "permissions": get_default_permissions(invitation["role"]),
         "status": "active",
+        "authToken": auth_token,
         "createdAt": now,
         "invitedAt": invitation["sentAt"],
         "joinedAt": now,
     }
-    
+
     result = await db.staff_members.insert_one(staff)
     staff["_id"] = result.inserted_id
-    
+
     # Update invitation status
     await db.invitations.update_one(
         {"_id": invitation["_id"]},
         {"$set": {"status": "accepted", "acceptedAt": now}}
     )
-    
-    # Generate simple auth token (should use JWT in production)
-    auth_token = generate_token(64)
-    
-    # Store auth token
-    await db.staff_tokens.insert_one({
-        "staffId": str(staff["_id"]),
-        "token": auth_token,
-        "createdAt": now,
-        "expiresAt": now + timedelta(days=30),
-    })
-    
+
     return {
         "success": True,
         "staff": serialize_staff(staff),

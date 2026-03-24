@@ -79,14 +79,26 @@ async def get_staff_context(request: Request) -> Optional[dict]:
 
     staff = await db.staff_members.find_one(
         {"authToken": session_token, "status": "active"},
-        {"_id": 1, "playerId": 1, "firstName": 1, "lastName": 1, "role": 1, "permissions": 1}
+        {"_id": 1, "playerId": 1, "playerIds": 1, "firstName": 1, "lastName": 1, "role": 1, "permissions": 1}
     )
     if not staff:
         return None
 
+    # Resolve the effective player_id (supports multi-player)
+    default_player_id = staff.get("playerId")
+    player_ids = staff.get("playerIds") or ([default_player_id] if default_player_id else [])
+
+    # Honour X-Active-Player-Id header if valid
+    requested_player = request.headers.get("X-Active-Player-Id")
+    if requested_player and requested_player in player_ids:
+        effective_player_id = requested_player
+    else:
+        effective_player_id = default_player_id or (player_ids[0] if player_ids else None)
+
     return {
         "user_id": f"staff_{str(staff['_id'])}",
-        "player_id": staff.get("playerId"),
+        "player_id": effective_player_id,
+        "player_ids": player_ids,
         "name": f"{staff.get('firstName', '')} {staff.get('lastName', '')}".strip() or "Staff",
         "role": staff.get("role", "agent"),
         "permissions": staff.get("permissions", {}),

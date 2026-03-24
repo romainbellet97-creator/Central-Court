@@ -10,8 +10,10 @@ export interface User {
   email: string;
   name: string;
   picture?: string;
-  role: 'player' | 'agent' | 'medical' | 'technical' | 'logistics' | 'family';
+  role: 'player' | 'tennis_coach' | 'physical_coach' | 'physio' | 'agent' | 'family' | 'other'
+      | 'medical' | 'technical' | 'logistics'; // legacy compat
   player_id?: string;
+  playerIds?: string[];
   isStaff?: boolean;
   firstName?: string;
   lastName?: string;
@@ -27,6 +29,7 @@ interface AuthContextType {
   loginPlayer: (email: string, password: string) => Promise<boolean>;
   setUserSession: (token: string, userData: Partial<User>) => Promise<void>;
   setUserFromStaffSignup: (userData: User, token: string) => Promise<void>;
+  switchPlayer: (playerId: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -52,26 +55,34 @@ const API_URL = getApiBase();
 
 // Helper to get/set session token
 const getSessionToken = async (): Promise<string | null> => {
-  if (Platform.OS === 'web') {
-    return localStorage.getItem('session_token');
-  }
+  if (Platform.OS === 'web') return localStorage.getItem('session_token');
   return await SecureStore.getItemAsync('session_token');
 };
 
 const setSessionToken = async (token: string): Promise<void> => {
-  if (Platform.OS === 'web') {
-    localStorage.setItem('session_token', token);
-  } else {
-    await SecureStore.setItemAsync('session_token', token);
-  }
+  if (Platform.OS === 'web') localStorage.setItem('session_token', token);
+  else await SecureStore.setItemAsync('session_token', token);
 };
 
 const removeSessionToken = async (): Promise<void> => {
-  if (Platform.OS === 'web') {
-    localStorage.removeItem('session_token');
-  } else {
-    await SecureStore.deleteItemAsync('session_token');
-  }
+  if (Platform.OS === 'web') localStorage.removeItem('session_token');
+  else await SecureStore.deleteItemAsync('session_token');
+};
+
+// Helper to persist active player selection for multi-player staff
+const getActivePlayerId = async (): Promise<string | null> => {
+  if (Platform.OS === 'web') return localStorage.getItem('active_player_id');
+  return await SecureStore.getItemAsync('active_player_id');
+};
+
+const setActivePlayerId = async (id: string): Promise<void> => {
+  if (Platform.OS === 'web') localStorage.setItem('active_player_id', id);
+  else await SecureStore.setItemAsync('active_player_id', id);
+};
+
+const removeActivePlayerId = async (): Promise<void> => {
+  if (Platform.OS === 'web') localStorage.removeItem('active_player_id');
+  else await SecureStore.deleteItemAsync('active_player_id');
 };
 
 // Parse session_id from URL
@@ -227,7 +238,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (response.ok) {
         const data = await response.json();
         await setSessionToken(data.session_token);
-        setUser(data.user);
+
+        // Restore previously chosen active player for multi-player staff
+        const userData: User = data.user;
+        const playerIds: string[] = userData.playerIds || (userData.player_id ? [userData.player_id] : []);
+        if (playerIds.length > 1) {
+          const saved = await getActivePlayerId();
+          if (saved && playerIds.includes(saved)) {
+            userData.player_id = saved;
+          }
+        }
+
+        setUser(userData);
         return true;
       } else {
         return false;
@@ -238,6 +260,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Switch active player (for multi-player staff members)
+  const switchPlayer = async (playerId: string): Promise<void> => {
+    await setActivePlayerId(playerId);
+    setUser(prev => prev ? { ...prev, player_id: playerId } : null);
   };
 
   // Set user after staff signup (no API call needed, data already available)
@@ -289,15 +317,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (token) {
         await fetch(`${API_URL}/api/auth/logout`, {
           method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
+          headers: { 'Authorization': `Bearer ${token}` }
         });
       }
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
       await removeSessionToken();
+      await removeActivePlayerId();
       setUser(null);
     }
   };
@@ -318,6 +345,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         loginPlayer,
         setUserSession,
         setUserFromStaffSignup,
+        switchPlayer,
         logout,
         refreshUser,
       }}

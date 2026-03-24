@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -57,11 +58,14 @@ interface Alert {
 }
 
 interface PlayerProfile {
+  id?: string;
   name: string;
+  prenom?: string;
   firstName?: string;
   lastName?: string;
   ranking?: number;
   rankingPoints?: number;
+  classement?: string;
 }
 
 // Helper to get day name
@@ -92,9 +96,9 @@ const getWeekBounds = () => {
 };
 
 export default function StaffDashboard() {
-  const { user } = useAuth();
+  const { user, switchPlayer } = useAuth();
   const insets = useSafeAreaInsets();
-  
+
   const [weekEvents, setWeekEvents] = useState<WeekEvent[]>([]);
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [playerProfile, setPlayerProfile] = useState<PlayerProfile | null>(null);
@@ -102,7 +106,24 @@ export default function StaffDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Multi-player switcher
+  const [allPlayers, setAllPlayers] = useState<PlayerProfile[]>([]);
+  const [showSwitcher, setShowSwitcher] = useState(false);
+
   const linkedPlayerId = user?.player_id;
+  const playerIds = user?.playerIds || (linkedPlayerId ? [linkedPlayerId] : []);
+
+  // Fetch list of all linked players for switcher
+  const loadAllPlayers = useCallback(async () => {
+    if (playerIds.length <= 1) return;
+    try {
+      const res = await authFetch('/api/staff/me/players');
+      if (res.ok) {
+        const data = await res.json();
+        setAllPlayers(data.players || []);
+      }
+    } catch { /* ignore */ }
+  }, [playerIds.length]);
 
   const loadDashboardData = useCallback(async () => {
     if (!linkedPlayerId) {
@@ -164,7 +185,8 @@ export default function StaffDashboard() {
 
   useEffect(() => {
     loadDashboardData();
-  }, [loadDashboardData]);
+    loadAllPlayers();
+  }, [loadDashboardData, loadAllPlayers]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -203,12 +225,57 @@ export default function StaffDashboard() {
       {/* Header */}
       <LinearGradient colors={['#1a2744', '#2d4a6f']} style={styles.header}>
         <View style={styles.headerContent}>
-          <Text style={styles.greeting}>Bonjour, {user?.name?.split(' ')[0] || 'Staff'} 👋</Text>
-          <Text style={styles.subtitle}>
-            {staffRoleEmoji} {staffRoleLabel} · Joueur : {playerName}
-          </Text>
+          <View style={styles.headerTop}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.greeting}>Bonjour, {user?.name?.split(' ')[0] || 'Staff'} 👋</Text>
+              <Text style={styles.subtitle}>{staffRoleEmoji} {staffRoleLabel}</Text>
+            </View>
+            {/* Player switcher button — only shown when staff manages multiple players */}
+            {playerIds.length > 1 && (
+              <TouchableOpacity style={styles.switcherBtn} onPress={() => setShowSwitcher(true)}>
+                <Text style={styles.switcherBtnLabel} numberOfLines={1}>{playerName}</Text>
+                <Ionicons name="chevron-down" size={14} color="rgba(255,255,255,0.8)" />
+              </TouchableOpacity>
+            )}
+            {playerIds.length === 1 && (
+              <Text style={styles.subtitlePlayer}>👤 {playerName}</Text>
+            )}
+          </View>
         </View>
       </LinearGradient>
+
+      {/* Player Switcher Modal */}
+      <Modal visible={showSwitcher} transparent animationType="fade" onRequestClose={() => setShowSwitcher(false)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowSwitcher(false)}>
+          <View style={styles.switcherModal}>
+            <Text style={styles.switcherTitle}>Choisir un joueur</Text>
+            {(allPlayers.length > 0 ? allPlayers : playerIds.map(id => ({ id, prenom: id }))).map(p => {
+              const pid = p.id || (p as any).id;
+              const name = p.prenom || p.name || pid;
+              const isActive = pid === linkedPlayerId;
+              return (
+                <TouchableOpacity
+                  key={pid}
+                  style={[styles.switcherItem, isActive && styles.switcherItemActive]}
+                  onPress={async () => {
+                    await switchPlayer(pid);
+                    setShowSwitcher(false);
+                  }}
+                >
+                  <View style={styles.switcherAvatar}>
+                    <Text style={styles.switcherAvatarText}>{name.charAt(0).toUpperCase()}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.switcherItemName, isActive && styles.switcherItemNameActive]}>{name}</Text>
+                    {p.classement && <Text style={styles.switcherItemSub}>#{p.classement}</Text>}
+                  </View>
+                  {isActive && <Ionicons name="checkmark-circle" size={20} color="#4A9B8E" />}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       <ScrollView
         style={styles.scrollView}
@@ -358,6 +425,96 @@ const styles = StyleSheet.create({
   },
   headerContent: {
     gap: 4,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  subtitlePlayer: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.75)',
+    flexShrink: 1,
+  },
+  switcherBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+    maxWidth: 140,
+  },
+  switcherBtnLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#fff',
+    flexShrink: 1,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  switcherModal: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    width: '100%',
+    maxWidth: 360,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
+    elevation: 8,
+  },
+  switcherTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1a2744',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  switcherItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    gap: 12,
+    marginBottom: 4,
+  },
+  switcherItemActive: {
+    backgroundColor: '#F0FDF9',
+  },
+  switcherAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#1a2744',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  switcherAvatarText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  switcherItemName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1a2744',
+  },
+  switcherItemNameActive: {
+    color: '#4A9B8E',
+  },
+  switcherItemSub: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 1,
   },
   greeting: {
     fontSize: 24,

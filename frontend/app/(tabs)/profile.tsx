@@ -237,9 +237,14 @@ export default function ProfileScreen() {
       
       const invitation = response.data;
       const roleInfo = STAFF_ROLES.find(r => r.id === selectedRole);
-      // BUG #3 FIX: Utiliser la variable d'environnement au lieu d'un domaine hardcodé
-      const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://multi-tenant-secure-2.preview.emergentagent.com';
-      const webUrl = `${backendUrl}/join/${invitation.token}`;
+      // Build join URL pointing to the frontend (not the backend API)
+      let webUrl: string;
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        webUrl = `${window.location.origin}/join/${invitation.token}`;
+      } else {
+        const frontendWebUrl = process.env.EXPO_PUBLIC_WEB_URL || process.env.EXPO_PUBLIC_BACKEND_URL?.replace(':8001', ':8081') || '';
+        webUrl = `${frontendWebUrl}/join/${invitation.token}`;
+      }
       
       // Add to local team
       setTeam(prev => [...prev, {

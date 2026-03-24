@@ -728,6 +728,9 @@ async def staff_login(req: StaffLoginRequest):
         }}
     )
     
+    player_id = staff.get("playerId", "")
+    player_ids = staff.get("playerIds") or ([player_id] if player_id else [])
+
     return {
         "success": True,
         "session_token": auth_token,
@@ -738,10 +741,37 @@ async def staff_login(req: StaffLoginRequest):
             "firstName": staff.get("firstName"),
             "lastName": staff.get("lastName"),
             "role": staff.get("role", "agent"),
-            "player_id": staff.get("playerId"),
+            "player_id": player_id,
+            "playerIds": player_ids,
             "isStaff": True,
         }
     }
+
+
+@app.get("/api/staff/me/players")
+async def get_staff_players(request: Request):
+    """Return all player profiles linked to the current staff member."""
+    staff_ctx = await get_staff_context(request)
+    if not staff_ctx:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    staff = await db.staff_members.find_one(
+        {"authToken": request.headers.get("Authorization", "").replace("Bearer ", ""), "status": "active"},
+        {"_id": 0, "playerIds": 1, "playerId": 1}
+    )
+    if not staff:
+        raise HTTPException(status_code=401, detail="Staff member not found")
+
+    player_ids = staff.get("playerIds") or ([staff["playerId"]] if staff.get("playerId") else [])
+    players = []
+    for pid in player_ids:
+        try:
+            player = await db.users.find_one({"_id": ObjectId(pid)}, {"_id": 0, "user_id": 1, "prenom": 1, "classement": 1, "circuits": 1})
+            if player:
+                players.append({"id": pid, **player})
+        except Exception:
+            pass
+    return {"players": players}
 
 
 class PlayerLoginRequest(BaseModel):
