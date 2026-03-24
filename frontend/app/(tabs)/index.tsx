@@ -40,6 +40,7 @@ import {
   hideTournament as apiHideTournament,
   unhideTournament as apiUnhideTournament,
   checkTournamentConflicts,
+  respondToEvent as apiRespondToEvent,
 } from '../../src/services/api';
 import EventObservationSection from '../../src/components/EventObservationSection';
 
@@ -121,15 +122,24 @@ interface CalendarEvent {
   title: string;
   date: string;
   time?: string;
-  endDate?: string;      // FEATURE #3: Date de fin
-  endTime?: string;      // FEATURE #3: Heure de fin
+  endDate?: string;
+  endTime?: string;
   location?: string;
   description?: string;
   observations?: Observation[];
   createdAt?: string;
-  pendingValidation?: boolean;  // FEATURE #2: En attente de validation
+  pendingValidation?: boolean;
   validationStatus?: 'accepted' | 'refused' | null;
   staffMembers?: { id: string; name: string; role: string }[];
+  // Staff-proposed event fields
+  status?: string; // pending_approval | confirmed | refused | rescheduled
+  proposedBy?: string;
+  proposedByName?: string;
+  proposedByRole?: string;
+  playerNote?: string;
+  alternativeDate?: string;
+  alternativeTime?: string;
+  alternativeEndTime?: string;
 }
 
 interface Tournament {
@@ -199,6 +209,16 @@ export default function CalendarScreen() {
   const [eventNotes, setEventNotes] = useState('');
   const [eventLocation, setEventLocation] = useState('');
   const [endTimeManuallySet, setEndTimeManuallySet] = useState(false);  // Pour auto-update
+
+  // Respond-to-event modal (player replies to staff proposals)
+  const [showRespondModal, setShowRespondModal] = useState(false);
+  const [respondAction, setRespondAction] = useState<'accept' | 'refuse' | 'reschedule' | null>(null);
+  const [respondNote, setRespondNote] = useState('');
+  const [respondAltDate, setRespondAltDate] = useState('');
+  const [respondAltTime, setRespondAltTime] = useState('');
+  const [respondAltEndTime, setRespondAltEndTime] = useState('');
+  const [respondingEvent, setRespondingEvent] = useState<CalendarEvent | null>(null);
+  const [submittingResponse, setSubmittingResponse] = useState(false);
 
   // Tournament Modal
   const [showTournamentModal, setShowTournamentModal] = useState(false);
@@ -668,6 +688,46 @@ export default function CalendarScreen() {
         },
       ]
     );
+  };
+
+  // ── Respond to staff-proposed event ──
+  const openRespondModal = (event: CalendarEvent, action: 'accept' | 'refuse' | 'reschedule') => {
+    setRespondingEvent(event);
+    setRespondAction(action);
+    setRespondNote('');
+    setRespondAltDate(event.date);
+    setRespondAltTime(event.time || '');
+    setRespondAltEndTime(event.endTime || '');
+    setShowEventDetailModal(false);
+    setTimeout(() => setShowRespondModal(true), 150);
+  };
+
+  const handleSubmitResponse = async () => {
+    if (!respondingEvent || !respondAction) return;
+    setSubmittingResponse(true);
+    try {
+      const updated = await apiRespondToEvent(respondingEvent.id, respondAction, {
+        note: respondNote.trim() || undefined,
+        alternativeDate: respondAction === 'reschedule' ? respondAltDate : undefined,
+        alternativeTime: respondAction === 'reschedule' ? respondAltTime : undefined,
+        alternativeEndTime: respondAction === 'reschedule' ? respondAltEndTime : undefined,
+      });
+      // Update local state
+      setEvents(prev => prev.map(e => e.id === respondingEvent.id ? { ...e, ...updated } : e));
+      setShowRespondModal(false);
+      setRespondingEvent(null);
+      const msg = respondAction === 'accept'
+        ? 'Créneau confirmé ✅'
+        : respondAction === 'refuse'
+          ? 'Créneau refusé'
+          : 'Autre horaire proposé 🔄';
+      Alert.alert('Réponse envoyée', msg);
+    } catch (err) {
+      console.error('Respond error:', err);
+      Alert.alert('Erreur', 'Impossible d\'envoyer la réponse');
+    } finally {
+      setSubmittingResponse(false);
+    }
   };
 
   // FEATURE #1: Handler pour le nouveau composant EventObservationSection
@@ -1144,22 +1204,31 @@ export default function CalendarScreen() {
               }
               
               // Rendu normal pour les événements manuels
-              // FEATURE #3: Afficher heure début → fin + nom complet
               const hasTimeRange = event.time && event.endTime;
-              
+              const isPendingProposal = event.status === 'pending_approval';
+
               return (
                 <TouchableOpacity
                   key={event.id}
-                  style={styles.eventCard}
+                  style={[styles.eventCard, isPendingProposal && { borderLeftWidth: 3, borderLeftColor: '#F59E0B' }]}
                   onPress={() => {
                     setSelectedEvent(event);
                     setShowEventDetailModal(true);
                   }}
                   data-testid={`event-card-${event.id}`}
                 >
-                  <View style={[styles.eventColorBar, { backgroundColor: eventConfig.color }]} />
+                  <View style={[styles.eventColorBar, { backgroundColor: isPendingProposal ? '#F59E0B' : eventConfig.color }]} />
                   <View style={styles.eventContent}>
-                    {/* FEATURE #3: Ligne 1 - Icône + nom COMPLET (pas de numberOfLines) */}
+                    {/* Pending proposal badge */}
+                    {isPendingProposal && (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 }}>
+                        <Ionicons name="time-outline" size={12} color="#D97706" />
+                        <Text style={{ fontSize: 11, color: '#D97706', fontWeight: '600' }}>
+                          En attente · {event.proposedByName || 'Staff'}
+                        </Text>
+                      </View>
+                    )}
+                    {/* Ligne 1 - Icône + nom COMPLET */}
                     <View style={styles.eventTitleRow}>
                       <Text style={styles.eventIcon}>
                         {eventConfig.label.split(' ')[0]}
@@ -1813,24 +1882,71 @@ export default function CalendarScreen() {
                     }}
                   />
 
-                  {/* Actions */}
-                  <View style={styles.actionButtons}>
-                    <TouchableOpacity
-                      style={styles.editButton}
-                      onPress={() => openEditEventModal(selectedEvent)}
-                    >
-                      <Ionicons name="pencil" size={20} color="#FFF" />
-                      <Text style={styles.editButtonText}>Modifier</Text>
-                    </TouchableOpacity>
+                  {/* Staff proposal info */}
+                  {selectedEvent.proposedByName && (
+                    <View style={{ backgroundColor: '#F3F4F6', borderRadius: 10, padding: 12, marginBottom: 16 }}>
+                      <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 2 }}>Proposé par</Text>
+                      <Text style={{ fontSize: 14, fontWeight: '600', color: '#1F2937' }}>
+                        {selectedEvent.proposedByName}
+                        {selectedEvent.proposedByRole ? ` · ${selectedEvent.proposedByRole}` : ''}
+                      </Text>
+                      {selectedEvent.playerNote && (
+                        <Text style={{ fontSize: 12, color: '#6366F1', marginTop: 6, fontStyle: 'italic' }}>
+                          💬 {selectedEvent.playerNote}
+                        </Text>
+                      )}
+                    </View>
+                  )}
 
-                    <TouchableOpacity
-                      style={styles.deleteButton}
-                      onPress={handleDeleteEvent}
-                    >
-                      <Ionicons name="trash-outline" size={20} color="#EF4444" />
-                      <Text style={styles.deleteButtonText}>Supprimer</Text>
-                    </TouchableOpacity>
-                  </View>
+                  {/* Response buttons for pending proposals */}
+                  {selectedEvent.status === 'pending_approval' ? (
+                    <View style={{ gap: 10, marginBottom: 12 }}>
+                      <Text style={{ fontSize: 13, color: '#374151', fontWeight: '600', marginBottom: 4 }}>
+                        Répondre à cette proposition :
+                      </Text>
+                      <TouchableOpacity
+                        style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#10B981', borderRadius: 12, paddingVertical: 13 }}
+                        onPress={() => openRespondModal(selectedEvent, 'accept')}
+                      >
+                        <Ionicons name="checkmark-circle" size={20} color="#FFF" />
+                        <Text style={{ color: '#FFF', fontWeight: '700', fontSize: 15 }}>Accepter</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#8B5CF6', borderRadius: 12, paddingVertical: 13 }}
+                        onPress={() => openRespondModal(selectedEvent, 'reschedule')}
+                      >
+                        <Ionicons name="swap-horizontal" size={20} color="#FFF" />
+                        <Text style={{ color: '#FFF', fontWeight: '700', fontSize: 15 }}>Proposer un autre horaire</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#FEE2E2', borderRadius: 12, paddingVertical: 13 }}
+                        onPress={() => openRespondModal(selectedEvent, 'refuse')}
+                      >
+                        <Ionicons name="close-circle" size={20} color="#EF4444" />
+                        <Text style={{ color: '#EF4444', fontWeight: '700', fontSize: 15 }}>Refuser</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    /* Normal edit/delete for own events */
+                    !selectedEvent.proposedBy && (
+                      <View style={styles.actionButtons}>
+                        <TouchableOpacity
+                          style={styles.editButton}
+                          onPress={() => openEditEventModal(selectedEvent)}
+                        >
+                          <Ionicons name="pencil" size={20} color="#FFF" />
+                          <Text style={styles.editButtonText}>Modifier</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.deleteButton}
+                          onPress={handleDeleteEvent}
+                        >
+                          <Ionicons name="trash-outline" size={20} color="#EF4444" />
+                          <Text style={styles.deleteButtonText}>Supprimer</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )
+                  )}
 
                   <TouchableOpacity
                     style={styles.closeDetailButton}
@@ -1846,6 +1962,122 @@ export default function CalendarScreen() {
             )}
           </View>
         </View>
+      </Modal>
+
+      {/* ── Respond to staff proposal modal ── */}
+      <Modal
+        visible={showRespondModal}
+        animationType="slide"
+        transparent
+        onRequestClose={() => { setShowRespondModal(false); setRespondingEvent(null); }}
+      >
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+              <TouchableOpacity
+                style={{ flex: 1 }}
+                activeOpacity={1}
+                onPress={() => { setShowRespondModal(false); setRespondingEvent(null); }}
+              />
+              <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24 }}>
+                {/* Header */}
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                  <Text style={{ fontSize: 18, fontWeight: '700', color: '#1a1a1a' }}>
+                    {respondAction === 'accept' ? '✅ Confirmer le créneau' : respondAction === 'refuse' ? '❌ Refuser le créneau' : '🔄 Proposer un autre horaire'}
+                  </Text>
+                  <TouchableOpacity onPress={() => { setShowRespondModal(false); setRespondingEvent(null); }}>
+                    <Ionicons name="close" size={24} color="#666" />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Event info */}
+                {respondingEvent && (
+                  <View style={{ backgroundColor: '#F3F4F6', borderRadius: 10, padding: 12, marginBottom: 16 }}>
+                    <Text style={{ fontWeight: '600', color: '#1F2937' }}>{respondingEvent.title}</Text>
+                    <Text style={{ fontSize: 13, color: '#6B7280', marginTop: 2 }}>
+                      {respondingEvent.date}{respondingEvent.time ? ` · ${respondingEvent.time}` : ''}
+                    </Text>
+                  </View>
+                )}
+
+                {/* Alternative time fields for reschedule */}
+                {respondAction === 'reschedule' && (
+                  <View style={{ marginBottom: 16, gap: 10 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151' }}>Date souhaitée</Text>
+                    <TextInput
+                      style={{ borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 11, fontSize: 15 }}
+                      placeholder="YYYY-MM-DD"
+                      value={respondAltDate}
+                      onChangeText={setRespondAltDate}
+                    />
+                    <View style={{ flexDirection: 'row', gap: 10 }}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 6 }}>Début</Text>
+                        <TextInput
+                          style={{ borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 11, fontSize: 15 }}
+                          placeholder="09:00"
+                          value={respondAltTime}
+                          onChangeText={setRespondAltTime}
+                        />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 6 }}>Fin</Text>
+                        <TextInput
+                          style={{ borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 11, fontSize: 15 }}
+                          placeholder="10:00"
+                          value={respondAltEndTime}
+                          onChangeText={setRespondAltEndTime}
+                        />
+                      </View>
+                    </View>
+                  </View>
+                )}
+
+                {/* Note */}
+                <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 6 }}>
+                  Note {respondAction === 'accept' ? '(optionnel)' : respondAction === 'refuse' ? '(optionnel)' : '(optionnel)'}
+                </Text>
+                <TextInput
+                  style={{ borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 11, fontSize: 15, minHeight: 72, textAlignVertical: 'top', marginBottom: 20 }}
+                  placeholder={respondAction === 'refuse' ? 'Raison du refus...' : 'Message pour le staff...'}
+                  value={respondNote}
+                  onChangeText={setRespondNote}
+                  multiline
+                />
+
+                {/* Submit */}
+                <TouchableOpacity
+                  style={{
+                    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+                    backgroundColor: respondAction === 'accept' ? '#10B981' : respondAction === 'refuse' ? '#EF4444' : '#8B5CF6',
+                    borderRadius: 14, paddingVertical: 15,
+                    opacity: submittingResponse ? 0.6 : 1,
+                  }}
+                  onPress={handleSubmitResponse}
+                  disabled={submittingResponse}
+                >
+                  {submittingResponse
+                    ? <ActivityIndicator color="#FFF" />
+                    : (
+                      <>
+                        <Ionicons
+                          name={respondAction === 'accept' ? 'checkmark-circle' : respondAction === 'refuse' ? 'close-circle' : 'send'}
+                          size={20} color="#FFF"
+                        />
+                        <Text style={{ color: '#FFF', fontWeight: '700', fontSize: 16 }}>
+                          {respondAction === 'accept' ? 'Confirmer' : respondAction === 'refuse' ? 'Refuser' : 'Envoyer la proposition'}
+                        </Text>
+                      </>
+                    )
+                  }
+                </TouchableOpacity>
+              </View>
+            </View>
+          </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Add Observation Modal - BUG #1 FIX: Ajout backdrop et onRequestClose */}

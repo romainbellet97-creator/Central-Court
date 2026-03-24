@@ -18,9 +18,26 @@ import { useAuth } from '../../src/context/AuthContext';
 import { PermissionGate, RestrictedScreen } from '../../src/components/PermissionGate';
 import { getStaffPermissions } from '../../src/types/staff';
 import Constants from 'expo-constants';
+import * as SecureStore from 'expo-secure-store';
 
-const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_BACKEND_URL || 
+const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_BACKEND_URL ||
                 process.env.EXPO_PUBLIC_BACKEND_URL || '';
+
+async function getStoredToken(): Promise<string | null> {
+  return SecureStore.getItemAsync('auth_token');
+}
+
+async function authFetch(path: string, options: RequestInit = {}): Promise<Response> {
+  const token = await getStoredToken();
+  return fetch(`${API_URL}${path}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options.headers as Record<string, string> || {}),
+    },
+  });
+}
 
 // Configure French locale
 LocaleConfig.locales['fr'] = {
@@ -42,7 +59,18 @@ interface CalendarEvent {
   status?: string;
   proposedBy?: string;
   proposedByName?: string;
+  playerNote?: string;
+  alternativeDate?: string;
+  alternativeTime?: string;
+  _masked?: boolean; // personal event without details
 }
+
+const EVENT_STATUS_CONFIG: Record<string, { label: string; color: string; icon: string }> = {
+  pending_approval: { label: 'En attente', color: '#F59E0B', icon: 'time' },
+  confirmed:        { label: 'Confirmé',   color: '#10B981', icon: 'checkmark-circle' },
+  refused:          { label: 'Refusé',     color: '#EF4444', icon: 'close-circle' },
+  rescheduled:      { label: 'Autre horaire proposé', color: '#8B5CF6', icon: 'swap-horizontal' },
+};
 
 const EVENT_COLORS: Record<string, string> = {
   training: '#10B981',
@@ -83,14 +111,13 @@ export default function StaffCalendar() {
     }
 
     try {
-      // Get events for 3 months range
       const startDate = new Date();
       startDate.setMonth(startDate.getMonth() - 1);
       const endDate = new Date();
       endDate.setMonth(endDate.getMonth() + 2);
 
-      const response = await fetch(
-        `${API_URL}/api/events?userId=${linkedPlayerId}&startDate=${startDate.toISOString().split('T')[0]}&endDate=${endDate.toISOString().split('T')[0]}`
+      const response = await authFetch(
+        `/api/events?userId=${linkedPlayerId}&startDate=${startDate.toISOString().split('T')[0]}&endDate=${endDate.toISOString().split('T')[0]}`
       );
 
       if (response.ok) {
@@ -151,19 +178,16 @@ export default function StaffCalendar() {
 
     setIsSubmitting(true);
     try {
-      const response = await fetch(`${API_URL}/api/events`, {
+      // Auth header is sent by authFetch → backend detects staff context
+      // and stores event under linked player's userId with status=pending_approval
+      const response = await authFetch(`/api/events`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: linkedPlayerId,
           title: proposeTitle.trim(),
           date: selectedDate,
           time: proposeTime,
           endTime: proposeEndTime,
-          type: 'other',
-          status: 'pending_approval',
-          proposedBy: user?.user_id,
-          proposedByName: user?.name,
+          type: 'training',
           description: proposeNotes.trim() || undefined,
         }),
       });
@@ -269,36 +293,62 @@ export default function StaffCalendar() {
               </View>
             ) : (
               dayEvents.map(event => {
+                const statusCfg = event.status ? EVENT_STATUS_CONFIG[event.status] : null;
                 const isPending = event.status === 'pending_approval';
+                const isMasked = event._masked;
+                const barColor = isMasked
+                  ? '#9CA3AF'
+                  : isPending
+                    ? '#F59E0B'
+                    : (EVENT_COLORS[event.type] || EVENT_COLORS.other);
+
                 return (
-                  <View 
-                    key={event.id} 
-                    style={[styles.eventCard, isPending && styles.eventCardPending]}
+                  <View
+                    key={event.id}
+                    style={[
+                      styles.eventCard,
+                      isPending && styles.eventCardPending,
+                      isMasked && styles.eventCardMasked,
+                    ]}
                   >
-                    <View 
-                      style={[
-                        styles.eventColorBar, 
-                        { backgroundColor: isPending ? '#9CA3AF' : (EVENT_COLORS[event.type] || EVENT_COLORS.other) }
-                      ]} 
-                    />
+                    <View style={[styles.eventColorBar, { backgroundColor: barColor }]} />
                     <View style={styles.eventContent}>
-                      {isPending && (
-                        <View style={styles.pendingBadge}>
-                          <Ionicons name="time" size={12} color="#F59E0B" />
-                          <Text style={styles.pendingText}>En attente de validation</Text>
+                      {/* Status badge */}
+                      {statusCfg && (
+                        <View style={[styles.statusBadge, { backgroundColor: statusCfg.color + '20' }]}>
+                          <Ionicons name={statusCfg.icon as any} size={12} color={statusCfg.color} />
+                          <Text style={[styles.statusBadgeText, { color: statusCfg.color }]}>
+                            {statusCfg.label}
+                          </Text>
                         </View>
                       )}
-                      <Text style={[styles.eventTitle, isPending && styles.textMuted]}>
+
+                      <Text style={[styles.eventTitle, (isPending || isMasked) && styles.textMuted]}>
                         {event.title}
                       </Text>
+
                       {event.time && (
                         <Text style={styles.eventTime}>
                           {event.time}{event.endTime ? ` → ${event.endTime}` : ''}
                         </Text>
                       )}
+
                       {event.proposedByName && (
                         <Text style={styles.proposedBy}>
                           Proposé par {event.proposedByName}
+                        </Text>
+                      )}
+
+                      {/* Show player's response note */}
+                      {event.playerNote && (
+                        <Text style={styles.playerNote}>💬 {event.playerNote}</Text>
+                      )}
+
+                      {/* Rescheduled: show alternative */}
+                      {event.status === 'rescheduled' && event.alternativeDate && (
+                        <Text style={styles.alternativeTime}>
+                          🔄 Horaire suggéré : {event.alternativeDate}
+                          {event.alternativeTime ? ` à ${event.alternativeTime}` : ''}
                         </Text>
                       )}
                     </View>
@@ -550,6 +600,38 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#9CA3AF',
     fontStyle: 'italic',
+    marginTop: 4,
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+    marginBottom: 6,
+  },
+  statusBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  eventCardMasked: {
+    opacity: 0.55,
+    borderStyle: 'dashed',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+  },
+  playerNote: {
+    fontSize: 12,
+    color: '#6366F1',
+    fontStyle: 'italic',
+    marginTop: 4,
+  },
+  alternativeTime: {
+    fontSize: 12,
+    color: '#8B5CF6',
+    fontWeight: '600',
     marginTop: 4,
   },
   fab: {

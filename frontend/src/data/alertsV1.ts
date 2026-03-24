@@ -4,10 +4,16 @@ export type AlertType =
   | 'flight_missing'      // Vol non réservé
   | 'hotel_missing'       // Hôtel non réservé
   | 'registration_pending' // Inscription non confirmée
-  | 'observation_new'     // Nouvelle observation
+  | 'observation_new'     // Nouvelle observation (legacy)
   | 'slot_suggestion'     // Suggestion de créneau
   | 'reminder'            // Rappel général
-  | 'residence_warning';  // Tournoi hors résidence fiscale
+  | 'residence_warning'   // Tournoi hors résidence fiscale
+  | 'event_proposal'      // Staff propose un créneau → notif joueur
+  | 'event_accepted'      // Joueur a accepté → notif staff
+  | 'event_refused'       // Joueur a refusé → notif staff
+  | 'event_rescheduled'   // Joueur propose un autre horaire → notif staff
+  | 'event_comment'       // Nouveau commentaire sur un événement
+  | 'event_modified';     // Événement modifié par le joueur → notif staff
 
 export type AlertPriority = 'high' | 'medium' | 'low';
 
@@ -101,7 +107,43 @@ export const ALERT_TYPE_CONFIG: Record<AlertType, {
     color: '#e67e22',
     label: 'Résidence fiscale',
     actionLabel: 'Voir'
-  }
+  },
+  event_proposal: {
+    icon: '📅',
+    color: '#1e3c72',
+    label: 'Proposition créneau',
+    actionLabel: 'Répondre'
+  },
+  event_accepted: {
+    icon: '✅',
+    color: '#10B981',
+    label: 'Créneau confirmé',
+    actionLabel: 'Voir'
+  },
+  event_refused: {
+    icon: '❌',
+    color: '#EF4444',
+    label: 'Créneau refusé',
+    actionLabel: 'Voir'
+  },
+  event_rescheduled: {
+    icon: '🔄',
+    color: '#F59E0B',
+    label: 'Autre horaire proposé',
+    actionLabel: 'Voir'
+  },
+  event_comment: {
+    icon: '💬',
+    color: '#6366F1',
+    label: 'Commentaire',
+    actionLabel: 'Voir'
+  },
+  event_modified: {
+    icon: '✏️',
+    color: '#8B5CF6',
+    label: 'Événement modifié',
+    actionLabel: 'Voir'
+  },
 };
 
 // Génération d'alertes intelligentes basées sur les tournois

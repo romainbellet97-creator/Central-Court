@@ -99,6 +99,21 @@ export const deleteEvent = (id: string) =>
 export const addObservation = (eventId: string, data: { author: string; role: string; text: string; parentId?: string | null }) =>
   apiFetch<any>(`/api/events/${eventId}/observations`, { method: 'POST', body: JSON.stringify(data) });
 
+export const respondToEvent = (
+  eventId: string,
+  action: 'accept' | 'refuse' | 'reschedule',
+  options?: {
+    note?: string;
+    alternativeDate?: string;
+    alternativeTime?: string;
+    alternativeEndTime?: string;
+  }
+) =>
+  apiFetch<any>(`/api/events/${eventId}/respond`, {
+    method: 'POST',
+    body: JSON.stringify({ action, ...options }),
+  });
+
 // ── Tournaments ──
 export const fetchTournaments = (circuits?: string) =>
   apiFetch<any[]>(circuits ? `/api/tournaments?circuits=${circuits}` : '/api/tournaments');

@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timezone
 import uuid
-from .auth_helpers import get_current_user_id
+from .auth_helpers import get_current_user_id, get_staff_context
 
 router = APIRouter(prefix="/api/events", tags=["events"])
 
@@ -27,6 +27,10 @@ class CreateEventRequest(BaseModel):
     tournamentId: Optional[str] = None
     visibleToStaff: bool = True
     assignedStaffIds: Optional[List[str]] = []
+    # Staff-side fields (ignored when player creates)
+    status: Optional[str] = None
+    proposedBy: Optional[str] = None
+    proposedByName: Optional[str] = None
 
 
 class UpdateEventRequest(BaseModel):
@@ -40,89 +44,172 @@ class UpdateEventRequest(BaseModel):
     description: Optional[str] = None
     cost: Optional[float] = None
     visibleToStaff: Optional[bool] = None
-    notify_staff: Optional[bool] = None  # FEATURE #2: Notifier le staff
-    pending_validation: Optional[bool] = None  # FEATURE #2: En attente de validation
+    notify_staff: Optional[bool] = None
+    pending_validation: Optional[bool] = None
 
 
 class AddObservationRequest(BaseModel):
     author: str
     role: str
     text: str
-    parentId: Optional[str] = None  # FEATURE #1: Support des réponses
+    parentId: Optional[str] = None
+
+
+class RespondEventRequest(BaseModel):
+    """Player response to a staff-proposed event."""
+    action: str  # accept | refuse | reschedule
+    note: Optional[str] = None
+    alternativeDate: Optional[str] = None
+    alternativeTime: Optional[str] = None
+    alternativeEndTime: Optional[str] = None
+
+
+async def _create_alert(user_id: str, alert_type: str, title: str, message: str,
+                         event_id: str, from_name: str = None, from_role: str = None,
+                         priority: str = "medium"):
+    """Helper: insert an alert document into the alerts collection."""
+    alert = {
+        "id": f"alert-evt-{uuid.uuid4().hex[:8]}",
+        "userId": user_id,
+        "type": alert_type,
+        "priority": priority,
+        "title": title,
+        "message": message,
+        "eventId": event_id,
+        "fromUserName": from_name,
+        "fromUserRole": from_role,
+        "read": False,
+        "dismissed": False,
+        "createdAt": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.alerts.insert_one(alert)
+    alert.pop("_id", None)
+    return alert
 
 
 @router.get("")
 async def list_events(
     request: Request,
-    date: Optional[str] = None, 
+    date: Optional[str] = None,
     month: Optional[str] = None,
-    userId: Optional[str] = None,  # Allow explicit userId for staff viewing player's events
+    userId: Optional[str] = None,
     startDate: Optional[str] = None,
     endDate: Optional[str] = None,
 ):
-    """List events, optionally filtered by date or month (YYYY-MM).
-    
-    SECURITY FIX: Events are now filtered by userId.
-    - If userId is provided (staff viewing player), use that
-    - Otherwise use authenticated user's ID
-    - Falls back to 'default-user' for backward compatibility
+    """List events.
+
+    - Player: own events (all types including personal, full details).
+    - Staff: player events via ?userId=, but personal events are masked (no details).
     """
-    # Get user ID from auth or explicit parameter
+    staff_ctx = await get_staff_context(request)
+    is_staff = staff_ctx is not None
+
     if userId:
-        # Staff accessing player's events
         target_user_id = userId
     else:
-        # Get current user's events
         target_user_id = await get_current_user_id(request)
-    
-    # Build query with user isolation
+
     query = {"userId": target_user_id}
-    
+
     if date:
         query["date"] = date
     elif month:
         query["date"] = {"$regex": f"^{month}"}
-    
-    # Support date range for staff dashboard
+
     if startDate and endDate:
         query["date"] = {"$gte": startDate, "$lte": endDate}
-    
+
     events = await db.events.find(query, {"_id": 0}).to_list(500)
+
+    # Mask personal event details when staff is fetching
+    if is_staff:
+        masked = []
+        for ev in events:
+            if ev.get("type") == "personal" and not ev.get("visibleToStaff", True):
+                masked.append({
+                    "id": ev["id"],
+                    "type": "personal",
+                    "title": "Événement personnel",
+                    "date": ev["date"],
+                    "time": ev.get("time"),
+                    "endTime": ev.get("endTime"),
+                    "status": ev.get("status"),
+                    "_masked": True,
+                })
+            else:
+                masked.append(ev)
+        return masked
+
     return events
 
 
 @router.get("/{event_id}")
 async def get_event(request: Request, event_id: str):
-    """Get a single event by ID.
-    
-    SECURITY FIX: Verify ownership before returning.
-    """
+    """Get a single event by ID."""
     current_user_id = await get_current_user_id(request)
+    staff_ctx = await get_staff_context(request)
+
     event = await db.events.find_one({"id": event_id}, {"_id": 0})
-    
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
-    
-    # SECURITY: Check ownership (403 if not owner, unless it's a shared event)
+
     event_owner = event.get("userId")
+
+    # Staff can read events they proposed or that belong to their linked player
+    if staff_ctx:
+        linked_player = staff_ctx.get("player_id")
+        if event_owner != linked_player and event.get("proposedBy") != staff_ctx["user_id"]:
+            raise HTTPException(status_code=403, detail="Access denied")
+        # Mask personal event details for staff
+        if event.get("type") == "personal" and not event.get("visibleToStaff", True):
+            return {
+                "id": event["id"],
+                "type": "personal",
+                "title": "Événement personnel",
+                "date": event["date"],
+                "time": event.get("time"),
+                "endTime": event.get("endTime"),
+                "status": event.get("status"),
+                "_masked": True,
+            }
+        return event
+
     if event_owner and event_owner != current_user_id and current_user_id != "default-user":
         raise HTTPException(status_code=403, detail="Access denied")
-    
+
     return event
 
 
 @router.post("")
 async def create_event(request: Request, req: CreateEventRequest):
     """Create a new event.
-    
-    SECURITY FIX: Associate event with authenticated user.
+
+    - Player creates: stored directly as owner, status=None (no pending).
+    - Staff creates: stored under linked player's userId, status=pending_approval,
+      proposedBy=staff_id. A notification alert is sent to the player.
+    - Staff also see the event as pending on their side.
     """
-    # Get current user ID for ownership
     current_user_id = await get_current_user_id(request)
-    
+    staff_ctx = await get_staff_context(request)
+
+    if staff_ctx and staff_ctx.get("player_id"):
+        # Staff proposing a slot to the player
+        owner_user_id = staff_ctx["player_id"]
+        event_status = "pending_approval"
+        proposed_by = staff_ctx["user_id"]
+        proposed_by_name = staff_ctx["name"]
+        proposed_by_role = staff_ctx.get("role", "")
+    else:
+        owner_user_id = current_user_id
+        event_status = None
+        proposed_by = None
+        proposed_by_name = None
+        proposed_by_role = None
+
+    event_id = f"evt-{uuid.uuid4().hex[:8]}"
     event = {
-        "id": f"evt-{uuid.uuid4().hex[:8]}",
-        "userId": current_user_id,  # SECURITY FIX: Add user ownership
+        "id": event_id,
+        "userId": owner_user_id,
         "type": req.type,
         "title": req.title,
         "date": req.date,
@@ -136,51 +223,149 @@ async def create_event(request: Request, req: CreateEventRequest):
         "tournamentId": req.tournamentId,
         "visibleToStaff": req.visibleToStaff,
         "assignedStaffIds": req.assignedStaffIds or [],
+        "status": event_status,
+        "proposedBy": proposed_by,
+        "proposedByName": proposed_by_name,
+        "proposedByRole": proposed_by_role,
         "createdAt": datetime.now(timezone.utc).isoformat(),
     }
     await db.events.insert_one(event)
     event.pop("_id", None)
+
+    # Notify player when staff proposes a slot
+    if staff_ctx and staff_ctx.get("player_id"):
+        time_str = f" à {req.time}" if req.time else ""
+        await _create_alert(
+            user_id=owner_user_id,
+            alert_type="event_proposal",
+            title=f"{proposed_by_name} propose un créneau",
+            message=f"{req.title} · {req.date}{time_str}",
+            event_id=event_id,
+            from_name=proposed_by_name,
+            from_role=proposed_by_role,
+            priority="medium",
+        )
+
     return event
+
+
+@router.post("/{event_id}/respond")
+async def respond_to_event(request: Request, event_id: str, req: RespondEventRequest):
+    """Player responds to a staff-proposed event.
+
+    Actions:
+      - accept:     status → confirmed, alert sent to proposing staff
+      - refuse:     status → refused, alert sent to proposing staff
+      - reschedule: status → rescheduled, alternative date/time stored,
+                    alert sent to proposing staff
+    """
+    current_user_id = await get_current_user_id(request)
+
+    event = await db.events.find_one({"id": event_id}, {"_id": 0})
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    # Only the event owner (player) can respond
+    if event.get("userId") != current_user_id and current_user_id != "default-user":
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    if event.get("status") not in ("pending_approval", "rescheduled"):
+        raise HTTPException(status_code=400, detail="Event is not awaiting a response")
+
+    if req.action == "accept":
+        new_status = "confirmed"
+        alert_type = "event_accepted"
+        alert_title = f"✅ Créneau confirmé"
+        alert_msg = f"{event['title']} · {event.get('date')} {event.get('time', '')}".strip()
+        if req.note:
+            alert_msg += f" — {req.note}"
+    elif req.action == "refuse":
+        new_status = "refused"
+        alert_type = "event_refused"
+        alert_title = f"❌ Créneau refusé"
+        alert_msg = req.note or f"{event['title']} a été refusé"
+    elif req.action == "reschedule":
+        new_status = "rescheduled"
+        alert_type = "event_rescheduled"
+        new_date = req.alternativeDate or event.get("date")
+        new_time = req.alternativeTime or ""
+        alert_title = f"🔄 Autre horaire proposé"
+        alert_msg = f"{event['title']} · {new_date} {new_time}".strip()
+        if req.note:
+            alert_msg += f" — {req.note}"
+    else:
+        raise HTTPException(status_code=400, detail="Invalid action. Use accept | refuse | reschedule")
+
+    update = {
+        "status": new_status,
+        "playerNote": req.note,
+        "updatedAt": datetime.now(timezone.utc).isoformat(),
+    }
+    if req.action == "reschedule":
+        update["alternativeDate"] = req.alternativeDate
+        update["alternativeTime"] = req.alternativeTime
+        update["alternativeEndTime"] = req.alternativeEndTime
+
+    await db.events.update_one({"id": event_id}, {"$set": update})
+
+    # Notify the staff member who proposed
+    proposed_by = event.get("proposedBy")
+    if proposed_by:
+        await _create_alert(
+            user_id=proposed_by,
+            alert_type=alert_type,
+            title=alert_title,
+            message=alert_msg,
+            event_id=event_id,
+            from_name="Le joueur",
+            priority="medium",
+        )
+
+    updated = await db.events.find_one({"id": event_id}, {"_id": 0})
+    updated.pop("_id", None)
+    return updated
 
 
 @router.put("/{event_id}")
 async def update_event(request: Request, event_id: str, req: UpdateEventRequest):
     """Update an event.
-    
-    SECURITY FIX: Verify ownership before updating.
+
+    - Player can update own events.
+    - Staff can update events they proposed (proposedBy == staff user_id).
     """
     current_user_id = await get_current_user_id(request)
-    
-    # Check event exists and belongs to user
+    staff_ctx = await get_staff_context(request)
+
     event = await db.events.find_one({"id": event_id}, {"_id": 0})
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
-    
-    # SECURITY: Check ownership
+
     event_owner = event.get("userId")
-    if event_owner and event_owner != current_user_id and current_user_id != "default-user":
+    proposed_by = event.get("proposedBy")
+
+    # Access check: owner OR the staff who proposed it
+    is_owner = event_owner == current_user_id or current_user_id == "default-user"
+    is_proposer = staff_ctx and proposed_by == staff_ctx.get("user_id")
+    if not is_owner and not is_proposer:
         raise HTTPException(status_code=403, detail="Access denied")
-    
+
     update_data = {k: v for k, v in req.dict().items() if v is not None}
-    
-    # FEATURE #2: Gérer la notification du staff
-    notify_staff = update_data.pop('notify_staff', None)
-    
+    notify_staff = update_data.pop("notify_staff", None)
+
     if not update_data:
         raise HTTPException(status_code=400, detail="No fields to update")
-    
-    result = await db.events.update_one({"id": event_id}, {"$set": update_data})
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Event not found")
-    
+
+    update_data["updatedAt"] = datetime.now(timezone.utc).isoformat()
+    await db.events.update_one({"id": event_id}, {"$set": update_data})
+
     event = await db.events.find_one({"id": event_id}, {"_id": 0})
-    
-    # FEATURE #2: Si notify_staff est True, créer une notification pour le staff
+    event.pop("_id", None)
+
+    # Notify staff if schedule changed
     if notify_staff and event.get("assignedStaffIds"):
-        # Créer une notification (simplifiée - à implémenter avec un système de notifications complet)
         notification = {
             "id": f"notif-{uuid.uuid4().hex[:8]}",
-            "type": "event_reschedule",
+            "type": "event_modified",
             "eventId": event_id,
             "eventTitle": event.get("title", "Événement"),
             "newDate": event.get("date"),
@@ -190,23 +375,41 @@ async def update_event(request: Request, event_id: str, req: UpdateEventRequest)
             "createdAt": datetime.now(timezone.utc).isoformat(),
         }
         await db.notifications.insert_one(notification)
-    
+
+        # Also create an alert for each assigned staff
+        for staff_id in event.get("assignedStaffIds", []):
+            time_str = f" à {event['time']}" if event.get("time") else ""
+            await _create_alert(
+                user_id=staff_id,
+                alert_type="event_modified",
+                title="📅 Horaire modifié",
+                message=f"{event['title']} · {event.get('date')}{time_str}",
+                event_id=event_id,
+                from_name="Le joueur",
+                priority="medium",
+            )
+
     return event
 
 
 @router.delete("/{event_id}")
 async def delete_event(request: Request, event_id: str):
-    """Delete an event. SECURITY FIX: Verify ownership before deleting."""
+    """Delete an event. Only owner or proposing staff can delete."""
     current_user_id = await get_current_user_id(request)
-    
-    event = await db.events.find_one({"id": event_id}, {"_id": 0, "userId": 1})
+    staff_ctx = await get_staff_context(request)
+
+    event = await db.events.find_one({"id": event_id}, {"_id": 0, "userId": 1, "proposedBy": 1})
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
-    
+
     event_owner = event.get("userId")
-    if event_owner and event_owner != current_user_id and current_user_id != "default-user":
+    proposed_by = event.get("proposedBy")
+
+    is_owner = event_owner == current_user_id or current_user_id == "default-user"
+    is_proposer = staff_ctx and proposed_by == staff_ctx.get("user_id")
+    if not is_owner and not is_proposer:
         raise HTTPException(status_code=403, detail="Access denied")
-    
+
     result = await db.events.delete_one({"id": event_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Event not found")
@@ -215,17 +418,26 @@ async def delete_event(request: Request, event_id: str):
 
 @router.post("/{event_id}/observations")
 async def add_observation(request: Request, event_id: str, req: AddObservationRequest):
-    """Add observation. SECURITY FIX: Verify ownership before adding."""
+    """Add observation/comment to an event.
+
+    After adding, generates an event_comment alert for the event owner.
+    """
     current_user_id = await get_current_user_id(request)
-    
-    event = await db.events.find_one({"id": event_id}, {"_id": 0, "userId": 1})
+    staff_ctx = await get_staff_context(request)
+
+    event = await db.events.find_one({"id": event_id}, {"_id": 0, "userId": 1, "title": 1})
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
-    
+
     event_owner = event.get("userId")
-    if event_owner and event_owner != current_user_id and current_user_id != "default-user":
+
+    # Access check: owner, or staff whose linked player owns the event
+    if staff_ctx:
+        if event_owner != staff_ctx.get("player_id") and event_owner != current_user_id:
+            raise HTTPException(status_code=403, detail="Access denied")
+    elif event_owner and event_owner != current_user_id and current_user_id != "default-user":
         raise HTTPException(status_code=403, detail="Access denied")
-    
+
     observation = {
         "id": f"obs-{uuid.uuid4().hex[:8]}",
         "author": req.author,
@@ -240,4 +452,20 @@ async def add_observation(request: Request, event_id: str, req: AddObservationRe
     )
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Event not found")
+
+    # Generate event_comment alert for the event owner
+    # (don't alert the author themselves)
+    if event_owner and event_owner != current_user_id:
+        snippet = req.text[:80] + ("..." if len(req.text) > 80 else "")
+        await _create_alert(
+            user_id=event_owner,
+            alert_type="event_comment",
+            title=f"💬 {req.author} a commenté",
+            message=f'"{snippet}" — {event.get("title", "")}',
+            event_id=event_id,
+            from_name=req.author,
+            from_role=req.role,
+            priority="low",
+        )
+
     return observation
