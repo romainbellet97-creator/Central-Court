@@ -385,30 +385,55 @@ export default function ProfileScreen() {
         <View style={styles.profileSection}>
           <View style={styles.avatarContainer}>
             <View style={styles.avatar}>
-              <Ionicons name="person" size={36} color="#fff" />
+              {userProfile?.prenom ? (
+                <Text style={styles.avatarInitials}>{userProfile.prenom.charAt(0).toUpperCase()}</Text>
+              ) : (
+                <Ionicons name="person" size={36} color="#fff" />
+              )}
             </View>
           </View>
-          
+
           <View style={styles.profileInfo}>
             <Text style={styles.playerName}>{userProfile?.prenom || 'Configurer le profil'}</Text>
-            
-            {userProfile?.classement && (
-              <View style={styles.rankingRow}>
-                <Ionicons name="trophy" size={16} color="#FFD700" />
-                <Text style={styles.rankingText}>#{userProfile.classement}</Text>
-              </View>
-            )}
-            
-            {renderCircuitBadges()}
-            
+
             {userProfile?.residenceFiscale && (
               <Text style={styles.residenceText}>📍 {userProfile.residenceFiscale}</Text>
             )}
+
+            {renderCircuitBadges()}
           </View>
-          
+
           <TouchableOpacity style={styles.editBtn} onPress={openEditModal} testID="btn-edit-profile">
             <Ionicons name="create-outline" size={20} color="#fff" />
           </TouchableOpacity>
+        </View>
+
+        {/* Stats bar */}
+        <View style={styles.headerStatsBar}>
+          {userProfile?.classement && (
+            <View style={styles.headerStat}>
+              <Text style={styles.headerStatValue}>#{userProfile.classement}</Text>
+              <Text style={styles.headerStatLabel}>Classement</Text>
+            </View>
+          )}
+          {team.length > 0 && (
+            <View style={styles.headerStat}>
+              <Text style={styles.headerStatValue}>{team.length}</Text>
+              <Text style={styles.headerStatLabel}>Staff</Text>
+            </View>
+          )}
+          {residenceStats && (
+            <View style={styles.headerStat}>
+              <Text style={styles.headerStatValue}>{residenceStats.totalDaysTracked}</Text>
+              <Text style={styles.headerStatLabel}>Jours suivis</Text>
+            </View>
+          )}
+          {residenceStats?.countries && residenceStats.countries.length > 0 && (
+            <View style={styles.headerStat}>
+              <Text style={styles.headerStatValue}>{residenceStats.countries.length}</Text>
+              <Text style={styles.headerStatLabel}>Pays</Text>
+            </View>
+          )}
         </View>
       </LinearGradient>
 
@@ -420,7 +445,7 @@ export default function ProfileScreen() {
         {/* Niveaux de tournois */}
         {userProfile?.niveaux && userProfile.niveaux.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>🏆 Niveaux de tournois</Text>
+            <Text style={styles.sectionTitle}>Niveaux de tournois</Text>
             <View style={styles.levelsCard}>
               {renderLevelBadges()}
             </View>
@@ -430,7 +455,7 @@ export default function ProfileScreen() {
         {/* Résidence Fiscale */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>🌍 Résidence Fiscale</Text>
+            <Text style={styles.sectionTitle}>Résidence Fiscale</Text>
             <TouchableOpacity 
               style={styles.viewAllBtn} 
               onPress={() => router.push('/(tabs)/residence')}
@@ -540,7 +565,7 @@ export default function ProfileScreen() {
         {/* Équipe */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>👥 Mon équipe</Text>
+            <Text style={styles.sectionTitle}>Mon équipe</Text>
             <TouchableOpacity style={styles.addBtn} onPress={() => setShowInviteModal(true)} testID="btn-invite">
               <Ionicons name="person-add" size={16} color="#fff" />
               <Text style={styles.addBtnText}>Inviter</Text>
@@ -592,27 +617,32 @@ export default function ProfileScreen() {
               })}
             </View>
           )}
-          <Text style={styles.hint}>Appuyez longuement pour retirer un membre</Text>
         </View>
 
-        {/* Actions rapides */}
+        {/* Réglages */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>⚡ Actions</Text>
+          <Text style={styles.sectionTitle}>Réglages</Text>
           <View style={styles.actionsCard}>
             <TouchableOpacity style={styles.actionItem} onPress={openEditModal}>
-              <Ionicons name="person-outline" size={20} color="#1e3c72" />
+              <View style={[styles.actionIcon, { backgroundColor: '#EEF2FF' }]}>
+                <Ionicons name="person-outline" size={18} color="#1e3c72" />
+              </View>
               <Text style={styles.actionText}>Modifier mon profil</Text>
-              <Ionicons name="chevron-forward" size={18} color="#999" />
+              <Ionicons name="chevron-forward" size={16} color="#C4CDD6" />
             </TouchableOpacity>
             <TouchableOpacity style={styles.actionItem} onPress={() => router.push('/onboarding')}>
-              <Ionicons name="refresh-outline" size={20} color="#1e3c72" />
+              <View style={[styles.actionIcon, { backgroundColor: '#F0FDF4' }]}>
+                <Ionicons name="refresh-outline" size={18} color="#16A34A" />
+              </View>
               <Text style={styles.actionText}>Refaire l'onboarding</Text>
-              <Ionicons name="chevron-forward" size={18} color="#999" />
+              <Ionicons name="chevron-forward" size={16} color="#C4CDD6" />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.actionItem} onPress={handleLogout} data-testid="btn-logout">
-              <Ionicons name="log-out-outline" size={20} color="#E53935" />
+            <TouchableOpacity style={[styles.actionItem, styles.actionItemLast]} onPress={handleLogout} data-testid="btn-logout">
+              <View style={[styles.actionIcon, { backgroundColor: '#FEF2F2' }]}>
+                <Ionicons name="log-out-outline" size={18} color="#E53935" />
+              </View>
               <Text style={[styles.actionText, { color: '#E53935' }]}>Se déconnecter</Text>
-              <Ionicons name="chevron-forward" size={18} color="#999" />
+              <Ionicons name="chevron-forward" size={16} color="#C4CDD6" />
             </TouchableOpacity>
           </View>
         </View>
@@ -777,7 +807,7 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#F7F8FA',
   },
   centered: {
     justifyContent: 'center',
@@ -785,31 +815,40 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 20,
-    paddingBottom: 24,
+    paddingBottom: 0,
   },
   profileSection: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    paddingBottom: 20,
   },
   avatarContainer: {
     marginRight: 16,
   },
   avatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: 'rgba(255,255,255,0.15)',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.4)',
+  },
+  avatarInitials: {
+    fontSize: 30,
+    fontWeight: '700',
+    color: '#fff',
   },
   profileInfo: {
     flex: 1,
   },
   playerName: {
-    fontSize: 22,
-    fontWeight: '700',
+    fontSize: 24,
+    fontWeight: '800',
     color: '#fff',
     marginBottom: 4,
+    letterSpacing: -0.3,
   },
   rankingRow: {
     flexDirection: 'row',
@@ -821,6 +860,28 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: '#FFD700',
+  },
+  headerStatsBar: {
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.15)',
+    paddingTop: 14,
+    paddingBottom: 18,
+    gap: 0,
+  },
+  headerStat: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  headerStatValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  headerStatLabel: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.6)',
+    marginTop: 2,
   },
   badgesRow: {
     flexDirection: 'row',
@@ -875,13 +936,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 12,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#8A9BAE',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginBottom: 10,
   },
   addBtn: {
     flexDirection: 'row',
@@ -899,14 +962,24 @@ const styles = StyleSheet.create({
   },
   levelsCard: {
     backgroundColor: '#fff',
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
+    shadowColor: '#1a2744',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
   emptyCard: {
     backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 32,
+    borderRadius: 16,
+    padding: 36,
     alignItems: 'center',
+    shadowColor: '#1a2744',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
   emptyTitle: {
     fontSize: 16,
@@ -921,8 +994,13 @@ const styles = StyleSheet.create({
   },
   teamCard: {
     backgroundColor: '#fff',
-    borderRadius: 12,
+    borderRadius: 16,
     overflow: 'hidden',
+    shadowColor: '#1a2744',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
   teamMember: {
     flexDirection: 'row',
@@ -972,21 +1050,38 @@ const styles = StyleSheet.create({
   },
   actionsCard: {
     backgroundColor: '#fff',
-    borderRadius: 12,
+    borderRadius: 16,
     overflow: 'hidden',
+    shadowColor: '#1a2744',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
   actionItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: '#F3F4F6',
     gap: 12,
+  },
+  actionItemLast: {
+    borderBottomWidth: 0,
+  },
+  actionIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   actionText: {
     flex: 1,
     fontSize: 15,
-    color: '#333',
+    fontWeight: '500',
+    color: '#1A2744',
   },
   modalOverlay: {
     flex: 1,
@@ -1155,9 +1250,14 @@ const styles = StyleSheet.create({
   },
   residenceCard: {
     backgroundColor: '#fff',
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
     overflow: 'hidden',
+    shadowColor: '#1a2744',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
   residenceStatsRow: {
     flexDirection: 'row',
