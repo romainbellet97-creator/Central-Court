@@ -38,37 +38,17 @@ async def seed():
     await db.tournament_weeks.insert_many(weeks)
     print(f"✅ Seeded {len(weeks)} tournament weeks")
 
-    # ── TOURNAMENTS (with circuit field) ──
+    # ── TOURNAMENTS (calendrier complet 2026) ──
+    from seed_data.tournaments_seed import get_all_tournaments
     await db.tournaments.delete_many({})
-    tournaments = [
-        # ATP - Semaine 6
-        {"id": "montpellier-2026", "name": "Open Occitanie", "city": "Montpellier", "country": "France", "countryFlag": "🇫🇷", "category": "ATP 250", "circuit": "atp", "surface": "Hard Indoor", "prize": "€768,735", "playerZoneLink": "https://playerzone.atptour.com/tournaments/montpellier", "deadlineDate": "2026-01-26", "startDate": "2026-02-02", "endDate": "2026-02-08", "weekNumber": 6},
-        {"id": "pune-2026", "name": "Tata Open Maharashtra", "city": "Pune", "country": "Inde", "countryFlag": "🇮🇳", "category": "ATP 250", "circuit": "atp", "surface": "Hard Outdoor", "prize": "$661,145", "playerZoneLink": "https://playerzone.atptour.com/tournaments/pune", "deadlineDate": "2026-01-26", "startDate": "2026-02-02", "endDate": "2026-02-08", "weekNumber": 6},
-        # ATP - Semaine 7
-        {"id": "rotterdam-2026", "name": "ABN AMRO Open", "city": "Rotterdam", "country": "Pays-Bas", "countryFlag": "🇳🇱", "category": "ATP 500", "circuit": "atp", "surface": "Hard Indoor", "prize": "€2,477,345", "playerZoneLink": "https://playerzone.atptour.com/tournaments/rotterdam", "deadlineDate": "2026-02-02", "startDate": "2026-02-09", "endDate": "2026-02-15", "weekNumber": 7},
-        {"id": "delray-2026", "name": "Delray Beach Open", "city": "Delray Beach", "country": "USA", "countryFlag": "🇺🇸", "category": "ATP 250", "circuit": "atp", "surface": "Hard Outdoor", "prize": "$768,735", "playerZoneLink": "https://playerzone.atptour.com/tournaments/delray-beach", "deadlineDate": "2026-02-02", "startDate": "2026-02-09", "endDate": "2026-02-15", "weekNumber": 7},
-        # ATP - Semaine 8
-        {"id": "doha-2026", "name": "Qatar ExxonMobil Open", "city": "Doha", "country": "Qatar", "countryFlag": "🇶🇦", "category": "ATP 250", "circuit": "atp", "surface": "Hard Outdoor", "prize": "$1,495,665", "playerZoneLink": "https://playerzone.atptour.com/tournaments/doha", "deadlineDate": "2026-02-09", "startDate": "2026-02-16", "endDate": "2026-02-22", "weekNumber": 8},
-        {"id": "buenos-aires-2026", "name": "Argentina Open", "city": "Buenos Aires", "country": "Argentine", "countryFlag": "🇦🇷", "category": "ATP 250", "circuit": "atp", "surface": "Clay", "prize": "$768,735", "playerZoneLink": "https://playerzone.atptour.com/tournaments/buenos-aires", "deadlineDate": "2026-02-09", "startDate": "2026-02-16", "endDate": "2026-02-22", "weekNumber": 8},
-        # ATP - Semaine 9
-        {"id": "acapulco-2026", "name": "Abierto Mexicano Telcel", "city": "Acapulco", "country": "Mexique", "countryFlag": "🇲🇽", "category": "ATP 500", "circuit": "atp", "surface": "Hard Outdoor", "prize": "$2,234,550", "playerZoneLink": "https://playerzone.atptour.com/tournaments/acapulco", "deadlineDate": "2026-02-16", "startDate": "2026-02-23", "endDate": "2026-03-01", "weekNumber": 9},
-        {"id": "dubai-2026", "name": "Dubai Duty Free Championships", "city": "Dubai", "country": "Émirats", "countryFlag": "🇦🇪", "category": "ATP 500", "circuit": "atp", "surface": "Hard Outdoor", "prize": "$2,794,840", "playerZoneLink": "https://playerzone.atptour.com/tournaments/dubai", "deadlineDate": "2026-02-16", "startDate": "2026-02-23", "endDate": "2026-03-01", "weekNumber": 9},
-        {"id": "santiago-2026", "name": "Chile Dove Men+Care Open", "city": "Santiago", "country": "Chili", "countryFlag": "🇨🇱", "category": "ATP 250", "circuit": "atp", "surface": "Clay", "prize": "$768,735", "playerZoneLink": "https://playerzone.atptour.com/tournaments/santiago", "deadlineDate": "2026-02-16", "startDate": "2026-02-23", "endDate": "2026-03-01", "weekNumber": 9},
-        # WTA - Semaine 6
-        {"id": "linz-wta-2026", "name": "Upper Austria Ladies Linz", "city": "Linz", "country": "Autriche", "countryFlag": "🇦🇹", "category": "WTA 250", "circuit": "wta", "surface": "Hard Indoor", "prize": "$267,082", "playerZoneLink": "https://www.wtatennis.com", "deadlineDate": "2026-01-26", "startDate": "2026-02-02", "endDate": "2026-02-08", "weekNumber": 6},
-        # WTA - Semaine 7
-        {"id": "doha-wta-2026", "name": "Qatar TotalEnergies Open", "city": "Doha", "country": "Qatar", "countryFlag": "🇶🇦", "category": "WTA 500", "circuit": "wta", "surface": "Hard Outdoor", "prize": "$780,637", "playerZoneLink": "https://www.wtatennis.com", "deadlineDate": "2026-02-02", "startDate": "2026-02-09", "endDate": "2026-02-15", "weekNumber": 7},
-        # WTA - Semaine 8
-        {"id": "dubai-wta-2026", "name": "Dubai Duty Free Tennis Championships", "city": "Dubai", "country": "Émirats", "countryFlag": "🇦🇪", "category": "WTA 1000", "circuit": "wta", "surface": "Hard Outdoor", "prize": "$3,211,715", "playerZoneLink": "https://www.wtatennis.com", "deadlineDate": "2026-02-09", "startDate": "2026-02-16", "endDate": "2026-02-22", "weekNumber": 8},
-        # ITF - Semaine 6
-        {"id": "antalya-itf-2026", "name": "Antalya ITF M25", "city": "Antalya", "country": "Turquie", "countryFlag": "🇹🇷", "category": "ITF M25", "circuit": "itf", "surface": "Clay", "prize": "$25,000", "playerZoneLink": "https://www.itftennis.com", "deadlineDate": "2026-01-26", "startDate": "2026-02-02", "endDate": "2026-02-08", "weekNumber": 6},
-        # ITF - Semaine 7
-        {"id": "sharm-itf-2026", "name": "Sharm El Sheikh ITF M15", "city": "Sharm El Sheikh", "country": "Egypte", "countryFlag": "🇪🇬", "category": "ITF M15", "circuit": "itf", "surface": "Hard Outdoor", "prize": "$15,000", "playerZoneLink": "https://www.itftennis.com", "deadlineDate": "2026-02-02", "startDate": "2026-02-09", "endDate": "2026-02-15", "weekNumber": 7},
-        # ITF Wheelchair - Semaine 7
-        {"id": "bolton-wheelchair-2026", "name": "Bolton Indoor ITF 1", "city": "Bolton", "country": "Royaume-Uni", "countryFlag": "🇬🇧", "category": "ITF Wheelchair 1", "circuit": "itf_wheelchair", "surface": "Hard Indoor", "prize": "$10,000", "playerZoneLink": "https://www.itftennis.com", "deadlineDate": "2026-02-02", "startDate": "2026-02-09", "endDate": "2026-02-15", "weekNumber": 7},
-    ]
-    await db.tournaments.insert_many(tournaments)
-    print(f"✅ Seeded {len(tournaments)} tournaments (ATP: {sum(1 for t in tournaments if t['circuit']=='atp')}, WTA: {sum(1 for t in tournaments if t['circuit']=='wta')}, ITF: {sum(1 for t in tournaments if t['circuit']=='itf')}, ITF Wheelchair: {sum(1 for t in tournaments if t['circuit']=='itf_wheelchair')})")
+    tournaments = get_all_tournaments()
+    if tournaments:
+        await db.tournaments.insert_many(tournaments)
+    atp_count = sum(1 for t in tournaments if t.get('circuit') == 'atp')
+    wta_count = sum(1 for t in tournaments if t.get('circuit') == 'wta')
+    itf_count = sum(1 for t in tournaments if t.get('circuit') == 'itf')
+    wc_count = sum(1 for t in tournaments if t.get('circuit') == 'itf_wheelchair')
+    print(f"✅ Seeded {len(tournaments)} tournaments (ATP: {atp_count}, WTA: {wta_count}, ITF: {itf_count}, ITF Wheelchair: {wc_count})")
 
     # ── EVENTS ──
     await db.events.delete_many({})

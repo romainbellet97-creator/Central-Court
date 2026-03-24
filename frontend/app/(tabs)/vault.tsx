@@ -194,7 +194,9 @@ export default function DocumentsScreen() {
       if (nextAppState === 'active') {
         console.log('📱 App returned to foreground, resetting locks...');
         isProcessingRef.current = false;
-        
+        setIsUploading(false);
+        setIsProcessingOCR(false);
+
         // Re-vérifier les permissions
         const { status } = await ImagePicker.getCameraPermissionsAsync();
         console.log('📷 Camera permission after foreground:', status);

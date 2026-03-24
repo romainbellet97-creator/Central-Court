@@ -83,7 +83,7 @@ const SURFACE_COLORS: Record<string, string> = {
 };
 
 const CATEGORY_COLORS: Record<string, string> = {
-  'Grand Chelem': '#D4AF37',
+  'Grand Slam': '#D4AF37',
   'Masters 1000': '#E53935',
   'ATP 500': '#1e3c72',
   'ATP 250': '#2196F3',
@@ -339,7 +339,7 @@ export default function CalendarScreen() {
 
   // Map onboarding niveaux IDs → backend category names
   const NIVEAUX_TO_CATEGORY: Record<string, string> = {
-    grand_slam: 'Grand Chelem',
+    grand_slam: 'Grand Slam',
     atp_1000: 'Masters 1000',
     atp_500: 'ATP 500',
     atp_250: 'ATP 250',

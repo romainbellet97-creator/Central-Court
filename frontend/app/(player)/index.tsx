@@ -80,7 +80,7 @@ const SURFACE_COLORS: Record<string, string> = {
 };
 
 const CATEGORY_COLORS: Record<string, string> = {
-  'Grand Chelem': '#D4AF37',
+  'Grand Slam': '#D4AF37',
   'Masters 1000': '#E53935',
   'ATP 500': '#1e3c72',
   'ATP 250': '#2196F3',
