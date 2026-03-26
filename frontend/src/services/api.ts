@@ -181,6 +181,10 @@ export const generateAlerts = () =>
 export const checkTournamentConflicts = (tournamentId: string) =>
   apiFetch<any>(`/api/tournaments/conflicts/${tournamentId}`);
 
+// ── User Profile ──
+export const fetchUserProfile = (userId: string) =>
+  apiFetch<any>(`/api/users/profile/${userId}`);
+
 // ── Preferences ──
 export const fetchPreferences = () => apiFetch<any>('/api/preferences');
 

@@ -400,12 +400,11 @@ export default function DocumentsScreen() {
         const asset = result.assets[0];
         console.log('5. Photo URI:', asset.uri?.substring(0, 50) + '...');
         console.log('6. Base64 length:', asset.base64?.length || 0);
-        
-        // Traiter immédiatement
+
         await processDocumentWithOCRBase64(
-          asset.base64 || '', 
-          asset.uri, 
-          'image', 
+          asset.base64 || '',
+          asset.uri,
+          'image',
           `Photo_${Date.now()}.jpg`
         );
       } else {
@@ -416,6 +415,11 @@ export default function DocumentsScreen() {
       console.error('❌ CAMERA ERROR:', error);
       isProcessingRef.current = false;
       Alert.alert('Erreur', error?.message || 'Impossible d\'ouvrir la caméra');
+    } finally {
+      if (isProcessingRef.current) {
+        console.warn('⚠️ Camera: isProcessingRef was still true after completion, releasing');
+        isProcessingRef.current = false;
+      }
     }
   };
 
@@ -479,12 +483,22 @@ export default function DocumentsScreen() {
         const asset = result.assets[0];
         console.log('5. Image URI:', asset.uri?.substring(0, 50) + '...');
         console.log('6. Base64 length:', asset.base64?.length || 0);
-        
-        // Traiter immédiatement
+
+        // Guard: if no base64 data, read from URI (FileSystem fallback)
+        let base64Data = asset.base64 || '';
+        if (!base64Data && asset.uri) {
+          try {
+            const { FileSystem } = require('expo-file-system');
+            base64Data = await FileSystem.readAsStringAsync(asset.uri, { encoding: 'base64' });
+          } catch (e) {
+            console.warn('⚠️ Could not read base64 from URI:', e);
+          }
+        }
+
         await processDocumentWithOCRBase64(
-          asset.base64 || '', 
-          asset.uri, 
-          'image', 
+          base64Data,
+          asset.uri,
+          'image',
           `Galerie_${Date.now()}.jpg`
         );
       } else {
@@ -495,6 +509,12 @@ export default function DocumentsScreen() {
       console.error('❌ GALLERY ERROR:', error);
       isProcessingRef.current = false;
       Alert.alert('Erreur', error?.message || 'Impossible d\'ouvrir la galerie');
+    } finally {
+      // Defensive: ensure lock is always released (OCR already does this, but belt-and-suspenders)
+      if (isProcessingRef.current) {
+        console.warn('⚠️ Gallery: isProcessingRef was still true after completion, releasing');
+        isProcessingRef.current = false;
+      }
     }
   };
 
@@ -645,7 +665,10 @@ export default function DocumentsScreen() {
     } catch (error: any) {
       console.error('❌ SAVE ERROR:', error);
       const errorMsg = error?.response?.data?.detail || error?.message || "Échec de l'enregistrement";
-      Alert.alert('Erreur', errorMsg);
+      Alert.alert('Erreur', errorMsg, [
+        { text: 'Annuler', style: 'cancel', onPress: () => { setShowVerificationModal(false); fullReset(); } },
+        { text: 'Réessayer', style: 'default' },
+      ]);
     } finally {
       setIsSaving(false);
     }

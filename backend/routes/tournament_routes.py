@@ -311,8 +311,10 @@ async def list_tournament_weeks(
         t_query["circuit"] = {"$in": db_circuits}
     
     # Parse category filter
+    # Alias mapping: 'Grand Chelem' is the French name for 'Grand Slam' (stored in DB as 'Grand Slam')
+    CATEGORY_ALIASES = {'Grand Chelem': 'Grand Slam'}
     if categories:
-        cat_list = [c.strip() for c in categories.split(",") if c.strip()]
+        cat_list = [CATEGORY_ALIASES.get(c.strip(), c.strip()) for c in categories.split(",") if c.strip()]
         if cat_list:
             t_query["category"] = {"$in": cat_list}
     

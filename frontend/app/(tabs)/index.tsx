@@ -41,6 +41,7 @@ import {
   unhideTournament as apiUnhideTournament,
   checkTournamentConflicts,
   respondToEvent as apiRespondToEvent,
+  fetchUserProfile,
 } from '../../src/services/api';
 import EventObservationSection from '../../src/components/EventObservationSection';
 
@@ -338,8 +339,9 @@ export default function CalendarScreen() {
   // ============ DATA LOADING ============
 
   // Map onboarding niveaux IDs → backend category names
+  // NOTE: DB stores 'Grand Slam' (English), NOT 'Grand Chelem'
   const NIVEAUX_TO_CATEGORY: Record<string, string> = {
-    grand_slam: 'Grand Chelem',
+    grand_slam: 'Grand Slam',
     atp_1000: 'Masters 1000',
     atp_500: 'ATP 500',
     atp_250: 'ATP 250',
@@ -356,6 +358,7 @@ export default function CalendarScreen() {
   useEffect(() => {
     const loadUserPreferences = async () => {
       try {
+        // First try local onboarding cache
         const stored = await AsyncStorage.getItem(ONBOARDING_DATA_KEY);
         if (stored) {
           const data = JSON.parse(stored);
@@ -364,14 +367,33 @@ export default function CalendarScreen() {
           }
           if (data.niveaux && Array.isArray(data.niveaux) && data.niveaux.length > 0) {
             setUserNiveaux(data.niveaux);
+            return; // Local cache has full data, no need to hit the API
           }
+        }
+
+        // Fallback: load from backend user profile (new device / cleared storage)
+        if (authUser?.user_id) {
+          try {
+            const profile = await fetchUserProfile(authUser.user_id);
+            if (profile?.circuits?.length) setUserCircuits(profile.circuits);
+            if (profile?.niveaux?.length) setUserNiveaux(profile.niveaux);
+            // Sync back to local cache so next load is instant
+            if (profile?.circuits || profile?.niveaux) {
+              const existing = stored ? JSON.parse(stored) : {};
+              await AsyncStorage.setItem(ONBOARDING_DATA_KEY, JSON.stringify({
+                ...existing,
+                circuits: profile.circuits || existing.circuits || [],
+                niveaux: profile.niveaux || existing.niveaux || [],
+              }));
+            }
+          } catch { /* profile fetch failed, continue with empty prefs */ }
         }
       } catch (e) {
         console.error('Failed to load user preferences:', e);
       }
     };
     loadUserPreferences();
-  }, []);
+  }, [authUser?.user_id]);
 
   useEffect(() => {
     const loadData = async () => {
