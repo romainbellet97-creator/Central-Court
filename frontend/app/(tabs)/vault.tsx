@@ -766,7 +766,9 @@ export default function DocumentsScreen() {
   }
 
   // CRITIQUE: Désactiver les boutons pendant le traitement
-  const isButtonsDisabled = isUploading || isProcessingOCR || isProcessingRef.current;
+  // Note: isProcessingRef.current intentionnellement exclu — c'est un verrou de courte durée
+  // géré en interne. isUploading/isProcessingOCR couvrent l'état visible par l'utilisateur.
+  const isButtonsDisabled = isUploading || isProcessingOCR;
 
   return (
     <View style={[s.container, { paddingTop: insets.top }]} data-testid="documents-screen">

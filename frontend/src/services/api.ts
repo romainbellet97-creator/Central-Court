@@ -123,6 +123,26 @@ export const respondToEvent = (
     body: JSON.stringify({ action, ...options }),
   });
 
+// ── Calendar sync ──
+export interface CalendarEventItem {
+  externalId: string;
+  title: string;
+  date: string;
+  endDate?: string;
+  time?: string;
+  endTime?: string;
+  location?: string;
+  description?: string;
+  allDay?: boolean;
+  calendarName?: string;
+}
+
+export const syncCalendarEvents = (events: CalendarEventItem[]) =>
+  apiFetch<{ success: boolean; inserted: number; updated: number }>(
+    '/api/events/sync-external',
+    { method: 'POST', body: JSON.stringify({ events }) }
+  );
+
 // ── Tournaments ──
 export const fetchTournaments = (circuits?: string) =>
   apiFetch<any[]>(circuits ? `/api/tournaments?circuits=${circuits}` : '/api/tournaments');

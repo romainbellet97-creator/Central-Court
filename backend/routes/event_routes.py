@@ -58,6 +58,21 @@ class AddObservationRequest(BaseModel):
 class RespondEventRequest(BaseModel):
     """Player response to a staff-proposed event."""
     action: str  # accept | refuse | reschedule
+
+class CalendarEventItem(BaseModel):
+    externalId: str
+    title: str
+    date: str          # YYYY-MM-DD
+    endDate: Optional[str] = None
+    time: Optional[str] = None    # HH:MM
+    endTime: Optional[str] = None
+    location: Optional[str] = None
+    description: Optional[str] = None
+    allDay: bool = False
+    calendarName: Optional[str] = None
+
+class SyncCalendarRequest(BaseModel):
+    events: List[CalendarEventItem]
     note: Optional[str] = None
     alternativeDate: Optional[str] = None
     alternativeTime: Optional[str] = None
@@ -469,3 +484,60 @@ async def add_observation(request: Request, event_id: str, req: AddObservationRe
         )
 
     return observation
+
+
+# ── External calendar sync ──
+
+@router.post("/sync-external")
+async def sync_external_events(req: SyncCalendarRequest, request: Request):
+    """Bulk upsert events imported from the device calendar (expo-calendar).
+
+    - Keyed on (userId, externalId) — safe to call repeatedly (idempotent).
+    - Only manages events with source='device_calendar'; never touches
+      events created manually inside the app.
+    - Returns counts of inserted / updated events.
+    """
+    user_id = await get_current_user_id(request)
+    inserted = 0
+    updated = 0
+
+    for item in req.events:
+        if not item.date:
+            continue
+
+        existing = await db.events.find_one(
+            {"userId": user_id, "externalId": item.externalId},
+            {"_id": 1, "id": 1}
+        )
+
+        now = datetime.now(timezone.utc).isoformat()
+        doc = {
+            "userId": user_id,
+            "externalId": item.externalId,
+            "type": "personal",
+            "title": item.title or "(Sans titre)",
+            "date": item.date,
+            "endDate": item.endDate,
+            "time": item.time,
+            "endTime": item.endTime,
+            "location": item.location or "",
+            "description": item.description or "",
+            "allDay": item.allDay,
+            "calendarName": item.calendarName,
+            "visibleToStaff": False,
+            "source": "device_calendar",
+            "updatedAt": now,
+        }
+
+        if existing:
+            await db.events.update_one({"_id": existing["_id"]}, {"$set": doc})
+            updated += 1
+        else:
+            doc["id"] = f"cal-{uuid.uuid4().hex[:12]}"
+            doc["createdAt"] = now
+            doc["observations"] = []
+            await db.events.insert_one(doc)
+            doc.pop("_id", None)
+            inserted += 1
+
+    return {"success": True, "inserted": inserted, "updated": updated}

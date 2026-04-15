@@ -44,6 +44,111 @@ import {
   fetchUserProfile,
 } from '../../src/services/api';
 import EventObservationSection from '../../src/components/EventObservationSection';
+import { useCalendarSync } from '../../src/hooks/useCalendarSync';
+
+// ============ CALENDAR SYNC PROMPT ============
+
+function CalendarSyncPrompt({ onConnect }: { onConnect: () => Promise<boolean> }) {
+  const [dismissed, setDismissed] = React.useState(false);
+  const [connecting, setConnecting] = React.useState(false);
+
+  React.useEffect(() => {
+    AsyncStorage.getItem('@cal_prompt_dismissed').then(v => {
+      if (v === 'true') setDismissed(true);
+    });
+  }, []);
+
+  const handleDismiss = async () => {
+    await AsyncStorage.setItem('@cal_prompt_dismissed', 'true');
+    setDismissed(true);
+  };
+
+  const handleConnect = async () => {
+    setConnecting(true);
+    const ok = await onConnect();
+    setConnecting(false);
+    if (ok) {
+      setDismissed(true);
+    } else {
+      Alert.alert(
+        'Permission refusée',
+        'Autorisez l\'accès au calendrier dans vos Réglages iOS pour activer la synchronisation.',
+        [{ text: 'OK' }]
+      );
+    }
+  };
+
+  if (dismissed) return null;
+
+  return (
+    <View style={calSyncStyles.banner}>
+      <View style={calSyncStyles.left}>
+        <View style={calSyncStyles.iconWrap}>
+          <Ionicons name="calendar-outline" size={20} color="#1e3c72" />
+        </View>
+        <View style={calSyncStyles.textWrap}>
+          <Text style={calSyncStyles.title}>Synchroniser votre calendrier</Text>
+          <Text style={calSyncStyles.sub}>Détectez les conflits avec vos tournois</Text>
+        </View>
+      </View>
+      <View style={calSyncStyles.actions}>
+        {connecting ? (
+          <ActivityIndicator size="small" color="#1e3c72" />
+        ) : (
+          <TouchableOpacity style={calSyncStyles.connectBtn} onPress={handleConnect}>
+            <Text style={calSyncStyles.connectText}>Activer</Text>
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity onPress={handleDismiss} style={calSyncStyles.closeBtn}>
+          <Ionicons name="close" size={18} color="#999" />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+const calSyncStyles = StyleSheet.create({
+  banner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#EEF2FF',
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 4,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: '#C7D2FE',
+  },
+  left: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  iconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  textWrap: { flex: 1 },
+  title: { fontSize: 13, fontWeight: '600', color: '#1e3c72' },
+  sub: { fontSize: 11, color: '#5B7ED6', marginTop: 1 },
+  actions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  connectBtn: {
+    backgroundColor: '#1e3c72',
+    borderRadius: 7,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  connectText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  closeBtn: { padding: 4 },
+});
 
 // ============ CONSTANTS ============
 
@@ -177,6 +282,9 @@ export default function CalendarScreen() {
   
   // BUG #1 FIX: Utiliser le contexte Auth pour le nom de l'utilisateur
   const { user: authUser } = useAuth();
+
+  // Sync calendrier natif (silencieux, déclenché au chargement)
+  const calendarSync = useCalendarSync();
   
   // BUG #3 FIX: Ref pour le scroll automatique du modal détail
   const detailScrollRef = useRef<ScrollView>(null);
@@ -394,6 +502,13 @@ export default function CalendarScreen() {
     };
     loadUserPreferences();
   }, [authUser?.user_id]);
+
+  // Déclencher la sync calendrier silencieusement après le chargement initial
+  useEffect(() => {
+    if (calendarSync.isEnabled && !calendarSync.isSyncing) {
+      calendarSync.syncNow();
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const loadData = async () => {
@@ -1129,6 +1244,11 @@ export default function CalendarScreen() {
       </LinearGradient>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Bannière sync calendrier — affichée seulement si pas encore activé */}
+        {!calendarSync.isEnabled && !calendarSync.isSyncing && (
+          <CalendarSyncPrompt onConnect={calendarSync.enable} />
+        )}
+
         {/* Calendar */}
         <View style={styles.calendarContainer}>
           <Calendar

@@ -22,6 +22,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api, { fetchResidenceStats, ResidenceStats } from '../../src/services/api';
+import { useCalendarSync } from '../../src/hooks/useCalendarSync';
+import CalendarSyncBanner from '../../src/components/CalendarSyncBanner';
 
 // ============ CONSTANTS ============
 
@@ -93,6 +95,7 @@ export default function ProfileScreen() {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteName, setInviteName] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const calendarSync = useCalendarSync();
   
   // Edit form
   const [editClassement, setEditClassement] = useState('');
@@ -622,6 +625,12 @@ export default function ProfileScreen() {
               })}
             </View>
           )}
+        </View>
+
+        {/* Sync Calendrier */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Calendrier</Text>
+          <CalendarSyncBanner sync={calendarSync} />
         </View>
 
         {/* Réglages */}
