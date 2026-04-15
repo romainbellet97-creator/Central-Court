@@ -1070,7 +1070,7 @@ export default function CalendarScreen() {
               if (t.id === tournamentId) {
                 return { ...t, registration: { status }, hidden: false };
               }
-              if (status === 'participating' && t.registration?.status !== 'participating') {
+              if (status === 'participating' && t.registration?.status === 'participating') {
                 return { ...t, registration: { status: 'not_interested' }, isBlocked: true };
               }
               if ((status === 'interested' || status === 'pending') && t.isBlocked) {
@@ -1345,16 +1345,10 @@ export default function CalendarScreen() {
       </LinearGradient>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Bannière sync calendrier */}
-        {calendarSync.isEnabled ? (
-          <View style={styles.calBannerWrap}>
-            <CalendarSyncBanner sync={calendarSync} onDisconnect={reloadEvents} />
-          </View>
-        ) : (
-          !calendarSync.isSyncing && (
-            <CalendarSyncPrompt onConnect={calendarSync.enable} />
-          )
-        )}
+        {/* Bannière sync calendrier — toujours visible */}
+        <View style={styles.calBannerWrap}>
+          <CalendarSyncBanner sync={calendarSync} onDisconnect={reloadEvents} />
+        </View>
 
         {/* Calendar */}
         <View style={styles.calendarContainer}>

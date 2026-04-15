@@ -215,9 +215,14 @@ export default function DocumentsScreen() {
         isProcessingRef.current = false;
       }
 
-      // Cleanup: libérer les verrous au blur
+      // Cleanup: libérer les verrous au blur (sauf si modal de vérification ouverte)
       return () => {
         isProcessingRef.current = false;
+        if (!verificationOpenRef.current) {
+          setIsUploading(false);
+          setIsProcessingOCR(false);
+          setPendingDocBase64(null);
+        }
       };
     }, [])
   );
@@ -411,6 +416,8 @@ export default function DocumentsScreen() {
     }
 
     setShowUploadModal(false);
+    // Wait for modal dismiss animation before launching picker (iOS ~300ms)
+    await new Promise(r => setTimeout(r, 350));
 
     try {
       isProcessingRef.current = true;
@@ -496,6 +503,8 @@ export default function DocumentsScreen() {
     }
 
     setShowUploadModal(false);
+    // Wait for modal dismiss animation before launching picker (iOS ~300ms)
+    await new Promise(r => setTimeout(r, 350));
 
     try {
       isProcessingRef.current = true;
@@ -513,25 +522,7 @@ export default function DocumentsScreen() {
 
       if (!isGranted) {
         isProcessingRef.current = false;
-        Alert.alert(
-          'Permission requise',
-          'Autorisez l\'accès à la galerie pour sélectionner des photos.',
-          [
-            { text: 'Annuler', style: 'cancel' },
-            { 
-              text: 'Ouvrir Paramètres', 
-              onPress: () => {
-                if (Platform.OS === 'ios') {
-                  Linking.openURL('app-settings:');
-                } else {
-                  Linking.openSettings();
-                }
-              }
-            },
-          ]
-        );
         dbg('GALERIE permission refusée — verrou libéré', 'error');
-        isProcessingRef.current = false;
         Alert.alert(
           'Permission requise',
           'Autorisez l\'accès à la galerie pour sélectionner des photos.',

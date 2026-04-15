@@ -115,7 +115,7 @@ async def check_tournament_conflicts(tournament_id: str, request: Request):
 
     # Also check for other tournaments in the same period that are registered (user-scoped)
     conflicting_tournaments = []
-    reg_filter = {"status": {"$in": ["pending", "participating"]}}
+    reg_filter = {"status": "participating"}
     if user_id != "default-user":
         reg_filter["userId"] = user_id
     regs = await db.tournament_registrations.find(
