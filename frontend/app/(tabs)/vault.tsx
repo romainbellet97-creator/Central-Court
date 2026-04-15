@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system';
 import api from '../../src/services/api';
 
 // ============ TYPES ============
@@ -80,6 +81,8 @@ export default function DocumentsScreen() {
   
   // Ref pour éviter les appels multiples
   const isProcessingRef = useRef(false);
+  // Ref miroir de showVerificationModal pour useFocusEffect (évite les deps cycliques)
+  const verificationOpenRef = useRef(false);
 
   // Core state
   const [documents, setDocuments] = useState<Document[]>([]);
@@ -93,6 +96,8 @@ export default function DocumentsScreen() {
   // Modal states
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showVerificationModal, setShowVerificationModal] = useState(false);
+  // Synchroniser le ref miroir à chaque changement d'état
+  useEffect(() => { verificationOpenRef.current = showVerificationModal; }, [showVerificationModal]);
   const [showDocDetail, setShowDocDetail] = useState<Document | null>(null);
   const [showAllCategories, setShowAllCategories] = useState(false);
   
@@ -169,16 +174,22 @@ export default function DocumentsScreen() {
   useFocusEffect(
     useCallback(() => {
       const checkPermissions = async () => {
-        console.log('🔄 Checking camera permissions on focus...');
         const { status } = await ImagePicker.getCameraPermissionsAsync();
-        console.log('📷 Camera permission status:', status);
         if (status !== 'granted') {
-          // Permissions perdues, les re-demander au prochain usage
           console.log('⚠️ Camera permission not granted');
         }
       };
       checkPermissions();
-      
+
+      // Si l'écran reprend le focus sans modal de vérification ouverte,
+      // on force le reset des états upload au cas où ils seraient bloqués
+      // (ex: app passée en background pendant l'OCR)
+      if (!verificationOpenRef.current) {
+        setIsUploading(false);
+        setIsProcessingOCR(false);
+        isProcessingRef.current = false;
+      }
+
       // Cleanup: libérer les verrous au blur
       return () => {
         isProcessingRef.current = false;
@@ -467,13 +478,14 @@ export default function DocumentsScreen() {
 
       console.log('3. Launching gallery...');
 
-      // 2. Ouvrir galerie avec options fraîches
+      // 2. Ouvrir galerie — base64:false pour éviter le freeze sur grandes images
+      //    (l'encodage base64 in-picker bloque le thread JS sur les fichiers lourds)
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [4, 3],
         quality: 0.8,
-        base64: true,
+        base64: false,
         exif: false,
       });
 
@@ -482,14 +494,15 @@ export default function DocumentsScreen() {
       if (!result.canceled && result.assets && result.assets[0]) {
         const asset = result.assets[0];
         console.log('5. Image URI:', asset.uri?.substring(0, 50) + '...');
-        console.log('6. Base64 length:', asset.base64?.length || 0);
 
-        // Guard: if no base64 data, read from URI (FileSystem fallback)
-        let base64Data = asset.base64 || '';
-        if (!base64Data && asset.uri) {
+        // Lire le base64 via FileSystem (import statique en haut du fichier)
+        let base64Data = '';
+        if (asset.uri) {
           try {
-            const { FileSystem } = require('expo-file-system');
-            base64Data = await FileSystem.readAsStringAsync(asset.uri, { encoding: 'base64' });
+            base64Data = await FileSystem.readAsStringAsync(asset.uri, {
+              encoding: FileSystem.EncodingType.Base64,
+            });
+            console.log('6. Base64 length:', base64Data.length);
           } catch (e) {
             console.warn('⚠️ Could not read base64 from URI:', e);
           }

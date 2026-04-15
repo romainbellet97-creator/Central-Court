@@ -1013,7 +1013,9 @@ export default function CalendarScreen() {
     if (status === 'pending' || status === 'participating') {
       try {
         const conflicts = await checkTournamentConflicts(tournamentId);
-        if (conflicts.totalConflicts > 0) {
+        // Seuls les tournois concurrents (pending/participating) bloquent vraiment.
+        // Les events calendrier sont des soft-conflicts — on ne bloque pas.
+        if ((conflicts.conflictingTournaments?.length ?? 0) > 0) {
           setConflictData(conflicts);
           setPendingRegistration({ tournamentId, status });
           setShowConflictModal(true);
