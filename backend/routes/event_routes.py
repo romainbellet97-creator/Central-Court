@@ -407,6 +407,24 @@ async def update_event(request: Request, event_id: str, req: UpdateEventRequest)
     return event
 
 
+@router.delete("/calendar-imported")
+async def delete_calendar_imported(request: Request, keep_observations: bool = False):
+    """Delete events imported from device calendar (source='device_calendar').
+
+    keep_observations=false (default): delete ALL imported calendar events.
+    keep_observations=true: only delete imported events that have NO observations.
+    """
+    user_id = await get_current_user_id(request)
+    query: dict = {"userId": user_id, "source": "device_calendar"}
+    if keep_observations:
+        query["$or"] = [
+            {"observations": {"$exists": False}},
+            {"observations": {"$size": 0}},
+        ]
+    result = await db.events.delete_many(query)
+    return {"success": True, "deleted": result.deleted_count}
+
+
 @router.delete("/{event_id}")
 async def delete_event(request: Request, event_id: str):
     """Delete an event. Only owner or proposing staff can delete."""

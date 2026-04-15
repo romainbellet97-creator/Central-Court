@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { CalendarSyncState } from '../hooks/useCalendarSync';
+import { deleteCalendarImported } from '../services/api';
 
 interface Props {
   sync: CalendarSyncState;
@@ -44,35 +45,52 @@ export default function CalendarSyncBanner({ sync }: Props) {
 
   const handleToggleOff = () => {
     Alert.alert(
-      'Désactiver la sync ?',
-      'Les événements déjà importés restent dans votre agenda Central Court. La synchronisation automatique sera désactivée.',
+      'Déconnecter le calendrier ?',
+      'Que faire des événements importés depuis votre calendrier natif ?',
       [
-        { text: 'Annuler', style: 'cancel' },
         {
-          text: 'Désactiver',
+          text: 'Tout supprimer',
           style: 'destructive',
-          onPress: async () => {
-            setIsTogglingOff(true);
-            await disable();
-            setIsTogglingOff(false);
-          },
+          onPress: () => confirmDisconnect(false),
         },
+        {
+          text: 'Garder ceux avec observations',
+          onPress: () => confirmDisconnect(true),
+        },
+        { text: 'Annuler', style: 'cancel' },
       ]
     );
   };
 
+  const confirmDisconnect = async (keepObservations: boolean) => {
+    setIsTogglingOff(true);
+    try {
+      await deleteCalendarImported(keepObservations);
+    } catch (e) {
+      console.warn('Failed to delete imported events:', e);
+    }
+    await disable();
+    setIsTogglingOff(false);
+  };
+
   const handleSyncNow = async () => {
     const result = await syncNow();
-    if (result) {
-      const total = result.inserted + result.updated;
+    if (result === null) {
       Alert.alert(
-        'Synchronisation terminée',
-        total === 0
-          ? 'Aucun nouvel événement à importer.'
-          : `${result.inserted > 0 ? `${result.inserted} ajouté${result.inserted > 1 ? 's' : ''}` : ''}${result.inserted > 0 && result.updated > 0 ? ', ' : ''}${result.updated > 0 ? `${result.updated} mis à jour` : ''}.`,
+        'Synchronisation échouée',
+        'Impossible de synchroniser le calendrier. Vérifiez votre connexion et réessayez.',
         [{ text: 'OK' }]
       );
+      return;
     }
+    const total = result.inserted + result.updated;
+    Alert.alert(
+      'Synchronisation terminée',
+      total === 0
+        ? 'Aucun nouvel événement à importer.'
+        : `${result.inserted > 0 ? `${result.inserted} ajouté${result.inserted > 1 ? 's' : ''}` : ''}${result.inserted > 0 && result.updated > 0 ? ', ' : ''}${result.updated > 0 ? `${result.updated} mis à jour` : ''}.`,
+      [{ text: 'OK' }]
+    );
   };
 
   // ── État désactivé ──

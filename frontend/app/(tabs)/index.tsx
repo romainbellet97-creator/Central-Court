@@ -42,9 +42,11 @@ import {
   checkTournamentConflicts,
   respondToEvent as apiRespondToEvent,
   fetchUserProfile,
+  deleteCalendarImported,
 } from '../../src/services/api';
 import EventObservationSection from '../../src/components/EventObservationSection';
 import { useCalendarSync } from '../../src/hooks/useCalendarSync';
+import CalendarSyncBanner from '../../src/components/CalendarSyncBanner';
 
 // ============ CALENDAR SYNC PROMPT ============
 
@@ -297,6 +299,7 @@ export default function CalendarScreen() {
   const [tournamentWeeks, setTournamentWeeks] = useState<TournamentWeek[]>([]);
   const [unreadAlertCount, setUnreadAlertCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [userCircuits, setUserCircuits] = useState<string[]>(['ATP']);
   const [userNiveaux, setUserNiveaux] = useState<string[]>([]);
 
@@ -338,6 +341,7 @@ export default function CalendarScreen() {
   const [showConflictModal, setShowConflictModal] = useState(false);
   const [pendingRegistration, setPendingRegistration] = useState<{tournamentId: string, status: string} | null>(null);
   const [registeringId, setRegisteringId] = useState<string | null>(null);
+  const [isConfirmingConflict, setIsConfirmingConflict] = useState(false);
 
   // ============ MODAL CLEANUP FUNCTIONS ============
   
@@ -514,6 +518,7 @@ export default function CalendarScreen() {
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
+      setLoadError(false);
       try {
         const circuitsParam = userCircuits.join(',');
         const categoriesParam = userNiveaux.length > 0
@@ -521,13 +526,13 @@ export default function CalendarScreen() {
           : undefined;
 
         const [eventsData, weeksData, alertsData] = await Promise.all([
-          fetchEvents(currentMonth).catch(() => []),
-          fetchTournamentWeeks(circuitsParam, categoriesParam).catch(() => ({ weeks: [] })),
+          fetchEvents(currentMonth),
+          fetchTournamentWeeks(circuitsParam, categoriesParam),
           fetchAlerts(true).catch(() => []),
         ]);
-        
+
         setEvents(Array.isArray(eventsData) ? eventsData : []);
-        
+
         if (weeksData && weeksData.weeks && Array.isArray(weeksData.weeks)) {
           setTournamentWeeks(weeksData.weeks);
         } else if (Array.isArray(weeksData)) {
@@ -535,17 +540,18 @@ export default function CalendarScreen() {
         } else {
           setTournamentWeeks([]);
         }
-        
+
         setUnreadAlertCount(Array.isArray(alertsData) ? alertsData.length : 0);
       } catch (e) {
         console.error('Failed to load data:', e);
+        setLoadError(true);
         setTournamentWeeks([]);
         setEvents([]);
       } finally {
         setLoading(false);
       }
     };
-    
+
     loadData();
   }, [currentMonth, userCircuits, userNiveaux]);
 
@@ -1017,8 +1023,11 @@ export default function CalendarScreen() {
       if (status === 'pending' || status === 'participating') {
         try {
           const conflicts = await checkTournamentConflicts(tournamentId);
-          // Seuls les tournois concurrents (pending/participating) bloquent vraiment.
-          if ((conflicts.conflictingTournaments?.length ?? 0) > 0) {
+          // Seuls les conflits de tournois (hard) bloquent l'inscription.
+          // Les événements calendrier (soft) sont affichés à titre informatif dans le modal
+          // mais ne déclenchent pas seuls une interruption du flow.
+          const hasHardConflicts = (conflicts.conflictingTournaments?.length ?? 0) > 0;
+          if (hasHardConflicts) {
             setConflictData(conflicts);
             setPendingRegistration({ tournamentId, status });
             setShowConflictModal(true);
@@ -1198,6 +1207,42 @@ export default function CalendarScreen() {
     );
   }
 
+  if (loadError) {
+    return (
+      <View style={[styles.container, styles.centered]}>
+        <Ionicons name="cloud-offline-outline" size={56} color="#bdbdbd" />
+        <Text style={styles.loadErrorTitle}>Impossible de charger les données</Text>
+        <Text style={styles.loadErrorSub}>Vérifiez votre connexion internet et réessayez.</Text>
+        <TouchableOpacity
+          style={styles.loadErrorRetryBtn}
+          onPress={() => {
+            // trigger reload by bumping currentMonth (same value forces re-run)
+            setLoadError(false);
+            setLoading(true);
+            const circuitsParam = userCircuits.join(',');
+            const categoriesParam = userNiveaux.length > 0
+              ? userNiveaux.map(n => NIVEAUX_TO_CATEGORY[n]).filter(Boolean).join(',')
+              : undefined;
+            Promise.all([
+              fetchEvents(currentMonth),
+              fetchTournamentWeeks(circuitsParam, categoriesParam),
+              fetchAlerts(true).catch(() => []),
+            ]).then(([eventsData, weeksData, alertsData]) => {
+              setEvents(Array.isArray(eventsData) ? eventsData : []);
+              if (weeksData?.weeks) setTournamentWeeks(weeksData.weeks);
+              else if (Array.isArray(weeksData)) setTournamentWeeks(weeksData);
+              else setTournamentWeeks([]);
+              setUnreadAlertCount(Array.isArray(alertsData) ? alertsData.length : 0);
+            }).catch(() => setLoadError(true)).finally(() => setLoading(false));
+          }}
+        >
+          <Ionicons name="refresh-outline" size={18} color="#fff" />
+          <Text style={styles.loadErrorRetryText}>Réessayer</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -1207,18 +1252,76 @@ export default function CalendarScreen() {
       >
         <View style={styles.headerRow}>
           <Text style={styles.headerTitle}>Calendrier</Text>
-          <TouchableOpacity 
-            style={styles.alertBtn}
-            onPress={() => router.push('/notifications')}
-            data-testid="notifications-btn"
-          >
-            <Ionicons name="notifications-outline" size={24} color="#fff" />
-            {unreadAlertCount > 0 && (
-              <View style={styles.alertBadge}>
-                <Text style={styles.alertBadgeText}>{unreadAlertCount}</Text>
-              </View>
+          <View style={styles.headerActions}>
+            {calendarSync.isEnabled && (
+              <TouchableOpacity
+                style={styles.calSyncBtn}
+                onPress={() =>
+                  Alert.alert(
+                    'Calendrier connecté',
+                    'Votre calendrier natif est synchronisé avec Central Court.',
+                    [
+                      {
+                        text: 'Synchroniser maintenant',
+                        onPress: async () => {
+                          const result = await calendarSync.syncNow();
+                          if (result === null) {
+                            Alert.alert('Échec', 'Synchronisation impossible. Vérifiez votre connexion.');
+                          } else {
+                            const total = result.inserted + result.updated;
+                            Alert.alert('Synchronisé', total === 0 ? 'Aucun nouvel événement.' : `${total} événement${total > 1 ? 's' : ''} mis à jour.`);
+                          }
+                        },
+                      },
+                      {
+                        text: 'Déconnecter',
+                        style: 'destructive',
+                        onPress: () =>
+                          Alert.alert(
+                            'Déconnecter le calendrier ?',
+                            'Que faire des événements importés depuis votre calendrier natif ?',
+                            [
+                              {
+                                text: 'Tout supprimer',
+                                style: 'destructive',
+                                onPress: async () => {
+                                  try { await deleteCalendarImported(false); } catch {}
+                                  await calendarSync.disable();
+                                },
+                              },
+                              {
+                                text: 'Garder ceux avec observations',
+                                onPress: async () => {
+                                  try { await deleteCalendarImported(true); } catch {}
+                                  await calendarSync.disable();
+                                },
+                              },
+                              { text: 'Annuler', style: 'cancel' },
+                            ]
+                          ),
+                      },
+                      { text: 'Annuler', style: 'cancel' },
+                    ]
+                  )
+                }
+              >
+                <Ionicons name="calendar" size={22} color="#fff" />
+                <View style={styles.calSyncDot} />
+              </TouchableOpacity>
             )}
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.alertBtn}
+              onPress={() => router.push('/notifications')}
+              data-testid="notifications-btn"
+            >
+              <Ionicons name="notifications-outline" size={24} color="#fff" />
+              {unreadAlertCount > 0 && (
+                <View style={styles.alertBadge}>
+                  <Text style={styles.alertBadgeText}>{unreadAlertCount}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
         
         <View style={styles.circuitRow}>
@@ -1231,9 +1334,15 @@ export default function CalendarScreen() {
       </LinearGradient>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Bannière sync calendrier — affichée seulement si pas encore activé */}
-        {!calendarSync.isEnabled && !calendarSync.isSyncing && (
-          <CalendarSyncPrompt onConnect={calendarSync.enable} />
+        {/* Bannière sync calendrier */}
+        {calendarSync.isEnabled ? (
+          <View style={styles.calBannerWrap}>
+            <CalendarSyncBanner sync={calendarSync} />
+          </View>
+        ) : (
+          !calendarSync.isSyncing && (
+            <CalendarSyncPrompt onConnect={calendarSync.enable} />
+          )
         )}
 
         {/* Calendar */}
@@ -2423,45 +2532,101 @@ export default function CalendarScreen() {
         <View style={styles.conflictOverlay}>
           <View style={styles.conflictCard}>
             <View style={styles.conflictHeader}>
-              <Ionicons name="warning" size={32} color="#FF9800" />
-              <Text style={styles.conflictTitle}>Conflit d'agenda</Text>
+              <Ionicons
+                name={(conflictData?.conflictingTournaments?.length ?? 0) > 0 ? "warning" : "information-circle"}
+                size={32}
+                color={(conflictData?.conflictingTournaments?.length ?? 0) > 0 ? "#FF9800" : "#2196F3"}
+              />
+              <Text style={styles.conflictTitle}>
+                {(conflictData?.conflictingTournaments?.length ?? 0) > 0 ? "Conflit d'agenda" : "Événements proches"}
+              </Text>
             </View>
-            
-            <Text style={styles.conflictSubtitle}>
-              {conflictData?.totalConflicts || 0} conflit{(conflictData?.totalConflicts || 0) > 1 ? 's' : ''} détecté{(conflictData?.totalConflicts || 0) > 1 ? 's' : ''}
-            </Text>
-            
+
+            {(conflictData?.conflictingTournaments?.length ?? 0) > 0 && (
+              <Text style={styles.conflictSubtitle}>
+                {conflictData.conflictingTournaments.length} tournoi{conflictData.conflictingTournaments.length > 1 ? 's' : ''} en conflit cette semaine
+              </Text>
+            )}
+
             <ScrollView style={styles.conflictList}>
-              {conflictData?.conflictingTournaments?.map((ct: any) => (
-                <View key={ct.id} style={styles.conflictItem}>
-                  <Ionicons name="trophy-outline" size={18} color="#FF9800" />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.conflictItemName}>{ct.name}</Text>
-                    <Text style={styles.conflictItemMeta}>
-                      {ct.startDate ? new Date(ct.startDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : ''} - 
-                      {ct.endDate ? new Date(ct.endDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : ''}
-                    </Text>
-                  </View>
-                </View>
-              ))}
+              {/* Hard conflicts — tournaments */}
+              {(conflictData?.conflictingTournaments?.length ?? 0) > 0 && (
+                <>
+                  {(conflictData?.calendarEvents?.length ?? 0) > 0 && (
+                    <Text style={styles.conflictSectionLabel}>Tournois en conflit</Text>
+                  )}
+                  {conflictData.conflictingTournaments.map((ct: any) => (
+                    <View key={ct.id} style={styles.conflictItem}>
+                      <Ionicons name="trophy-outline" size={18} color="#FF9800" />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.conflictItemName}>{ct.name}</Text>
+                        <Text style={styles.conflictItemMeta}>
+                          {ct.startDate ? new Date(ct.startDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : ''}{ct.endDate ? ` – ${new Date(ct.endDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}` : ''}
+                        </Text>
+                      </View>
+                    </View>
+                  ))}
+                </>
+              )}
+
+              {/* Soft conflicts — calendar events */}
+              {(conflictData?.calendarEvents?.length ?? 0) > 0 && (
+                <>
+                  <Text style={[styles.conflictSectionLabel, { color: '#2196F3' }]}>
+                    {(conflictData?.conflictingTournaments?.length ?? 0) > 0 ? 'Événements calendrier' : 'Ces événements sont prévus cette semaine-là'}
+                  </Text>
+                  {conflictData.calendarEvents.map((ce: any, idx: number) => (
+                    <View key={ce.id || idx} style={[styles.conflictItem, styles.conflictItemSoft]}>
+                      <Ionicons name="calendar-outline" size={18} color="#2196F3" />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.conflictItemName}>{ce.title || ce.name || 'Événement'}</Text>
+                        {(ce.startDate || ce.start) && (
+                          <Text style={styles.conflictItemMeta}>
+                            {new Date(ce.startDate || ce.start).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })}
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+                  ))}
+                </>
+              )}
             </ScrollView>
-            
+
+            {(conflictData?.conflictingTournaments?.length ?? 0) > 0 && (
+              <Text style={styles.conflictWarning}>
+                Vous ne pouvez être inscrit qu'à un seul tournoi par semaine. Continuer retirera votre inscription au(x) tournoi(s) ci-dessus.
+              </Text>
+            )}
+
             <View style={styles.conflictActions}>
-              <TouchableOpacity 
-                style={styles.conflictProceedBtn} 
-                onPress={() => {
-                  if (pendingRegistration) {
-                    executeRegistration(pendingRegistration.tournamentId, pendingRegistration.status);
-                  }
+              <TouchableOpacity
+                style={[styles.conflictProceedBtn, isConfirmingConflict && { opacity: 0.7 }]}
+                disabled={isConfirmingConflict}
+                onPress={async () => {
+                  if (!pendingRegistration || isConfirmingConflict) return;
+                  setIsConfirmingConflict(true);
+                  const { tournamentId, status } = pendingRegistration;
                   setShowConflictModal(false);
                   setConflictData(null);
                   setPendingRegistration(null);
+                  try {
+                    await executeRegistration(tournamentId, status);
+                  } finally {
+                    setIsConfirmingConflict(false);
+                  }
                 }}
               >
-                <Text style={styles.conflictProceedText}>Continuer quand même</Text>
+                {isConfirmingConflict ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.conflictProceedText}>
+                    {(conflictData?.conflictingTournaments?.length ?? 0) > 0 ? 'Continuer quand même' : "S'inscrire"}
+                  </Text>
+                )}
               </TouchableOpacity>
-              <TouchableOpacity 
-                style={styles.conflictCancelBtn} 
+              <TouchableOpacity
+                style={styles.conflictCancelBtn}
+                disabled={isConfirmingConflict}
                 onPress={() => {
                   setShowConflictModal(false);
                   setConflictData(null);
@@ -2484,11 +2649,19 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8f9fa' },
   centered: { justifyContent: 'center', alignItems: 'center' },
   loadingText: { marginTop: 12, fontSize: 16, color: '#666' },
+  loadErrorTitle: { marginTop: 16, fontSize: 18, fontWeight: '700', color: '#1a1a1a', textAlign: 'center' },
+  loadErrorSub: { marginTop: 8, fontSize: 14, color: '#666', textAlign: 'center', paddingHorizontal: 32 },
+  loadErrorRetryBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 24, backgroundColor: '#1e3c72', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 10 },
+  loadErrorRetryText: { fontSize: 15, fontWeight: '600', color: '#fff' },
   
   // Header
   header: { paddingHorizontal: 20, paddingBottom: 16 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   headerTitle: { fontSize: 28, fontWeight: '700', color: '#fff' },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  calSyncBtn: { position: 'relative', padding: 8 },
+  calSyncDot: { position: 'absolute', top: 8, right: 8, width: 8, height: 8, borderRadius: 4, backgroundColor: '#4CAF50', borderWidth: 1.5, borderColor: '#1e3c72' },
+  calBannerWrap: { marginHorizontal: 16, marginTop: 12 },
   alertBtn: { position: 'relative', padding: 8 },
   alertBadge: { position: 'absolute', top: 4, right: 4, backgroundColor: '#FF5252', borderRadius: 8, minWidth: 16, height: 16, alignItems: 'center', justifyContent: 'center' },
   alertBadgeText: { fontSize: 10, fontWeight: '700', color: '#fff' },
@@ -2698,10 +2871,13 @@ const styles = StyleSheet.create({
   conflictHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 8 },
   conflictTitle: { fontSize: 20, fontWeight: '700', color: '#1a1a1a' },
   conflictSubtitle: { fontSize: 14, color: '#666', marginBottom: 16 },
-  conflictList: { maxHeight: 250, marginBottom: 20 },
+  conflictList: { maxHeight: 260, marginBottom: 12 },
   conflictItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
+  conflictItemSoft: { opacity: 0.85 },
   conflictItemName: { fontSize: 15, fontWeight: '600', color: '#1a1a1a' },
   conflictItemMeta: { fontSize: 12, color: '#999', marginTop: 2 },
+  conflictSectionLabel: { fontSize: 12, fontWeight: '700', color: '#FF9800', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 8, marginBottom: 4 },
+  conflictWarning: { fontSize: 12, color: '#FF9800', backgroundColor: '#FFF8E1', padding: 10, borderRadius: 8, marginBottom: 12, lineHeight: 17 },
   conflictActions: { gap: 10 },
   conflictProceedBtn: { backgroundColor: '#FF9800', padding: 14, borderRadius: 12, alignItems: 'center' },
   conflictProceedText: { fontSize: 15, fontWeight: '600', color: '#fff' },

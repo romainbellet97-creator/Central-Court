@@ -108,6 +108,7 @@ export default function DocumentsScreen() {
   // Upload/OCR state - CRITIQUE: Utiliser des états séparés
   const [isUploading, setIsUploading] = useState(false);
   const [isProcessingOCR, setIsProcessingOCR] = useState(false);
+  const ocrAbortRef = useRef<AbortController | null>(null);
   const [pendingDocUri, setPendingDocUri] = useState<string | null>(null);
   const [pendingDocBase64, setPendingDocBase64] = useState<string | null>(null);
   const [pendingDocType, setPendingDocType] = useState<'pdf' | 'image'>('image');
@@ -561,12 +562,17 @@ export default function DocumentsScreen() {
     setPendingDocType(type);
     setPendingDocName(name);
 
+    // Set up cancellation + 30s timeout
+    const abortController = new AbortController();
+    ocrAbortRef.current = abortController;
+    const ocrTimeout = setTimeout(() => abortController.abort('timeout'), 30000);
+
     try {
       console.log('OCR: Sending image to API...');
       const response = await api.post('/api/invoices/analyze-base64', {
         image_base64: base64,
         filename: name,
-      });
+      }, { signal: abortController.signal, timeout: 30000 });
 
       console.log('OCR Response success:', response.data.success);
 
@@ -601,14 +607,19 @@ export default function DocumentsScreen() {
       setShowVerificationModal(true);
       
     } catch (error: any) {
-      console.error('❌ OCR ERROR:', error?.message || error);
-      // BUG #4 FIX: Afficher une alerte si l'OCR échoue
-      Alert.alert(
-        'OCR non disponible',
-        'L\'analyse automatique n\'a pas pu extraire les données. Veuillez remplir le formulaire manuellement.',
-        [{ text: 'OK' }]
-      );
-      // Still show form for manual entry
+      const isCancelled = error?.name === 'CanceledError' || error?.name === 'AbortError' || error?.code === 'ERR_CANCELED';
+      const isTimeout = isCancelled && abortController.signal.reason === 'timeout';
+      console.error('❌ OCR ERROR:', isCancelled ? (isTimeout ? 'timeout' : 'cancelled') : (error?.message || error));
+
+      if (!isCancelled) {
+        // Network or server error — inform user, still open manual form
+        Alert.alert(
+          'OCR non disponible',
+          'L\'analyse automatique n\'a pas pu extraire les données. Veuillez remplir le formulaire manuellement.',
+          [{ text: 'OK' }]
+        );
+      }
+      // If cancelled by user or timed out — skip alert, just open manual form
       setEditedFournisseur('');
       setEditedDate(new Date().toISOString().split('T')[0]);
       setEditedMontant('');
@@ -618,6 +629,8 @@ export default function DocumentsScreen() {
       setEditedCurrency('EUR');
       setShowVerificationModal(true);
     } finally {
+      clearTimeout(ocrTimeout);
+      ocrAbortRef.current = null;
       // CRITIQUE: Toujours libérer les verrous
       console.log('🔓 Releasing OCR lock');
       setIsUploading(false);
@@ -915,11 +928,19 @@ export default function DocumentsScreen() {
 
       {/* ── OCR Loading Overlay ── */}
       {isProcessingOCR && (
-        <View style={s.ocrOverlay} pointerEvents="box-none">
+        <View style={s.ocrOverlay}>
           <View style={s.ocrCard}>
             <ActivityIndicator size="large" color="#1e3c72" />
             <Text style={s.ocrCardTitle}>Analyse en cours…</Text>
             <Text style={s.ocrCardSub}>L'IA extrait les données du document</Text>
+            <TouchableOpacity
+              style={s.ocrCancelBtn}
+              onPress={() => {
+                ocrAbortRef.current?.abort('user_cancel');
+              }}
+            >
+              <Text style={s.ocrCancelText}>Passer en mode manuel</Text>
+            </TouchableOpacity>
           </View>
         </View>
       )}
@@ -1267,6 +1288,8 @@ const s = StyleSheet.create({
   ocrCard: { backgroundColor: '#fff', borderRadius: 20, paddingHorizontal: 32, paddingVertical: 28, alignItems: 'center', gap: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.18, shadowRadius: 20, elevation: 12, minWidth: 220 },
   ocrCardTitle: { fontSize: 16, fontWeight: '700', color: '#1a1a1a', marginTop: 4 },
   ocrCardSub: { fontSize: 13, color: '#6b7280', textAlign: 'center' },
+  ocrCancelBtn: { marginTop: 8, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8, borderWidth: 1, borderColor: '#e5e7eb' },
+  ocrCancelText: { fontSize: 13, color: '#6b7280', fontWeight: '500' },
 
   // Modals
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },

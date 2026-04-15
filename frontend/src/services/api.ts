@@ -143,6 +143,12 @@ export const syncCalendarEvents = (events: CalendarEventItem[]) =>
     { method: 'POST', body: JSON.stringify({ events }) }
   );
 
+export const deleteCalendarImported = (keepObservations: boolean) =>
+  apiFetch<{ success: boolean; deleted: number }>(
+    `/api/events/calendar-imported?keep_observations=${keepObservations}`,
+    { method: 'DELETE' }
+  );
+
 // ── Tournaments ──
 export const fetchTournaments = (circuits?: string) =>
   apiFetch<any[]>(circuits ? `/api/tournaments?circuits=${circuits}` : '/api/tournaments');
