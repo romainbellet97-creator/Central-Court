@@ -20,6 +20,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
+import * as ImageManipulator from 'expo-image-manipulator';
 import api from '../../src/services/api';
 
 // ============ TYPES ============
@@ -126,6 +127,29 @@ export default function DocumentsScreen() {
 
   // Available currencies
   const CURRENCIES = ['EUR', 'USD', 'GBP', 'CHF', 'AUD', 'CAD', 'AED'];
+
+  // ============ DEBUG PANEL ============
+  const [showDebug, setShowDebug] = useState(false);
+  const [debugLog, setDebugLog] = useState<{ ts: string; msg: string; kind: 'info' | 'warn' | 'error' | 'ok' }[]>([]);
+  const debugTapCount = useRef(0);
+  const debugTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const dbg = useCallback((msg: string, kind: 'info' | 'warn' | 'error' | 'ok' = 'info') => {
+    const ts = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const prefix = kind === 'error' ? '❌' : kind === 'warn' ? '⚠️' : kind === 'ok' ? '✅' : 'ℹ️';
+    console.log(`[VAULT DEBUG] ${prefix} ${msg}`);
+    setDebugLog(prev => [{ ts, msg: `${prefix} ${msg}`, kind }, ...prev].slice(0, 40));
+  }, []);
+
+  const handleDebugTap = () => {
+    debugTapCount.current += 1;
+    if (debugTapTimer.current) clearTimeout(debugTapTimer.current);
+    debugTapTimer.current = setTimeout(() => { debugTapCount.current = 0; }, 800);
+    if (debugTapCount.current >= 3) {
+      debugTapCount.current = 0;
+      setShowDebug(v => !v);
+    }
+  };
 
   // ============ CLEANUP / RESET ============
 
@@ -358,51 +382,65 @@ export default function DocumentsScreen() {
 
   // ============ UPLOAD / OCR - CORRIGÉ ============
 
+  /**
+   * Redimensionne une image à max 1200px (côté le plus long) avant envoi OCR.
+   * Évite les crashes et timeouts sur les photos haute résolution (4032×3024 iPhone).
+   * Retourne l'URI redimensionnée (ou l'originale si l'opération échoue).
+   */
+  const resizeImageForOCR = async (uri: string): Promise<string> => {
+    try {
+      const result = await ImageManipulator.manipulateAsync(
+        uri,
+        [{ resize: { width: 1200 } }], // garde le ratio, limite la largeur à 1200px
+        { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
+      );
+      console.log('✂️ Image resized for OCR:', result.uri.substring(0, 60));
+      return result.uri;
+    } catch (e) {
+      console.warn('⚠️ Image resize failed, using original:', e);
+      return uri; // fallback sur l'original plutôt que de bloquer
+    }
+  };
+
   const handleTakePhoto = async () => {
-    console.log('📸 === TAKE PHOTO PRESSED ===');
-    
-    // CRITIQUE: Garde contre double appel
+    dbg('CAMERA bouton pressé');
+
     if (isProcessingRef.current) {
-      console.log('⚠️ Already processing, ignoring click');
+      dbg('CAMERA ignoré — verrou déjà actif (isProcessingRef=true)', 'warn');
       return;
     }
-    
-    // Fermer le modal immédiatement
+
     setShowUploadModal(false);
-    
+
     try {
       isProcessingRef.current = true;
-      
-      // 1. Toujours demander les permissions
-      console.log('1. Requesting camera permissions...');
+      dbg('CAMERA verrou activé');
+
+      dbg('CAMERA demande permission…');
       const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-      console.log('2. Permission result:', permissionResult.status);
-      
+      dbg(`CAMERA permission: ${permissionResult.status}`, permissionResult.status === 'granted' ? 'ok' : 'warn');
+
       if (permissionResult.status !== 'granted') {
         isProcessingRef.current = false;
+        dbg('CAMERA permission refusée — verrou libéré', 'error');
         Alert.alert(
           'Permission requise',
           'Autorisez l\'accès à la caméra pour scanner les reçus.',
           [
             { text: 'Annuler', style: 'cancel' },
-            { 
-              text: 'Ouvrir Paramètres', 
+            {
+              text: 'Ouvrir Paramètres',
               onPress: () => {
-                if (Platform.OS === 'ios') {
-                  Linking.openURL('app-settings:');
-                } else {
-                  Linking.openSettings();
-                }
-              }
+                if (Platform.OS === 'ios') Linking.openURL('app-settings:');
+                else Linking.openSettings();
+              },
             },
           ]
         );
         return;
       }
 
-      console.log('3. Launching camera...');
-      
-      // 2. Ouvrir caméra — base64:false comme la galerie (évite l'encodage synchrone en picker)
+      dbg('CAMERA lancement ImagePicker…');
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
@@ -412,68 +450,68 @@ export default function DocumentsScreen() {
         exif: false,
       });
 
-      console.log('4. Camera result:', result.canceled ? 'CANCELED' : 'PHOTO TAKEN');
-
-      if (!result.canceled && result.assets && result.assets[0]) {
-        const asset = result.assets[0];
-        console.log('5. Photo URI:', asset.uri?.substring(0, 50) + '...');
-
-        // Lire le base64 de façon asynchrone (même pattern que la galerie)
-        let base64Data = '';
-        if (asset.uri) {
-          try {
-            base64Data = await FileSystem.readAsStringAsync(asset.uri, {
-              encoding: FileSystem.EncodingType.Base64,
-            });
-            console.log('6. Base64 length:', base64Data.length);
-          } catch (e) {
-            console.warn('⚠️ Could not read base64 from camera URI:', e);
-          }
-        }
-
-        await processDocumentWithOCRBase64(
-          base64Data,
-          asset.uri,
-          'image',
-          `Photo_${Date.now()}.jpg`
-        );
-      } else {
-        console.log('5. Photo canceled by user');
+      if (result.canceled) {
+        dbg('CAMERA annulée par l\'utilisateur', 'warn');
         isProcessingRef.current = false;
+        return;
       }
+
+      const asset = result.assets[0];
+      dbg(`CAMERA photo reçue — dimensions: ${asset.width}×${asset.height}`);
+
+      dbg('CAMERA redimensionnement 1200px…');
+      const resizedUri = await resizeImageForOCR(asset.uri);
+      dbg('CAMERA redimensionnement OK', 'ok');
+
+      dbg('CAMERA lecture base64…');
+      let base64Data = '';
+      try {
+        base64Data = await FileSystem.readAsStringAsync(resizedUri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        dbg(`CAMERA base64 prêt — ${(base64Data.length / 1024).toFixed(0)} Ko`, 'ok');
+      } catch (e: any) {
+        dbg(`CAMERA lecture base64 ÉCHEC: ${e?.message}`, 'error');
+      }
+
+      await processDocumentWithOCRBase64(base64Data, resizedUri, 'image', `Photo_${Date.now()}.jpg`);
     } catch (error: any) {
-      console.error('❌ CAMERA ERROR:', error);
+      dbg(`CAMERA ERREUR: ${error?.message || String(error)}`, 'error');
       isProcessingRef.current = false;
       Alert.alert('Erreur', error?.message || 'Impossible d\'ouvrir la caméra');
     } finally {
       if (isProcessingRef.current) {
-        console.warn('⚠️ Camera: isProcessingRef was still true after completion, releasing');
+        dbg('CAMERA finally — verrou encore actif, libération forcée', 'warn');
         isProcessingRef.current = false;
       }
     }
   };
 
   const handleSelectGallery = async () => {
-    console.log('🖼️ === GALLERY PRESSED ===');
-    
-    // CRITIQUE: Garde contre double appel
+    dbg('GALERIE bouton pressé');
+
     if (isProcessingRef.current) {
-      console.log('⚠️ Already processing, ignoring click');
+      dbg('GALERIE ignorée — verrou déjà actif (isProcessingRef=true)', 'warn');
       return;
     }
-    
-    // Fermer le modal immédiatement
+
     setShowUploadModal(false);
-    
+
     try {
       isProcessingRef.current = true;
-      
-      // 1. Toujours demander les permissions
-      console.log('1. Requesting gallery permissions...');
+      dbg('GALERIE verrou activé');
+
+      dbg('GALERIE demande permission…');
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      console.log('2. Permission result:', permissionResult.status);
-      
-      if (permissionResult.status !== 'granted') {
+      const accessPriv = (permissionResult as any).accessPrivileges ?? 'n/a';
+      dbg(`GALERIE permission: status=${permissionResult.status} accessPrivileges=${accessPriv}`,
+        permissionResult.status === 'granted' ? 'ok' : 'warn');
+
+      // iOS 14+: "Select Photos" donne status='granted' avec accessPrivileges='limited' — on accepte les deux
+      const isGranted = permissionResult.status === 'granted' ||
+        (permissionResult as any).accessPrivileges === 'limited';
+
+      if (!isGranted) {
         isProcessingRef.current = false;
         Alert.alert(
           'Permission requise',
@@ -492,13 +530,26 @@ export default function DocumentsScreen() {
             },
           ]
         );
+        dbg('GALERIE permission refusée — verrou libéré', 'error');
+        isProcessingRef.current = false;
+        Alert.alert(
+          'Permission requise',
+          'Autorisez l\'accès à la galerie pour sélectionner des photos.',
+          [
+            { text: 'Annuler', style: 'cancel' },
+            {
+              text: 'Ouvrir Paramètres',
+              onPress: () => {
+                if (Platform.OS === 'ios') Linking.openURL('app-settings:');
+                else Linking.openSettings();
+              },
+            },
+          ]
+        );
         return;
       }
 
-      console.log('3. Launching gallery...');
-
-      // 2. Ouvrir galerie — base64:false pour éviter le freeze sur grandes images
-      //    (l'encodage base64 in-picker bloque le thread JS sur les fichiers lourds)
+      dbg('GALERIE lancement ImagePicker…');
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
@@ -508,43 +559,38 @@ export default function DocumentsScreen() {
         exif: false,
       });
 
-      console.log('4. Gallery result:', result.canceled ? 'CANCELED' : 'IMAGE SELECTED');
-
-      if (!result.canceled && result.assets && result.assets[0]) {
-        const asset = result.assets[0];
-        console.log('5. Image URI:', asset.uri?.substring(0, 50) + '...');
-
-        // Lire le base64 via FileSystem (import statique en haut du fichier)
-        let base64Data = '';
-        if (asset.uri) {
-          try {
-            base64Data = await FileSystem.readAsStringAsync(asset.uri, {
-              encoding: FileSystem.EncodingType.Base64,
-            });
-            console.log('6. Base64 length:', base64Data.length);
-          } catch (e) {
-            console.warn('⚠️ Could not read base64 from URI:', e);
-          }
-        }
-
-        await processDocumentWithOCRBase64(
-          base64Data,
-          asset.uri,
-          'image',
-          `Galerie_${Date.now()}.jpg`
-        );
-      } else {
-        console.log('5. Selection canceled by user');
+      if (result.canceled) {
+        dbg('GALERIE annulée par l\'utilisateur', 'warn');
         isProcessingRef.current = false;
+        return;
       }
+
+      const asset = result.assets[0];
+      dbg(`GALERIE image reçue — dimensions: ${asset.width}×${asset.height}`);
+
+      dbg('GALERIE redimensionnement 1200px…');
+      const resizedUri = await resizeImageForOCR(asset.uri);
+      dbg('GALERIE redimensionnement OK', 'ok');
+
+      dbg('GALERIE lecture base64…');
+      let base64Data = '';
+      try {
+        base64Data = await FileSystem.readAsStringAsync(resizedUri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        dbg(`GALERIE base64 prêt — ${(base64Data.length / 1024).toFixed(0)} Ko`, 'ok');
+      } catch (e: any) {
+        dbg(`GALERIE lecture base64 ÉCHEC: ${e?.message}`, 'error');
+      }
+
+      await processDocumentWithOCRBase64(base64Data, resizedUri, 'image', `Galerie_${Date.now()}.jpg`);
     } catch (error: any) {
-      console.error('❌ GALLERY ERROR:', error);
+      dbg(`GALERIE ERREUR: ${error?.message || String(error)}`, 'error');
       isProcessingRef.current = false;
       Alert.alert('Erreur', error?.message || 'Impossible d\'ouvrir la galerie');
     } finally {
-      // Defensive: ensure lock is always released (OCR already does this, but belt-and-suspenders)
       if (isProcessingRef.current) {
-        console.warn('⚠️ Gallery: isProcessingRef was still true after completion, releasing');
+        dbg('GALERIE finally — verrou encore actif, libération forcée', 'warn');
         isProcessingRef.current = false;
       }
     }
@@ -552,9 +598,8 @@ export default function DocumentsScreen() {
 
   // Fonction OCR corrigée
   const processDocumentWithOCRBase64 = async (base64: string, uri: string, type: 'pdf' | 'image', name: string) => {
-    console.log('🔍 === OCR PROCESSING START ===');
-    
-    // Mettre à jour les états
+    dbg(`OCR démarré — fichier: ${name} — base64: ${(base64.length / 1024).toFixed(0)} Ko`);
+
     setIsUploading(true);
     setIsProcessingOCR(true);
     setPendingDocUri(uri);
@@ -562,28 +607,25 @@ export default function DocumentsScreen() {
     setPendingDocType(type);
     setPendingDocName(name);
 
-    // Set up cancellation + 30s timeout
     const abortController = new AbortController();
     ocrAbortRef.current = abortController;
-    const ocrTimeout = setTimeout(() => abortController.abort('timeout'), 30000);
+    const ocrTimeout = setTimeout(() => {
+      dbg('OCR timeout 30s — annulation automatique', 'warn');
+      abortController.abort('timeout');
+    }, 30000);
 
     try {
-      console.log('OCR: Sending image to API...');
+      dbg('OCR envoi vers /api/invoices/analyze-base64…');
       const response = await api.post('/api/invoices/analyze-base64', {
         image_base64: base64,
         filename: name,
       }, { signal: abortController.signal, timeout: 30000 });
 
-      console.log('OCR Response success:', response.data.success);
+      dbg(`OCR réponse reçue — success: ${response.data.success}`, response.data.success ? 'ok' : 'warn');
 
       if (response.data.success && response.data.data) {
         const data = response.data.data;
-        console.log('OCR Data:', {
-          fournisseur: data.fournisseur,
-          montant: data.montantTotal,
-          date: data.dateFacture,
-        });
-        
+        dbg(`OCR données extraites — fournisseur: "${data.fournisseur}" montant: ${data.montantTotal} date: ${data.dateFacture}`, 'ok');
         setEditedFournisseur(data.fournisseur || '');
         setEditedDate(data.dateFacture || new Date().toISOString().split('T')[0]);
         setEditedMontant(data.montantTotal?.toString() || '');
@@ -592,8 +634,7 @@ export default function DocumentsScreen() {
         setEditedCategorie(data.categorie || 'Autre');
         setEditedCurrency(data.currency || 'EUR');
       } else {
-        // OCR failed - prepare for manual entry
-        console.log('OCR: No data extracted, manual entry mode');
+        dbg('OCR aucune donnée extraite — mode saisie manuelle', 'warn');
         setEditedFournisseur('');
         setEditedDate(new Date().toISOString().split('T')[0]);
         setEditedMontant('');
@@ -602,24 +643,26 @@ export default function DocumentsScreen() {
         setEditedCategorie('Autre');
         setEditedCurrency('EUR');
       }
-      
-      // Afficher le modal de vérification
+
+      dbg('OCR ouverture modal de vérification', 'ok');
       setShowVerificationModal(true);
-      
+
     } catch (error: any) {
       const isCancelled = error?.name === 'CanceledError' || error?.name === 'AbortError' || error?.code === 'ERR_CANCELED';
       const isTimeout = isCancelled && abortController.signal.reason === 'timeout';
-      console.error('❌ OCR ERROR:', isCancelled ? (isTimeout ? 'timeout' : 'cancelled') : (error?.message || error));
+      const isUserCancel = isCancelled && abortController.signal.reason === 'user_cancel';
+
+      if (isTimeout) dbg('OCR ÉCHEC — timeout 30s dépassé', 'error');
+      else if (isUserCancel) dbg('OCR annulé par l\'utilisateur', 'warn');
+      else dbg(`OCR ÉCHEC — ${error?.code ?? ''} ${error?.message ?? String(error)}`, 'error');
 
       if (!isCancelled) {
-        // Network or server error — inform user, still open manual form
         Alert.alert(
           'OCR non disponible',
           'L\'analyse automatique n\'a pas pu extraire les données. Veuillez remplir le formulaire manuellement.',
           [{ text: 'OK' }]
         );
       }
-      // If cancelled by user or timed out — skip alert, just open manual form
       setEditedFournisseur('');
       setEditedDate(new Date().toISOString().split('T')[0]);
       setEditedMontant('');
@@ -627,6 +670,7 @@ export default function DocumentsScreen() {
       setEditedMontantTVA('');
       setEditedCategorie('Autre');
       setEditedCurrency('EUR');
+      dbg('OCR ouverture modal saisie manuelle après échec');
       setShowVerificationModal(true);
     } finally {
       clearTimeout(ocrTimeout);
@@ -640,27 +684,28 @@ export default function DocumentsScreen() {
   };
 
   const handleSaveDocument = async () => {
-    console.log('💾 === SAVE DOCUMENT ===');
-    
+    dbg(`SAVE bouton pressé — fournisseur:"${editedFournisseur}" montant:${editedMontant} date:${editedDate} cat:${editedCategorie}`);
+
     if (isSaving) {
-      console.log('⚠️ Already saving, ignoring');
+      dbg('SAVE ignoré — déjà en cours de sauvegarde', 'warn');
       return;
     }
-    
-    // BUG #17 FIX: Utiliser null check explicite au lieu de || pour gérer 0 correctement
+
     const parsedMontant = parseFloat(editedMontant.replace(',', '.')) || 0;
     const htValue = parseFloat(editedMontantHT.replace(',', '.'));
     const tvaValue = parseFloat(editedMontantTVA.replace(',', '.'));
     const parsedHT = isNaN(htValue) ? undefined : htValue;
     const parsedTVA = isNaN(tvaValue) ? undefined : tvaValue;
 
+    dbg(`SAVE payload — montant:${parsedMontant} HT:${parsedHT} TVA:${parsedTVA} base64:${pendingDocBase64 ? (pendingDocBase64.length / 1024).toFixed(0) + ' Ko' : 'VIDE'}`);
     setIsSaving(true);
-    
+
     try {
+      dbg('SAVE envoi vers /api/documents…');
       const response = await api.post('/api/documents', {
         name: editedFournisseur || pendingDocName,
         fournisseur: editedFournisseur,
-        dateFacture: editedDate, // BUG #1 FIX: Utiliser la date extraite par l'IA, PAS new Date()
+        dateFacture: editedDate,
         category: editedCategorie,
         montantTotal: parsedMontant,
         montantHT: parsedHT,
@@ -670,12 +715,11 @@ export default function DocumentsScreen() {
         fileType: pendingDocType,
       });
 
-      console.log('✅ Document saved:', response.data.id);
+      dbg(`SAVE OK — id: ${response.data.id}`, 'ok');
 
       const saved = response.data;
       const savedDate = saved.dateFacture || editedDate;
-      
-      // BUG #1 FIX: Ajouter le document à la liste locale
+
       setDocuments(prev => [{
         id: saved.id,
         name: saved.name,
@@ -688,22 +732,18 @@ export default function DocumentsScreen() {
         createdAt: saved.createdAt,
       }, ...prev]);
 
-      // ============================================================
-      // BUG #1 FIX: Naviguer vers le mois de la facture sauvegardée
-      // ============================================================
       if (savedDate && savedDate !== '--') {
         const [year, month] = savedDate.split('-').map(Number);
         if (year && month) {
-          console.log(`📅 Navigating to invoice month: ${year}-${month}`);
+          dbg(`SAVE navigation vers ${year}-${month < 10 ? '0' : ''}${month}`);
           setCurrentYear(year);
-          setCurrentMonth(month - 1); // Month is 0-indexed
+          setCurrentMonth(month - 1);
         }
       }
 
-      // CRITIQUE: Reset complet après succès
       setShowVerificationModal(false);
       fullReset();
-      
+
       Alert.alert('Succès', 'Document enregistré avec succès');
       
     } catch (error: any) {
@@ -719,7 +759,7 @@ export default function DocumentsScreen() {
   };
 
   const handleCancelVerification = () => {
-    console.log('❌ Verification canceled');
+    dbg('VERIFICATION annulée — reset complet', 'warn');
     setShowVerificationModal(false);
     fullReset();
   };
@@ -823,7 +863,9 @@ export default function DocumentsScreen() {
         {/* ── Month Header ── */}
         <View style={s.monthHeader}>
           <View>
-            <Text style={s.monthTitle}>{MONTHS_FR[currentMonth]} {currentYear}</Text>
+            <TouchableOpacity onPress={handleDebugTap} activeOpacity={1}>
+              <Text style={s.monthTitle}>{MONTHS_FR[currentMonth]} {currentYear}</Text>
+            </TouchableOpacity>
             <Text style={s.monthTotal}>{monthTotal.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} €</Text>
           </View>
           <View style={s.monthNav}>
@@ -945,16 +987,43 @@ export default function DocumentsScreen() {
         </View>
       )}
 
+      {/* ── Debug Panel ── */}
+      {showDebug && (
+        <View style={s.debugPanel}>
+          <View style={s.debugHeader}>
+            <Text style={s.debugHeaderText}>🐛 Debug Vault</Text>
+            <TouchableOpacity onPress={() => setDebugLog([])}><Text style={s.debugClear}>Effacer</Text></TouchableOpacity>
+            <TouchableOpacity onPress={() => setShowDebug(false)}><Text style={s.debugClose}>✕</Text></TouchableOpacity>
+          </View>
+          <View style={s.debugState}>
+            <Text style={s.debugStateText}>
+              {`lock:${isProcessingRef.current ? '🔴' : '🟢'}  uploading:${isUploading ? '🔴' : '🟢'}  ocr:${isProcessingOCR ? '🔴' : '🟢'}  saving:${isSaving ? '🔴' : '🟢'}\nbase64:${pendingDocBase64 ? (pendingDocBase64.length / 1024).toFixed(0) + ' Ko' : 'vide'}  docs:${documents.length}`}
+            </Text>
+          </View>
+          <ScrollView style={s.debugScroll} showsVerticalScrollIndicator={false}>
+            {debugLog.length === 0
+              ? <Text style={s.debugEmpty}>Aucune action enregistrée. Triple-tap sur le titre du mois pour afficher/masquer.</Text>
+              : debugLog.map((entry, i) => (
+                <Text key={i} style={[s.debugEntry, { color: entry.kind === 'error' ? '#ff6b6b' : entry.kind === 'warn' ? '#ffd43b' : entry.kind === 'ok' ? '#69db7c' : '#c8d6e5' }]}>
+                  {entry.ts}  {entry.msg}
+                </Text>
+              ))
+            }
+          </ScrollView>
+        </View>
+      )}
+
       {/* ── FAB Camera ── */}
       <TouchableOpacity
         style={[s.fab, { bottom: insets.bottom + 80 }, isButtonsDisabled && s.fabDisabled]}
         onPress={() => {
-          console.log('🔘 FAB pressed');
-          if (!isButtonsDisabled) {
-            setShowUploadModal(true);
-          }
+          dbg('FAB pressé — reset verrous + ouverture modal upload');
+          // Force-reset du verrou au cas où il serait coincé depuis une session précédente
+          isProcessingRef.current = false;
+          setIsUploading(false);
+          setIsProcessingOCR(false);
+          setShowUploadModal(true);
         }}
-        disabled={isButtonsDisabled}
         activeOpacity={0.7}
         data-testid="fab-upload"
       >
@@ -1353,4 +1422,16 @@ const s = StyleSheet.create({
   uploadingCard: { backgroundColor: '#fff', borderRadius: 20, padding: 32, alignItems: 'center', width: '80%' },
   uploadingText: { fontSize: 18, fontWeight: '600', color: '#1a1a1a', marginTop: 16 },
   uploadingSub: { fontSize: 13, color: '#999', marginTop: 8, textAlign: 'center' },
+
+  // Debug panel
+  debugPanel: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 320, backgroundColor: '#0d1117', borderTopWidth: 1, borderTopColor: '#30363d', zIndex: 200 },
+  debugHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#30363d', gap: 8 },
+  debugHeaderText: { flex: 1, fontSize: 13, fontWeight: '700', color: '#e6edf3' },
+  debugClear: { fontSize: 12, color: '#58a6ff', paddingHorizontal: 8 },
+  debugClose: { fontSize: 14, color: '#8b949e', paddingHorizontal: 4 },
+  debugState: { backgroundColor: '#161b22', paddingHorizontal: 12, paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#30363d' },
+  debugStateText: { fontSize: 11, color: '#8b949e', fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace', lineHeight: 18 },
+  debugScroll: { flex: 1, paddingHorizontal: 12, paddingTop: 4 },
+  debugEmpty: { fontSize: 11, color: '#484f58', fontStyle: 'italic', marginTop: 8 },
+  debugEntry: { fontSize: 11, fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace', lineHeight: 18, marginBottom: 1 },
 });

@@ -13,6 +13,7 @@ import { deleteCalendarImported } from '../services/api';
 
 interface Props {
   sync: CalendarSyncState;
+  onDisconnect?: () => void;
 }
 
 function formatLastSync(date: Date | null): string {
@@ -28,7 +29,7 @@ function formatLastSync(date: Date | null): string {
   return `Il y a ${diffD}j`;
 }
 
-export default function CalendarSyncBanner({ sync }: Props) {
+export default function CalendarSyncBanner({ sync, onDisconnect }: Props) {
   const { isEnabled, isSyncing, lastSync, permissionStatus, enable, disable, syncNow } = sync;
   const [isTogglingOff, setIsTogglingOff] = useState(false);
 
@@ -71,6 +72,7 @@ export default function CalendarSyncBanner({ sync }: Props) {
     }
     await disable();
     setIsTogglingOff(false);
+    onDisconnect?.();
   };
 
   const handleSyncNow = async () => {

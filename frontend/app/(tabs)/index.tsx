@@ -515,6 +515,15 @@ export default function CalendarScreen() {
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const reloadEvents = useCallback(async () => {
+    try {
+      const eventsData = await fetchEvents(currentMonth);
+      setEvents(Array.isArray(eventsData) ? eventsData : []);
+    } catch (e) {
+      console.warn('reloadEvents failed:', e);
+    }
+  }, [currentMonth]);
+
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
@@ -1287,6 +1296,7 @@ export default function CalendarScreen() {
                                 onPress: async () => {
                                   try { await deleteCalendarImported(false); } catch {}
                                   await calendarSync.disable();
+                                  reloadEvents();
                                 },
                               },
                               {
@@ -1294,6 +1304,7 @@ export default function CalendarScreen() {
                                 onPress: async () => {
                                   try { await deleteCalendarImported(true); } catch {}
                                   await calendarSync.disable();
+                                  reloadEvents();
                                 },
                               },
                               { text: 'Annuler', style: 'cancel' },
@@ -1337,7 +1348,7 @@ export default function CalendarScreen() {
         {/* Bannière sync calendrier */}
         {calendarSync.isEnabled ? (
           <View style={styles.calBannerWrap}>
-            <CalendarSyncBanner sync={calendarSync} />
+            <CalendarSyncBanner sync={calendarSync} onDisconnect={reloadEvents} />
           </View>
         ) : (
           !calendarSync.isSyncing && (
