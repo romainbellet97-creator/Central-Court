@@ -205,7 +205,13 @@ export default function DocumentsScreen() {
       if (nextAppState === 'active') {
         console.log('📱 App returned to foreground, resetting locks...');
         isProcessingRef.current = false;
-        
+        // Aussi reset les états React pour débloquer le FAB si l'app revenait au premier plan
+        // pendant un traitement OCR (l'OCR aura été interrompu de toute façon)
+        if (!verificationOpenRef.current) {
+          setIsUploading(false);
+          setIsProcessingOCR(false);
+        }
+
         // Re-vérifier les permissions
         const { status } = await ImagePicker.getCameraPermissionsAsync();
         console.log('📷 Camera permission after foreground:', status);
@@ -395,14 +401,14 @@ export default function DocumentsScreen() {
 
       console.log('3. Launching camera...');
       
-      // 2. Ouvrir caméra avec options fraîches
+      // 2. Ouvrir caméra — base64:false comme la galerie (évite l'encodage synchrone en picker)
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [4, 3],
         quality: 0.8,
-        base64: true,
-        exif: false, // Éviter les métadonnées qui peuvent bloquer
+        base64: false,
+        exif: false,
       });
 
       console.log('4. Camera result:', result.canceled ? 'CANCELED' : 'PHOTO TAKEN');
@@ -410,10 +416,22 @@ export default function DocumentsScreen() {
       if (!result.canceled && result.assets && result.assets[0]) {
         const asset = result.assets[0];
         console.log('5. Photo URI:', asset.uri?.substring(0, 50) + '...');
-        console.log('6. Base64 length:', asset.base64?.length || 0);
+
+        // Lire le base64 de façon asynchrone (même pattern que la galerie)
+        let base64Data = '';
+        if (asset.uri) {
+          try {
+            base64Data = await FileSystem.readAsStringAsync(asset.uri, {
+              encoding: FileSystem.EncodingType.Base64,
+            });
+            console.log('6. Base64 length:', base64Data.length);
+          } catch (e) {
+            console.warn('⚠️ Could not read base64 from camera URI:', e);
+          }
+        }
 
         await processDocumentWithOCRBase64(
-          asset.base64 || '',
+          base64Data,
           asset.uri,
           'image',
           `Photo_${Date.now()}.jpg`
@@ -895,6 +913,17 @@ export default function DocumentsScreen() {
         <View style={{ height: 120 }} />
       </ScrollView>
 
+      {/* ── OCR Loading Overlay ── */}
+      {isProcessingOCR && (
+        <View style={s.ocrOverlay} pointerEvents="box-none">
+          <View style={s.ocrCard}>
+            <ActivityIndicator size="large" color="#1e3c72" />
+            <Text style={s.ocrCardTitle}>Analyse en cours…</Text>
+            <Text style={s.ocrCardSub}>L'IA extrait les données du document</Text>
+          </View>
+        </View>
+      )}
+
       {/* ── FAB Camera ── */}
       <TouchableOpacity
         style={[s.fab, { bottom: insets.bottom + 80 }, isButtonsDisabled && s.fabDisabled]}
@@ -1234,6 +1263,10 @@ const s = StyleSheet.create({
   // FAB
   fab: { position: 'absolute', right: 20, width: 60, height: 60, borderRadius: 30, backgroundColor: '#1e3c72', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 8, elevation: 8 },
   fabDisabled: { opacity: 0.5 },
+  ocrOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.35)', zIndex: 99 },
+  ocrCard: { backgroundColor: '#fff', borderRadius: 20, paddingHorizontal: 32, paddingVertical: 28, alignItems: 'center', gap: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.18, shadowRadius: 20, elevation: 12, minWidth: 220 },
+  ocrCardTitle: { fontSize: 16, fontWeight: '700', color: '#1a1a1a', marginTop: 4 },
+  ocrCardSub: { fontSize: 13, color: '#6b7280', textAlign: 'center' },
 
   // Modals
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },

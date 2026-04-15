@@ -337,6 +337,7 @@ export default function CalendarScreen() {
   const [conflictData, setConflictData] = useState<any>(null);
   const [showConflictModal, setShowConflictModal] = useState(false);
   const [pendingRegistration, setPendingRegistration] = useState<{tournamentId: string, status: string} | null>(null);
+  const [registeringId, setRegisteringId] = useState<string | null>(null);
 
   // ============ MODAL CLEANUP FUNCTIONS ============
   
@@ -1010,99 +1011,83 @@ export default function CalendarScreen() {
 
   // Tournament handlers
   const handleRegisterTournament = async (tournamentId: string, status: string) => {
-    if (status === 'pending' || status === 'participating') {
-      try {
-        const conflicts = await checkTournamentConflicts(tournamentId);
-        // Seuls les tournois concurrents (pending/participating) bloquent vraiment.
-        // Les events calendrier sont des soft-conflicts — on ne bloque pas.
-        if ((conflicts.conflictingTournaments?.length ?? 0) > 0) {
-          setConflictData(conflicts);
-          setPendingRegistration({ tournamentId, status });
-          setShowConflictModal(true);
-          return;
+    if (registeringId) return; // Déjà en cours
+    setRegisteringId(tournamentId);
+    try {
+      if (status === 'pending' || status === 'participating') {
+        try {
+          const conflicts = await checkTournamentConflicts(tournamentId);
+          // Seuls les tournois concurrents (pending/participating) bloquent vraiment.
+          if ((conflicts.conflictingTournaments?.length ?? 0) > 0) {
+            setConflictData(conflicts);
+            setPendingRegistration({ tournamentId, status });
+            setShowConflictModal(true);
+            return;
+          }
+        } catch (e) {
+          // Si le check échoue on continue quand même
+          console.warn('Conflict check failed, proceeding:', e);
         }
-      } catch (e) {
-        console.warn('Conflict check failed:', e);
       }
+      await executeRegistration(tournamentId, status);
+    } finally {
+      setRegisteringId(null);
     }
-    await executeRegistration(tournamentId, status);
   };
-  
+
   const executeRegistration = async (tournamentId: string, status: string) => {
     try {
       await apiRegisterTournament(tournamentId, status);
-      
-      // AMÉLIORATION RÉACTIVITÉ: Mise à jour optimiste immédiate
-      const updateTournaments = (weeks: typeof tournamentWeeks) => {
-        const targetWeek = weeks.find(week => 
+
+      // Mise à jour optimiste immédiate
+      setTournamentWeeks(weeks => {
+        const targetWeek = weeks.find(week =>
           week.tournaments.some(t => t.id === tournamentId)
         );
-        
         return weeks.map(week => {
-          if (week.weekNumber !== targetWeek?.weekNumber) {
-            return week;
-          }
-          
+          if (week.weekNumber !== targetWeek?.weekNumber) return week;
           return {
             ...week,
             tournaments: (week.tournaments || []).map(t => {
               if (t.id === tournamentId) {
                 return { ...t, registration: { status }, hidden: false };
               }
-              
-              // Si on participe, bloquer les autres
               if (status === 'participating' && t.registration?.status !== 'participating') {
-                return { 
-                  ...t, 
-                  registration: { status: 'not_interested' },
-                  isBlocked: true 
-                };
+                return { ...t, registration: { status: 'not_interested' }, isBlocked: true };
               }
-              
-              // Si on change depuis participating, débloquer
               if ((status === 'interested' || status === 'pending') && t.isBlocked) {
-                return { 
-                  ...t, 
-                  registration: undefined,
-                  isBlocked: false 
-                };
+                return { ...t, registration: undefined, isBlocked: false };
               }
-              
               return t;
-            })
+            }),
           };
         });
-      };
-      
-      // Mettre à jour tournamentWeeks
-      setTournamentWeeks(updateTournaments);
-      
-      // AMÉLIORATION RÉACTIVITÉ: Mettre à jour selectedWeek si c'est la semaine affichée
-      if (selectedWeekNumber) {
-        setTournamentWeeks(prev => {
-          const updatedWeek = prev.find(w => w.weekNumber === selectedWeekNumber);
-          if (updatedWeek) {
-            // Force re-render du selectedWeek via useEffect/useMemo
-          }
-          return prev;
-        });
-      }
-      
-      // Déclencher la génération d'alertes (vol/hôtel/résidence) en arrière-plan
+      });
+
+      // Génération d'alertes en arrière-plan (fire-and-forget)
       if (status === 'pending' || status === 'participating') {
         generateAlerts().catch(err => console.warn('generateAlerts failed:', err));
       }
 
-      // Message de confirmation
       if (status === 'participating') {
         Alert.alert(
-          '✅ Inscription confirmée',
+          'Inscription confirmée',
           'Les autres tournois de cette semaine ont été automatiquement marqués comme non intéressés.'
         );
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error('Registration failed:', e);
-      Alert.alert('Erreur', 'Échec de l\'inscription');
+      const detail = e?.response?.data?.detail;
+      const msg = detail
+        ? detail
+        : e?.response?.status === 409
+          ? 'Vous êtes déjà inscrit à un tournoi en conflit cette semaine.'
+          : e?.response?.status === 403
+            ? 'Vous n\'avez pas les droits pour effectuer cette action.'
+            : e?.response?.status === 404
+              ? 'Tournoi introuvable. Rechargez la page.'
+              : 'Échec de l\'inscription. Vérifiez votre connexion et réessayez.';
+      Alert.alert('Erreur', msg);
     }
   };
 
@@ -1952,7 +1937,10 @@ export default function CalendarScreen() {
               setSelectedEvent(null);
             }}
           />
-          <View style={styles.detailModal}>
+          <KeyboardAvoidingView
+            style={styles.detailModal}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          >
             {selectedEvent && (
               <>
                 {/* Header with type */}
@@ -2019,10 +2007,14 @@ export default function CalendarScreen() {
                     onObservationUpdated={handleObservationUpdated}
                     onSaveObservation={handleSaveObservationAPI}
                     onComposerOpen={() => {
-                      // BUG #3 FIX: Scroll vers le bas quand le composer s'ouvre
+                      // Scroll immédiat quand le composer s'ouvre
                       setTimeout(() => {
                         detailScrollRef.current?.scrollToEnd({ animated: true });
-                      }, 350);
+                      }, 100);
+                      // Second scroll après la fin de l'animation clavier (~300-500ms)
+                      setTimeout(() => {
+                        detailScrollRef.current?.scrollToEnd({ animated: true });
+                      }, 550);
                     }}
                   />
 
@@ -2104,7 +2096,7 @@ export default function CalendarScreen() {
                 </ScrollView>
               </>
             )}
-          </View>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
 
@@ -2379,23 +2371,33 @@ export default function CalendarScreen() {
                         
                         {/* Boutons de statut */}
                         <View style={styles.registrationButtons}>
-                          {['interested', 'pending', 'participating'].map(status => (
-                            <TouchableOpacity
-                              key={status}
-                              style={[
-                                styles.statusBtn,
-                                tournament.registration?.status === status && styles.statusBtnActive
-                              ]}
-                              onPress={() => handleRegisterTournament(tournament.id, status)}
-                            >
-                              <Text style={[
-                                styles.statusBtnText,
-                                tournament.registration?.status === status && styles.statusBtnTextActive
-                              ]}>
-                                {TOURNAMENT_STATUS_LABELS[status]?.label || status}
-                              </Text>
-                            </TouchableOpacity>
-                          ))}
+                          {['interested', 'pending', 'participating'].map(status => {
+                            const isActive = tournament.registration?.status === status;
+                            const isThisRegistering = registeringId === tournament.id;
+                            return (
+                              <TouchableOpacity
+                                key={status}
+                                style={[
+                                  styles.statusBtn,
+                                  isActive && styles.statusBtnActive,
+                                  isThisRegistering && styles.statusBtnLoading,
+                                ]}
+                                onPress={() => handleRegisterTournament(tournament.id, status)}
+                                disabled={!!registeringId}
+                              >
+                                {isThisRegistering ? (
+                                  <ActivityIndicator size="small" color={isActive ? '#fff' : '#1e3c72'} />
+                                ) : (
+                                  <Text style={[
+                                    styles.statusBtnText,
+                                    isActive && styles.statusBtnTextActive,
+                                  ]}>
+                                    {TOURNAMENT_STATUS_LABELS[status]?.label || status}
+                                  </Text>
+                                )}
+                              </TouchableOpacity>
+                            );
+                          })}
                         </View>
                         
                         {/* Lien "Pas intéressé" */}
@@ -2682,6 +2684,7 @@ const styles = StyleSheet.create({
   registrationButtons: { flexDirection: 'row', gap: 8, marginTop: 14 },
   statusBtn: { flex: 1, paddingVertical: 12, paddingHorizontal: 8, borderRadius: 10, backgroundColor: '#F3F4F6', alignItems: 'center', borderWidth: 1, borderColor: '#E5E7EB' },
   statusBtnActive: { backgroundColor: '#1e3c72', borderColor: '#1e3c72' },
+  statusBtnLoading: { opacity: 0.7 },
   statusBtnText: { fontSize: 12, fontWeight: '600', color: '#6B7280' },
   statusBtnTextActive: { color: '#fff' },
   notInterestedBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 12, paddingVertical: 10 },
