@@ -477,8 +477,44 @@ async def register_with_invitation(req: RegisterWithInvitationRequest, response:
     }
 
 @app.get("/api/auth/me")
-async def get_me(user: User = Depends(require_auth)):
-    """Get current user info"""
+async def get_me(request: Request):
+    """Get current user info — supports both player sessions and staff tokens"""
+    # Extract token from cookie or Authorization header
+    token = request.cookies.get("session_token")
+    if not token:
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            token = auth_header[7:].strip()
+
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    # Staff token path (staff_xxx)
+    if token.startswith("staff_"):
+        staff = await db.staff_members.find_one(
+            {"authToken": token, "status": "active"}
+        )
+        if not staff:
+            raise HTTPException(status_code=401, detail="Invalid or expired staff token")
+        player_id = staff.get("playerId", "")
+        player_ids = staff.get("playerIds") or ([player_id] if player_id else [])
+        return {
+            "user_id": str(staff["_id"]),
+            "email": staff.get("email", ""),
+            "name": f"{staff.get('firstName', '')} {staff.get('lastName', '')}".strip(),
+            "firstName": staff.get("firstName"),
+            "lastName": staff.get("lastName"),
+            "picture": None,
+            "role": staff.get("role", "agent"),
+            "player_id": player_id,
+            "playerIds": player_ids,
+            "isStaff": True,
+        }
+
+    # Player session path
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
     return UserResponse(
         user_id=user.user_id,
         email=user.email,
