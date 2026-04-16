@@ -139,11 +139,17 @@ export default function StaffDocuments() {
       setIsUploading(true);
 
       const formData = new FormData();
-      formData.append('file', {
-        uri: file.uri,
-        name: file.name,
-        type: file.mimeType || 'application/octet-stream',
-      } as any);
+      // On web, Expo DocumentPicker exposes the native browser File object via `file.file`.
+      // The React Native {uri, name, type} syntax only works on iOS/Android.
+      if (Platform.OS === 'web' && (file as any).file instanceof Blob) {
+        formData.append('file', (file as any).file, file.name);
+      } else {
+        formData.append('file', {
+          uri: file.uri,
+          name: file.name,
+          type: file.mimeType || 'application/octet-stream',
+        } as any);
+      }
 
       const token = await getStoredToken();
       const res = await fetch(`${API_URL}/api/documents/upload`, {
