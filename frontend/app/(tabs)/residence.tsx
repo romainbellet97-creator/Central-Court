@@ -712,19 +712,26 @@ export default function ResidenceScreen() {
         <View style={styles.gpsCard}>
           <View style={styles.gpsHeader}>
             <View style={styles.gpsStatus}>
-              <View style={[styles.gpsIndicator, locationPermission === 'granted' && styles.gpsIndicatorActive]} />
+              <View style={[styles.gpsIndicator, Platform.OS !== 'web' && locationPermission === 'granted' && styles.gpsIndicatorActive]} />
               <Text style={styles.gpsStatusText}>
-                {isLocating ? 'Localisation...' : locationPermission === 'granted' ? 'GPS actif' : 'GPS désactivé'}
+                {Platform.OS === 'web' ? 'GPS non disponible sur navigateur' : isLocating ? 'Localisation...' : locationPermission === 'granted' ? 'GPS actif' : 'GPS désactivé'}
               </Text>
             </View>
-            {currentLocation && (
+            {currentLocation && Platform.OS !== 'web' && (
               <TouchableOpacity style={styles.refreshLocationBtn} onPress={getCurrentLocation}>
                 <Ionicons name="refresh" size={16} color={Colors.primary} />
               </TouchableOpacity>
             )}
           </View>
           
-          {currentLocation ? (
+          {Platform.OS === 'web' ? (
+            <View style={styles.webUnavailableRow}>
+              <Ionicons name="phone-portrait-outline" size={18} color="#9CA3AF" />
+              <Text style={styles.webUnavailableText}>
+                Téléchargez l'application mobile pour utiliser le GPS
+              </Text>
+            </View>
+          ) : currentLocation ? (
             <View style={styles.currentLocationInfo}>
               <Text style={styles.currentLocationFlag}>
                 {countryFlags[currentLocation.countryCode] || '🌍'}
@@ -747,10 +754,10 @@ export default function ResidenceScreen() {
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
                   <>
-                    <Ionicons 
-                      name={alreadyLoggedToday ? "checkmark-circle" : "add-circle"} 
-                      size={18} 
-                      color="#fff" 
+                    <Ionicons
+                      name={alreadyLoggedToday ? "checkmark-circle" : "add-circle"}
+                      size={18}
+                      color="#fff"
                     />
                     <Text style={styles.logTodayBtnText}>
                       {alreadyLoggedToday ? 'Enregistré' : 'Aujourd\'hui'}
@@ -859,12 +866,17 @@ export default function ResidenceScreen() {
                 : 'Activez le GPS ou ajoutez des jours manuellement'}
             </Text>
             {!gpsEnabled && (
-              <TouchableOpacity 
-                style={styles.enableGpsEmptyBtn}
-                onPress={() => setShowSettings(true)}
+              <TouchableOpacity
+                style={[styles.enableGpsEmptyBtn, Platform.OS === 'web' && { opacity: 0.4 }]}
+                onPress={Platform.OS === 'web'
+                  ? () => Alert.alert('Application mobile requise', 'Le tracking GPS n\'est pas disponible sur navigateur. Téléchargez l\'application mobile pour utiliser cette fonctionnalité.')
+                  : () => setShowSettings(true)
+                }
               >
                 <Ionicons name="location" size={18} color="#fff" />
-                <Text style={styles.enableGpsEmptyBtnText}>Activer le GPS</Text>
+                <Text style={styles.enableGpsEmptyBtnText}>
+                  {Platform.OS === 'web' ? 'GPS — Application requise' : 'Activer le GPS'}
+                </Text>
               </TouchableOpacity>
             )}
           </View>
@@ -892,7 +904,7 @@ export default function ResidenceScreen() {
               </TouchableOpacity>
             </View>
 
-            <View style={styles.settingRow}>
+            <View style={[styles.settingRow, Platform.OS === 'web' && { opacity: 0.4 }]}>
               <View style={styles.settingInfo}>
                 <View style={styles.settingIconContainer}>
                   <Ionicons name="location" size={24} color={Colors.primary} />
@@ -900,15 +912,21 @@ export default function ResidenceScreen() {
                 <View style={styles.settingText}>
                   <Text style={styles.settingTitle}>Tracking GPS</Text>
                   <Text style={styles.settingDesc}>
-                    Détecte automatiquement votre pays actuel
+                    {Platform.OS === 'web'
+                      ? 'Téléchargez l\'application mobile pour utiliser le GPS'
+                      : 'Détecte automatiquement votre pays actuel'}
                   </Text>
                 </View>
               </View>
               <Switch
-                value={gpsEnabled}
-                onValueChange={toggleGpsTracking}
+                value={Platform.OS === 'web' ? false : gpsEnabled}
+                onValueChange={Platform.OS === 'web'
+                  ? () => Alert.alert('Application mobile requise', 'Le tracking GPS n\'est pas disponible sur navigateur. Téléchargez l\'application mobile pour utiliser cette fonctionnalité.')
+                  : toggleGpsTracking
+                }
                 trackColor={{ false: Colors.border.light, true: Colors.primary + '50' }}
                 thumbColor={gpsEnabled ? Colors.primary : '#f4f3f4'}
+                disabled={Platform.OS === 'web'}
               />
             </View>
 
@@ -2564,5 +2582,17 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 15,
     fontWeight: '600',
+  },
+  webUnavailableRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+  },
+  webUnavailableText: {
+    fontSize: 13,
+    color: '#9CA3AF',
+    fontStyle: 'italic',
+    flex: 1,
   },
 });

@@ -454,12 +454,17 @@ export default function FiscalityScreen() {
           </TouchableOpacity>
           
           <TouchableOpacity
-            style={styles.onboardingBtn}
-            onPress={handleEnableLocation}
+            style={[styles.onboardingBtn, Platform.OS === 'web' && { opacity: 0.4 }]}
+            onPress={Platform.OS === 'web'
+              ? () => Alert.alert('Application mobile requise', 'La géolocalisation n\'est pas disponible sur navigateur. Téléchargez l\'application mobile pour utiliser cette fonctionnalité.')
+              : handleEnableLocation
+            }
             disabled={isTrackingLocation}
           >
             <Ionicons name="location" size={20} color="#fff" />
-            <Text style={styles.onboardingBtnText}>Activer la localisation</Text>
+            <Text style={styles.onboardingBtnText}>
+              {Platform.OS === 'web' ? 'Localisation — App requise' : 'Activer la localisation'}
+            </Text>
           </TouchableOpacity>
         </View>
       </View>

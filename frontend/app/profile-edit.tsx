@@ -208,7 +208,7 @@ export default function EditProfileScreen() {
       'Choisissez une option',
       [
         { text: 'Annuler', style: 'cancel' },
-        { text: '📷 Prendre une photo', onPress: handleTakePhoto },
+        ...(Platform.OS !== 'web' ? [{ text: '📷 Prendre une photo', onPress: handleTakePhoto }] : []),
         { text: '🖼️ Choisir dans la galerie', onPress: handlePickPhoto },
         ...(profile.photoUri ? [{ text: '🗑️ Supprimer', style: 'destructive' as const, onPress: () => saveProfile({ photoUri: '' }) }] : []),
       ]

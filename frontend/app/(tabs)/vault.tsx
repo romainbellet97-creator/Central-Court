@@ -1036,20 +1036,28 @@ export default function DocumentsScreen() {
             <View style={s.sheetHandle} />
             <Text style={s.sheetTitle}>Ajouter un reçu</Text>
 
-            <TouchableOpacity 
-              style={[s.uploadOption, isButtonsDisabled && s.uploadOptionDisabled]} 
-              onPress={handleTakePhoto} 
+            <TouchableOpacity
+              style={[s.uploadOption, (isButtonsDisabled || Platform.OS === 'web') && s.uploadOptionDisabled]}
+              onPress={Platform.OS === 'web'
+                ? () => Alert.alert('Application mobile requise', 'La caméra n\'est pas disponible sur navigateur. Téléchargez l\'application mobile pour scanner vos reçus.')
+                : handleTakePhoto
+              }
               disabled={isButtonsDisabled}
               activeOpacity={0.7}
               data-testid="upload-camera"
             >
               <View style={[s.uploadIconWrap, { backgroundColor: '#e3f2fd' }]}>
-                <Ionicons name="camera" size={24} color="#1976d2" />
+                <Ionicons name="camera" size={24} color={Platform.OS === 'web' ? '#9CA3AF' : '#1976d2'} />
               </View>
-              <View>
-                <Text style={s.uploadOptionTitle}>Prendre une photo</Text>
-                <Text style={s.uploadOptionSub}>Scanner une facture papier</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={[s.uploadOptionTitle, Platform.OS === 'web' && { color: '#9CA3AF' }]}>Prendre une photo</Text>
+                <Text style={s.uploadOptionSub}>
+                  {Platform.OS === 'web' ? 'Disponible sur l\'application mobile' : 'Scanner une facture papier'}
+                </Text>
               </View>
+              {Platform.OS === 'web' && (
+                <Ionicons name="phone-portrait-outline" size={18} color="#9CA3AF" />
+              )}
             </TouchableOpacity>
 
             <TouchableOpacity 
