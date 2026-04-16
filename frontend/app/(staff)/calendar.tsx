@@ -28,7 +28,14 @@ const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_BACKEND_URL ||
                 process.env.EXPO_PUBLIC_BACKEND_URL || '';
 
 async function getStoredToken(): Promise<string | null> {
-  return SecureStore.getItemAsync('session_token');
+  try {
+    if (Platform.OS === 'web') {
+      return typeof localStorage !== 'undefined' ? localStorage.getItem('session_token') : null;
+    }
+    return await SecureStore.getItemAsync('session_token');
+  } catch {
+    return null;
+  }
 }
 
 async function authFetch(path: string, options: RequestInit = {}): Promise<Response> {
@@ -111,12 +118,16 @@ export default function StaffCalendar() {
   const [proposeNotes, setProposeNotes] = useState('');
   const [endTimeManuallySet, setEndTimeManuallySet] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [titleTouched, setTitleTouched] = useState(false);
 
   const linkedPlayerId = user?.player_id;
   const permissions = getStaffPermissions(user?.role);
   const canEdit = permissions?.canEditCalendar ?? false;
 
   const timeIsValid = proposeEndTime > proposeTime;
+  const titleMissing = !proposeTitle.trim();
+  const canSubmit = !titleMissing && timeIsValid;
 
   const loadEvents = useCallback(async () => {
     if (!linkedPlayerId) {
@@ -185,20 +196,13 @@ export default function StaffCalendar() {
   }, [events, selectedDate]);
 
   const handleProposeSlot = async () => {
-    if (!proposeTitle.trim()) {
-      Alert.alert('Erreur', 'Veuillez entrer un titre');
-      return;
-    }
+    setTitleTouched(true);
+    setSubmitError(null);
 
-    if (!timeIsValid) {
-      Alert.alert('Erreur', 'L\'heure de fin doit être après l\'heure de début');
-      return;
-    }
+    if (!canSubmit) return;
 
     setIsSubmitting(true);
     try {
-      // Auth header is sent by authFetch → backend detects staff context
-      // and stores event under linked player's userId with status=pending_approval
       const response = await authFetch(`/api/events`, {
         method: 'POST',
         body: JSON.stringify({
@@ -212,19 +216,17 @@ export default function StaffCalendar() {
       });
 
       if (response.ok) {
-        Alert.alert(
-          'Proposition envoyée',
-          'Le joueur recevra une notification pour valider ce créneau.',
-          [{ text: 'OK' }]
-        );
         setShowProposeModal(false);
         resetProposeForm();
         loadEvents();
+        // Success alert is OK here (only fires on actual success, not validation)
+        Alert.alert('Proposition envoyée', 'Le joueur recevra une notification pour valider ce créneau.');
       } else {
-        Alert.alert('Erreur', 'Impossible d\'envoyer la proposition');
+        const body = await response.text().catch(() => '');
+        setSubmitError(body || 'Impossible d\'envoyer la proposition. Vérifiez votre connexion.');
       }
-    } catch (error) {
-      Alert.alert('Erreur', 'Une erreur est survenue');
+    } catch {
+      setSubmitError('Erreur réseau. Vérifiez votre connexion et réessayez.');
     } finally {
       setIsSubmitting(false);
     }
@@ -237,6 +239,8 @@ export default function StaffCalendar() {
     setProposeEndTime('10:00');
     setProposeNotes('');
     setEndTimeManuallySet(false);
+    setSubmitError(null);
+    setTitleTouched(false);
   };
 
   const openProposeModal = () => {
@@ -431,14 +435,23 @@ export default function StaffCalendar() {
 
             <ScrollView showsVerticalScrollIndicator={false}>
               {/* Title */}
-              <Text style={styles.inputLabel}>TITRE</Text>
+              <Text style={styles.inputLabel}>
+                TITRE <Text style={{ color: '#EF4444' }}>*</Text>
+              </Text>
               <TextInput
-                style={styles.textInput}
+                style={[styles.textInput, titleTouched && titleMissing && styles.textInputError]}
                 placeholder="Ex: Entraînement, Réunion..."
                 value={proposeTitle}
-                onChangeText={setProposeTitle}
+                onChangeText={(t) => { setProposeTitle(t); setSubmitError(null); }}
+                onBlur={() => setTitleTouched(true)}
                 placeholderTextColor="#9CA3AF"
               />
+              {titleTouched && titleMissing && (
+                <View style={styles.fieldError}>
+                  <Ionicons name="alert-circle" size={14} color="#EF4444" />
+                  <Text style={styles.fieldErrorText}>Le titre est obligatoire</Text>
+                </View>
+              )}
 
               <View style={styles.pickerSpacer} />
 
@@ -503,10 +516,18 @@ export default function StaffCalendar() {
                 placeholder="Détails supplémentaires..."
               />
 
+              {submitError && (
+                <View style={styles.submitErrorBox}>
+                  <Ionicons name="alert-circle" size={16} color="#EF4444" />
+                  <Text style={styles.submitErrorText}>{submitError}</Text>
+                </View>
+              )}
+
               <TouchableOpacity
-                style={[styles.submitButton, (!timeIsValid || isSubmitting) && styles.submitButtonDisabled]}
+                style={[styles.submitButton, (!canSubmit || isSubmitting) && styles.submitButtonDisabled]}
                 onPress={handleProposeSlot}
-                disabled={!timeIsValid || isSubmitting}
+                disabled={isSubmitting}
+                activeOpacity={0.8}
               >
                 {isSubmitting ? (
                   <ActivityIndicator color="#FFFFFF" />
@@ -814,5 +835,33 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     textAlign: 'center',
     marginTop: 12,
+  },
+  textInputError: {
+    borderColor: '#EF4444',
+    borderWidth: 1.5,
+  },
+  fieldError: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
+  fieldErrorText: {
+    fontSize: 12,
+    color: '#EF4444',
+  },
+  submitErrorBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: '#FEF2F2',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 12,
+  },
+  submitErrorText: {
+    fontSize: 13,
+    color: '#EF4444',
+    flex: 1,
   },
 });
