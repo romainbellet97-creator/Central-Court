@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timezone
 import uuid
-from .auth_helpers import get_current_user_id
+from .auth_helpers import get_current_user_id, get_staff_context
 
 router = APIRouter(prefix="/api/tournaments", tags=["tournaments"])
 
@@ -225,6 +225,32 @@ async def list_tournaments(
     tournaments = await cursor.to_list(length=limit)
     
     return [serialize_tournament(t) for t in tournaments]
+
+
+@router.get("/player-registrations")
+async def get_player_tournament_registrations(
+    request: Request,
+    userId: str,
+    status: Optional[str] = Query(default="participating"),
+):
+    """Return tournaments a specific player is registered for (staff only).
+    Joins registration data with tournament details."""
+    staff_ctx = await get_staff_context(request)
+    if not staff_ctx:
+        raise HTTPException(status_code=403, detail="Accès réservé au staff")
+
+    regs = await db.tournament_registrations.find(
+        {"userId": userId, "status": status},
+        {"_id": 0, "tournamentId": 1, "status": 1, "updatedAt": 1}
+    ).to_list(200)
+
+    result = []
+    for reg in regs:
+        t = await db.tournaments.find_one({"id": reg["tournamentId"]}, {"_id": 0})
+        if t:
+            result.append({**serialize_tournament(t), "registration": reg})
+
+    return result
 
 
 @router.get("/user/{user_id}")

@@ -107,6 +107,7 @@ export default function StaffCalendar() {
 
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [tournaments, setTournaments] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showProposeModal, setShowProposeModal] = useState(false);
 
@@ -141,13 +142,21 @@ export default function StaffCalendar() {
       const endDate = new Date();
       endDate.setMonth(endDate.getMonth() + 2);
 
-      const response = await authFetch(
-        `/api/events?userId=${linkedPlayerId}&startDate=${startDate.toISOString().split('T')[0]}&endDate=${endDate.toISOString().split('T')[0]}`
-      );
+      const [eventsRes, tournamentsRes] = await Promise.all([
+        authFetch(
+          `/api/events?userId=${linkedPlayerId}&startDate=${startDate.toISOString().split('T')[0]}&endDate=${endDate.toISOString().split('T')[0]}`
+        ),
+        authFetch(`/api/tournaments/player-registrations?userId=${linkedPlayerId}&status=participating`),
+      ]);
 
-      if (response.ok) {
-        const data = await response.json();
+      if (eventsRes.ok) {
+        const data = await eventsRes.json();
         setEvents(Array.isArray(data) ? data : []);
+      }
+
+      if (tournamentsRes.ok) {
+        const data = await tournamentsRes.json();
+        setTournaments(Array.isArray(data) ? data : []);
       }
     } catch (error) {
       console.error('Error loading events:', error);
@@ -177,6 +186,22 @@ export default function StaffCalendar() {
       });
     });
 
+    // Add tournament dots for every day in each participating tournament's span
+    tournaments.forEach(t => {
+      const start = t.startDate ? t.startDate.split('T')[0] : null;
+      const end = t.endDate ? t.endDate.split('T')[0] : start;
+      if (!start) return;
+      const cur = new Date(start);
+      const last = new Date(end || start);
+      while (cur <= last) {
+        const d = cur.toISOString().split('T')[0];
+        if (!marks[d]) marks[d] = { dots: [] };
+        if (!marks[d].dots) marks[d].dots = [];
+        marks[d].dots.push({ key: `t-${t.id}-${d}`, color: EVENT_COLORS.tournament });
+        cur.setDate(cur.getDate() + 1);
+      }
+    });
+
     // Add selected date marker
     if (marks[selectedDate]) {
       marks[selectedDate].selected = true;
@@ -186,14 +211,30 @@ export default function StaffCalendar() {
     }
 
     return marks;
-  }, [events, selectedDate]);
+  }, [events, tournaments, selectedDate]);
 
-  // Events for selected date
+  // Events for selected date (including participating tournaments spanning that day)
   const dayEvents = useMemo(() => {
-    return events
+    const regular = events
       .filter(e => e.date === selectedDate)
       .sort((a, b) => (a.time || '').localeCompare(b.time || ''));
-  }, [events, selectedDate]);
+
+    const tournamentEvents: CalendarEvent[] = tournaments
+      .filter(t => {
+        const start = t.startDate ? t.startDate.split('T')[0] : null;
+        const end = t.endDate ? t.endDate.split('T')[0] : start;
+        return start && selectedDate >= start && selectedDate <= (end || start);
+      })
+      .map(t => ({
+        id: `tournament-${t.id}`,
+        title: t.name || 'Tournoi',
+        date: selectedDate,
+        type: 'tournament',
+        status: undefined,
+      }));
+
+    return [...tournamentEvents, ...regular];
+  }, [events, tournaments, selectedDate]);
 
   const handleProposeSlot = async () => {
     setTitleTouched(true);
