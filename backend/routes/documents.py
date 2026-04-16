@@ -156,8 +156,8 @@ def serialize_document(doc: dict) -> dict:
         "userId": doc.get("userId"),
         "playerId": doc.get("playerId"),
         "uploadedByName": doc.get("uploadedByName"),
-        "createdAt": doc.get("createdAt").isoformat() if doc.get("createdAt") else None,
-        "updatedAt": doc.get("updatedAt").isoformat() if doc.get("updatedAt") else None,
+        "createdAt": doc["createdAt"].isoformat() if doc.get("createdAt") and hasattr(doc["createdAt"], "isoformat") else (doc.get("createdAt") or None),
+        "updatedAt": doc["updatedAt"].isoformat() if doc.get("updatedAt") and hasattr(doc["updatedAt"], "isoformat") else (doc.get("updatedAt") or None),
     }
 
 

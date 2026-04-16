@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List, Union
 from datetime import datetime, timezone, timedelta
 from bson import ObjectId
+import asyncio
 import bcrypt
 import uuid
 import secrets
@@ -156,9 +157,12 @@ async def create_or_update_onboarding(data: OnboardingData):
         "role": "player",
     }
 
-    # Hash password if provided
+    # Hash password if provided (run in thread executor to avoid blocking the event loop)
     if data.password:
-        user_data["password_hash"] = bcrypt.hashpw(data.password.encode(), bcrypt.gensalt()).decode()
+        loop = asyncio.get_event_loop()
+        user_data["password_hash"] = await loop.run_in_executor(
+            None, lambda: bcrypt.hashpw(data.password.encode(), bcrypt.gensalt()).decode()
+        )
 
     if existing:
         user_id = existing.get("user_id") or f"player_{uuid.uuid4().hex[:12]}"
