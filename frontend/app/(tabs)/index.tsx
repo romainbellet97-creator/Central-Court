@@ -453,6 +453,9 @@ export default function CalendarScreen() {
 
   // Map onboarding niveaux IDs → backend category names
   // NOTE: DB stores 'Grand Slam' (English), NOT 'Grand Chelem'
+  // NOTE: itf_wheelchair is intentionally absent — wheelchair sub-categories vary
+  //       ("ITF Wheelchair Grand Slam", "ITF Wheelchair 1", etc.) so we let the
+  //       circuit filter alone handle it (no category restriction).
   const NIVEAUX_TO_CATEGORY: Record<string, string> = {
     grand_slam: 'Grand Slam',
     atp_1000: 'Masters 1000',
@@ -465,7 +468,6 @@ export default function CalendarScreen() {
     wta_250: 'WTA 250',
     wta_125: 'WTA 125',
     itf_w15: 'ITF W15',
-    itf_wheelchair: 'ITF Wheelchair',
   };
 
   useEffect(() => {

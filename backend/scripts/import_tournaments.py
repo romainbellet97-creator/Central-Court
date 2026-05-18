@@ -132,7 +132,7 @@ async def import_tournaments():
                 "id": f"wheelchair-{row.get('Tournament Key', '')}".lower(),
                 "name": row.get("Tournament Name", ""),
                 "shortName": row.get("Short Name", ""),
-                "circuit": "ITF",  # ITF Wheelchair
+                "circuit": "itf_wheelchair",
                 "category": category,
                 "surface": row.get("Surface", ""),
                 "startDate": start_date,
