@@ -73,6 +73,9 @@ interface TeamMember {
   email: string;
   role: string;
   status: 'active' | 'pending';
+  token?: string;
+  expiresAt?: string;
+  reminderCount?: number;
 }
 
 // ============ COMPONENT ============
@@ -143,6 +146,9 @@ export default function ProfileScreen() {
             email: inv.inviteeEmail,
             role: inv.role,
             status: 'pending' as const,
+            token: inv.token,
+            expiresAt: inv.expiresAt,
+            reminderCount: inv.reminderCount || 0,
           }));
         
         setTeam([...activeStaff, ...pendingInvites]);
@@ -302,6 +308,35 @@ export default function ProfileScreen() {
         }
       ]
     );
+  };
+
+  const handleResendInvitation = async (member: TeamMember) => {
+    try {
+      await api.post(`/api/invitations/${member.id}/resend`);
+      // Refresh team to get updated expiresAt
+      setTeam(prev => prev.map(m =>
+        m.id === member.id
+          ? { ...m, expiresAt: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(), reminderCount: (m.reminderCount || 0) + 1 }
+          : m
+      ));
+      Alert.alert('Invitation relancée ✅', `Un nouveau lien valable 7 jours a été généré pour ${member.email}.`);
+    } catch {
+      Alert.alert('Erreur', 'Impossible de relancer l\'invitation.');
+    }
+  };
+
+  const handleShareInvitation = async (member: TeamMember) => {
+    if (!member.token) return;
+    const frontendWebUrl = process.env.EXPO_PUBLIC_FRONTEND_URL || '';
+    let webUrl = '';
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      webUrl = `${window.location.origin}/join/${member.token}`;
+    } else {
+      webUrl = `${frontendWebUrl}/join/${member.token}`;
+    }
+    try {
+      await Share.share({ message: `Rejoins mon équipe sur Le Court Central : ${webUrl}` });
+    } catch { /* ignore */ }
   };
 
   const resetInviteForm = () => {
@@ -601,18 +636,45 @@ export default function ProfileScreen() {
                     </View>
                     <View style={styles.memberInfo}>
                       <Text style={styles.memberName}>{member.name}</Text>
+                      <Text style={styles.memberEmail} numberOfLines={1}>{member.email}</Text>
                       <Text style={[styles.memberRole, { color: roleInfo.color }]}>
                         {roleInfo.label}
-                        {member.status === 'pending' && ' (en attente)'}
+                        {member.status === 'pending' && ' · En attente'}
                       </Text>
+                      {member.status === 'pending' && member.expiresAt && (
+                        <Text style={styles.memberExpiry}>
+                          Expire le {new Date(member.expiresAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
+                          {member.reminderCount ? ` · ${member.reminderCount} relance${member.reminderCount > 1 ? 's' : ''}` : ''}
+                        </Text>
+                      )}
                     </View>
                     {member.status === 'pending' ? (
-                      <View style={styles.pendingBadge}>
-                        <Ionicons name="time-outline" size={14} color="#ff9800" />
+                      <View style={styles.pendingActions}>
+                        <TouchableOpacity
+                          style={styles.resendBtn}
+                          onPress={() => handleResendInvitation(member)}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Ionicons name="send-outline" size={14} color="#1976d2" />
+                          <Text style={styles.resendBtnText}>Relancer</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.shareBtn}
+                          onPress={() => handleShareInvitation(member)}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Ionicons name="share-outline" size={16} color="#6B7280" />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.removeMemberBtn}
+                          onPress={() => handleRemoveMember(member)}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Ionicons name="close-circle-outline" size={18} color="#E53935" />
+                        </TouchableOpacity>
                       </View>
                     ) : (
-                      // P2-16 FIX: Ajout icône suppression visible
-                      <TouchableOpacity 
+                      <TouchableOpacity
                         style={styles.removeMemberBtn}
                         onPress={() => handleRemoveMember(member)}
                         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -1051,10 +1113,41 @@ const styles = StyleSheet.create({
   pendingBadge: {
     padding: 6,
   },
-  // P2-16 FIX: Style pour le bouton de suppression de membre
+  memberEmail: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 1,
+  },
+  memberExpiry: {
+    fontSize: 11,
+    color: '#ff9800',
+    marginTop: 2,
+  },
+  pendingActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  resendBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  resendBtnText: {
+    fontSize: 12,
+    color: '#1976d2',
+    fontWeight: '600',
+  },
+  shareBtn: {
+    padding: 5,
+  },
   removeMemberBtn: {
     padding: 6,
-    marginLeft: 8,
+    marginLeft: 4,
   },
   hint: {
     fontSize: 12,
