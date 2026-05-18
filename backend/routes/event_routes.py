@@ -458,7 +458,7 @@ async def add_observation(request: Request, event_id: str, req: AddObservationRe
     current_user_id = await get_current_user_id(request)
     staff_ctx = await get_staff_context(request)
 
-    event = await db.events.find_one({"id": event_id}, {"_id": 0, "userId": 1, "title": 1})
+    event = await db.events.find_one({"id": event_id}, {"_id": 0, "userId": 1, "title": 1, "proposedBy": 1})
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
 
@@ -488,12 +488,26 @@ async def add_observation(request: Request, event_id: str, req: AddObservationRe
 
     # Generate event_comment alert for the event owner
     # (don't alert the author themselves)
+    snippet = req.text[:80] + ("..." if len(req.text) > 80 else "")
     if event_owner and event_owner != current_user_id:
-        snippet = req.text[:80] + ("..." if len(req.text) > 80 else "")
         await _create_alert(
             user_id=event_owner,
             alert_type="event_comment",
             title=f"💬 {req.author} a commenté",
+            message=f'"{snippet}" — {event.get("title", "")}',
+            event_id=event_id,
+            from_name=req.author,
+            from_role=req.role,
+            priority="low",
+        )
+
+    # Also notify the staff member who proposed the event, if different
+    proposed_by = event.get("proposedBy")
+    if proposed_by and proposed_by != current_user_id and proposed_by != event_owner:
+        await _create_alert(
+            user_id=proposed_by,
+            alert_type="event_comment",
+            title=f"💬 {req.author} a commenté sur votre proposition",
             message=f'"{snippet}" — {event.get("title", "")}',
             event_id=event_id,
             from_name=req.author,

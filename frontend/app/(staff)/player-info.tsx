@@ -6,34 +6,60 @@ import {
   StyleSheet,
   ActivityIndicator,
   RefreshControl,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as SecureStore from 'expo-secure-store';
 import { useAuth } from '../../src/context/AuthContext';
 import { PermissionGate } from '../../src/components/PermissionGate';
 import { getStaffRoleLabel } from '../../src/types/staff';
 import Constants from 'expo-constants';
 
-const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_BACKEND_URL || 
+const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_BACKEND_URL ||
                 process.env.EXPO_PUBLIC_BACKEND_URL || '';
 
+async function getStoredToken(): Promise<string | null> {
+  try {
+    if (Platform.OS === 'web') return typeof localStorage !== 'undefined' ? localStorage.getItem('session_token') : null;
+    return await SecureStore.getItemAsync('session_token');
+  } catch { return null; }
+}
+
+async function authFetch(path: string, options: RequestInit = {}): Promise<Response> {
+  const token = await getStoredToken();
+  return fetch(`${API_URL}${path}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options.headers as Record<string, string> || {}),
+    },
+  });
+}
+
 interface PlayerProfile {
-  user_id?: string;
-  name?: string;
-  firstName?: string;
-  lastName?: string;
+  id?: string;
+  prenom?: string;
   email?: string;
-  birthDate?: string;
+  dateNaissance?: string;
   nationality?: string;
-  ranking?: number;
-  rankingPoints?: number;
-  travelClass?: string;
-  hotelPreference?: string;
-  dietaryRequirements?: string;
-  taxResidency?: {
-    country?: string;
-    daysRemaining?: number;
+  classement?: string;
+  circuits?: string[];
+  residenceFiscale?: string;
+  travelPreferences?: {
+    flightClass?: string;
+    seatPreference?: string;
+    mealPreference?: string;
+  };
+  hotelPreferences?: {
+    roomType?: string;
+    essentialAmenities?: string[];
+  };
+  foodPreferences?: {
+    restrictions?: string[];
+    allergies?: string[];
   };
 }
 
@@ -67,29 +93,21 @@ export default function PlayerInfo() {
     }
 
     try {
-      // Fetch player profile
-      const profileRes = await fetch(`${API_URL}/api/users/${linkedPlayerId}`);
+      // Fetch player profile with auth
+      const profileRes = await authFetch(`/api/users/profile/${linkedPlayerId}`);
       if (profileRes.ok) {
         const profileData = await profileRes.json();
         setPlayer(profileData);
       }
 
-      // Fetch tournaments
-      const tournamentsRes = await fetch(
-        `${API_URL}/api/tournaments/weeks?circuits=ATP,WTA`
+      // Fetch confirmed tournament registrations for this player
+      const tournamentsRes = await authFetch(
+        `/api/tournaments/player-registrations?userId=${linkedPlayerId}&status=participating`
       );
       if (tournamentsRes.ok) {
         const data = await tournamentsRes.json();
-        // Extract participating tournaments
-        const participating: Tournament[] = [];
-        data.weeks?.forEach((week: any) => {
-          week.tournaments?.forEach((t: any) => {
-            if (t.registration?.status === 'participating') {
-              participating.push(t);
-            }
-          });
-        });
-        setUpcomingTournaments(participating.slice(0, 5));
+        const list: Tournament[] = Array.isArray(data) ? data : (data.tournaments || []);
+        setUpcomingTournaments(list.slice(0, 5));
       }
     } catch (error) {
       console.error('Error loading player data:', error);
@@ -110,9 +128,11 @@ export default function PlayerInfo() {
 
   const formatDate = (dateStr?: string) => {
     if (!dateStr) return 'Non renseigné';
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('fr-FR', { 
-      day: 'numeric', 
+    const parts = dateStr.split('T')[0].split('-').map(Number);
+    if (parts.length < 3) return dateStr;
+    const date = new Date(parts[0], parts[1] - 1, parts[2]);
+    return date.toLocaleDateString('fr-FR', {
+      day: 'numeric',
       month: 'long',
       year: 'numeric'
     });
@@ -125,9 +145,7 @@ export default function PlayerInfo() {
     return `${startDate.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} - ${endDate.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}`;
   };
 
-  const playerName = player?.name || 
-    `${player?.firstName || ''} ${player?.lastName || ''}`.trim() || 
-    'Joueur';
+  const playerName = player?.prenom || 'Joueur';
 
   if (!linkedPlayerId) {
     return (
@@ -178,13 +196,13 @@ export default function PlayerInfo() {
             <Text style={styles.sectionTitle}>Profil</Text>
           </View>
           <View style={styles.card}>
-            <InfoRow label="Nom complet" value={playerName} />
+            <InfoRow label="Prénom" value={playerName} />
             <InfoRow label="Email" value={player?.email || 'Non renseigné'} />
-            <InfoRow label="Nationalité" value={player?.nationality || 'Non renseigné'} />
-            <InfoRow 
-              label="Date de naissance" 
-              value={formatDate(player?.birthDate)} 
-              isLast 
+            <InfoRow label="Circuits" value={player?.circuits?.join(', ') || 'Non renseigné'} />
+            <InfoRow
+              label="Date de naissance"
+              value={formatDate(player?.dateNaissance)}
+              isLast
             />
           </View>
         </View>
@@ -197,12 +215,12 @@ export default function PlayerInfo() {
           </View>
           <View style={styles.statsRow}>
             <View style={styles.statCard}>
-              <Text style={styles.statValue}>{player?.ranking || '—'}</Text>
+              <Text style={styles.statValue}>{player?.classement || '—'}</Text>
               <Text style={styles.statLabel}>Classement</Text>
             </View>
             <View style={styles.statCard}>
-              <Text style={styles.statValue}>{player?.rankingPoints || '—'}</Text>
-              <Text style={styles.statLabel}>Points</Text>
+              <Text style={styles.statValue}>{player?.circuits?.[0] || '—'}</Text>
+              <Text style={styles.statLabel}>Circuit</Text>
             </View>
           </View>
         </View>
@@ -253,12 +271,12 @@ export default function PlayerInfo() {
             <Text style={styles.sectionTitle}>Préférences voyage</Text>
           </View>
           <View style={styles.card}>
-            <InfoRow label="Classe de vol" value={player?.travelClass || 'Non renseigné'} />
-            <InfoRow label="Préférence hôtel" value={player?.hotelPreference || 'Non renseigné'} />
-            <InfoRow 
-              label="Régime alimentaire" 
-              value={player?.dietaryRequirements || 'Non renseigné'} 
-              isLast 
+            <InfoRow label="Classe de vol" value={player?.travelPreferences?.flightClass || 'Non renseigné'} />
+            <InfoRow label="Siège préféré" value={player?.travelPreferences?.seatPreference || 'Non renseigné'} />
+            <InfoRow
+              label="Régime alimentaire"
+              value={player?.foodPreferences?.restrictions?.join(', ') || 'Non renseigné'}
+              isLast
             />
           </View>
         </View>
@@ -271,17 +289,10 @@ export default function PlayerInfo() {
               <Text style={styles.sectionTitle}>Résidence fiscale</Text>
             </View>
             <View style={styles.card}>
-              <InfoRow 
-                label="Pays principal" 
-                value={player?.taxResidency?.country || 'Non renseigné'} 
-              />
-              <InfoRow 
-                label="Jours restants autorisés" 
-                value={player?.taxResidency?.daysRemaining 
-                  ? `${player.taxResidency.daysRemaining} jours` 
-                  : 'Non calculé'
-                } 
-                isLast 
+              <InfoRow
+                label="Pays principal"
+                value={player?.residenceFiscale || 'Non renseigné'}
+                isLast
               />
             </View>
           </View>
