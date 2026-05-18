@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   Platform,
+  Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -69,6 +70,9 @@ export default function StaffNotifications() {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showAll, setShowAll] = useState(false);
+  const [showResponseModal, setShowResponseModal] = useState(false);
+  const [selectedResponseAlert, setSelectedResponseAlert] = useState<StaffAlert | null>(null);
+  const [acceptingResponse, setAcceptingResponse] = useState(false);
 
   const loadAlerts = useCallback(async () => {
     try {
@@ -114,6 +118,22 @@ export default function StaffNotifications() {
     setRefreshing(true);
     loadAlerts();
   }, [loadAlerts]);
+
+  const handleAcceptCounterProposal = async () => {
+    if (!selectedResponseAlert?.eventId) {
+      setShowResponseModal(false);
+      setSelectedResponseAlert(null);
+      return;
+    }
+    setAcceptingResponse(true);
+    try {
+      await authFetch(`/api/events/${selectedResponseAlert.eventId}/confirm-reschedule`, { method: 'PUT' });
+      dismiss(selectedResponseAlert.id);
+    } catch { /* ignore */ }
+    setAcceptingResponse(false);
+    setShowResponseModal(false);
+    setSelectedResponseAlert(null);
+  };
 
   const unreadCount = alerts.filter(a => !a.read).length;
   const displayed = showAll ? alerts : alerts.filter(a => !a.read).concat(alerts.filter(a => a.read)).slice(0, 30);
@@ -163,8 +183,10 @@ export default function StaffNotifications() {
                 style={[styles.alertRow, !alert.read && styles.alertRowUnread]}
                 onPress={() => {
                   markRead(alert.id);
-                  if (alert.eventId) {
-                    // Navigate to calendar focused on this event
+                  if (alert.type === 'event_rescheduled' && alert.eventId) {
+                    setSelectedResponseAlert(alert);
+                    setShowResponseModal(true);
+                  } else if (alert.eventId) {
                     router.push('/(staff)/calendar');
                   }
                 }}
@@ -202,6 +224,61 @@ export default function StaffNotifications() {
           </TouchableOpacity>
         )}
       </ScrollView>
+
+      {/* ===== MODAL: Réponse à la contre-proposition ===== */}
+      <Modal visible={showResponseModal} animationType="fade" transparent>
+        <View style={styles.responseOverlay}>
+          <View style={styles.responseContent}>
+            <View style={styles.responseHeader}>
+              <Text style={styles.responseTitle}>Contre-proposition</Text>
+              <TouchableOpacity onPress={() => { setShowResponseModal(false); setSelectedResponseAlert(null); }}>
+                <Ionicons name="close" size={24} color="#9CA3AF" />
+              </TouchableOpacity>
+            </View>
+
+            {selectedResponseAlert && (
+              <>
+                <View style={styles.proposalBox}>
+                  <Text style={styles.proposalAlertTitle}>{selectedResponseAlert.title}</Text>
+                  <Text style={styles.proposalAlertMessage}>{selectedResponseAlert.message}</Text>
+                  {selectedResponseAlert.fromUserName && (
+                    <Text style={styles.proposalAlertFrom}>
+                      De : {selectedResponseAlert.fromUserName}{selectedResponseAlert.fromUserRole ? ` · ${selectedResponseAlert.fromUserRole}` : ''}
+                    </Text>
+                  )}
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.responseAcceptBtn, acceptingResponse && { opacity: 0.6 }]}
+                  onPress={handleAcceptCounterProposal}
+                  disabled={acceptingResponse}
+                >
+                  {acceptingResponse ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <>
+                      <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                      <Text style={styles.responseAcceptBtnText}>Accepter le créneau</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.responseCounterBtn}
+                  onPress={() => {
+                    setShowResponseModal(false);
+                    setSelectedResponseAlert(null);
+                    router.push('/(staff)/calendar');
+                  }}
+                >
+                  <Ionicons name="swap-horizontal" size={20} color="#4A9B8E" />
+                  <Text style={styles.responseCounterBtnText}>Proposer un autre horaire</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -278,4 +355,83 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   showMoreText: { color: '#4A9B8E', fontWeight: '600', fontSize: 14 },
+
+  // Counter-proposal response modal
+  responseOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  responseContent: {
+    width: '100%',
+    maxWidth: 400,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+  },
+  responseHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  responseTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  proposalBox: {
+    backgroundColor: '#F3F4F6',
+    borderRadius: 10,
+    padding: 14,
+    marginBottom: 16,
+    gap: 6,
+  },
+  proposalAlertTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  proposalAlertMessage: {
+    fontSize: 13,
+    color: '#374151',
+    lineHeight: 18,
+  },
+  proposalAlertFrom: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontStyle: 'italic',
+  },
+  responseAcceptBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#10B981',
+    borderRadius: 12,
+    paddingVertical: 14,
+    marginBottom: 10,
+  },
+  responseAcceptBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  responseCounterBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1.5,
+    borderColor: '#4A9B8E',
+    borderRadius: 12,
+    paddingVertical: 14,
+  },
+  responseCounterBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#4A9B8E',
+  },
 });

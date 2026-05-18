@@ -16,6 +16,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Colors from '../src/constants/colors';
+import AppleDatePickerFR from '../src/components/inputs/AppleDatePickerFR';
+import AppleTimePicker from '../src/components/inputs/AppleTimePicker';
 import {
   Alert,
   ALERT_TYPE_CONFIG,
@@ -83,6 +85,18 @@ function generateSkyscannerUrl(destinationCity: string, tournamentStart: string,
 // ============================================
 // COMPOSANT PRINCIPAL
 // ============================================
+
+// Convert YYYY-MM-DD ↔ DD/MM/YYYY for AppleDatePickerFR
+const toFRDate = (iso: string): string => {
+  if (!iso || !iso.includes('-')) return iso;
+  const [y, m, d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+};
+const toISODate = (fr: string): string => {
+  if (!fr || !fr.includes('/')) return fr;
+  const [d, m, y] = fr.split('/');
+  return `${y}-${m}-${d}`;
+};
 
 export default function NotificationsScreen() {
   const insets = useSafeAreaInsets();
@@ -260,12 +274,14 @@ export default function NotificationsScreen() {
   // Ouvrir le modal de contre-proposition
   const openCounterProposal = () => {
     setShowRefuseModal(false);
-    
-    // Pré-remplir avec la date originale
     if (selectedAlert?.targetSlot) {
       setCounterDate(selectedAlert.targetSlot.date);
-      setCounterTime('');
-      setCounterEndTime('');
+      setCounterTime(selectedAlert.targetSlot.time || '13:00');
+      setCounterEndTime(selectedAlert.targetSlot.endTime || '14:00');
+    } else {
+      setCounterDate(new Date().toISOString().split('T')[0]);
+      setCounterTime('13:00');
+      setCounterEndTime('14:00');
     }
     setCounterMessage('');
     setShowCounterProposalModal(true);
@@ -540,78 +556,74 @@ export default function NotificationsScreen() {
       </Modal>
       
       {/* ===== MODAL: Contre-proposition ===== */}
-      <Modal visible={showCounterProposalModal} animationType="fade" transparent>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Proposer un créneau</Text>
-              <TouchableOpacity onPress={() => setShowCounterProposalModal(false)}>
-                <Ionicons name="close" size={24} color="#9e9e9e" />
-              </TouchableOpacity>
-            </View>
-            
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Date</Text>
-              <TextInput
-                style={styles.textInputSmall}
-                placeholder="2026-02-05"
-                placeholderTextColor="#bdbdbd"
-                value={counterDate}
-                onChangeText={setCounterDate}
-              />
-            </View>
-            
-            <View style={styles.timeRow}>
-              <View style={[styles.inputGroup, { flex: 1 }]}>
-                <Text style={styles.inputLabel}>Début</Text>
-                <TextInput
-                  style={styles.textInputSmall}
-                  placeholder="14:00"
-                  placeholderTextColor="#bdbdbd"
-                  value={counterTime}
-                  onChangeText={setCounterTime}
-                />
+      <Modal visible={showCounterProposalModal} animationType="slide" transparent>
+        <View style={styles.cpOverlay}>
+          <TouchableOpacity
+            style={{ flex: 1 }}
+            activeOpacity={1}
+            onPress={() => setShowCounterProposalModal(false)}
+          />
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+            <View style={styles.cpSheet}>
+              <View style={styles.cpHandle} />
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Proposer un créneau</Text>
+                <TouchableOpacity onPress={() => setShowCounterProposalModal(false)}>
+                  <Ionicons name="close" size={24} color="#9e9e9e" />
+                </TouchableOpacity>
               </View>
-              <View style={[styles.inputGroup, { flex: 1, marginLeft: 12 }]}>
-                <Text style={styles.inputLabel}>Fin</Text>
-                <TextInput
-                  style={styles.textInputSmall}
-                  placeholder="15:00"
-                  placeholderTextColor="#bdbdbd"
-                  value={counterEndTime}
-                  onChangeText={setCounterEndTime}
+
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 8 }}>
+                <AppleDatePickerFR
+                  value={toFRDate(counterDate)}
+                  onChange={(fr) => setCounterDate(toISODate(fr))}
+                  label="DATE"
                 />
+
+                <View style={styles.cpTimeSection}>
+                  <AppleTimePicker
+                    value={counterTime || '13:00'}
+                    onChange={setCounterTime}
+                    minuteStep={5}
+                    label="HEURE DE DÉBUT"
+                  />
+                </View>
+
+                <View style={styles.cpTimeSection}>
+                  <AppleTimePicker
+                    value={counterEndTime || '14:00'}
+                    onChange={setCounterEndTime}
+                    minuteStep={5}
+                    label="HEURE DE FIN"
+                  />
+                </View>
+
+                <View style={[styles.inputGroup, { marginTop: 16 }]}>
+                  <Text style={styles.inputLabel}>MESSAGE (OPTIONNEL)</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    placeholder="Ce créneau me conviendrait mieux..."
+                    placeholderTextColor="#bdbdbd"
+                    value={counterMessage}
+                    onChangeText={setCounterMessage}
+                    multiline
+                    numberOfLines={2}
+                  />
+                </View>
+              </ScrollView>
+
+              <View style={styles.actionRow}>
+                <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowCounterProposalModal(false)}>
+                  <Text style={styles.cancelBtnText}>Annuler</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.sendBtn} onPress={sendCounterProposal}>
+                  <Ionicons name="send" size={16} color="#fff" />
+                  <Text style={styles.sendBtnText}>Envoyer</Text>
+                </TouchableOpacity>
               </View>
             </View>
-            
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Message (optionnel)</Text>
-              <TextInput
-                style={styles.textInput}
-                placeholder="Ce créneau me conviendrait mieux..."
-                placeholderTextColor="#bdbdbd"
-                value={counterMessage}
-                onChangeText={setCounterMessage}
-                multiline
-                numberOfLines={2}
-              />
-            </View>
-            
-            <View style={styles.actionRow}>
-              <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowCounterProposalModal(false)}>
-                <Text style={styles.cancelBtnText}>Annuler</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.sendBtn, (!counterDate || !counterTime || !counterEndTime) && styles.sendBtnDisabled]} 
-                onPress={sendCounterProposal}
-                disabled={!counterDate || !counterTime || !counterEndTime}
-              >
-                <Ionicons name="send" size={16} color="#fff" />
-                <Text style={styles.sendBtnText}>Envoyer</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
+          </KeyboardAvoidingView>
+        </View>
       </Modal>
       
       {/* ===== MODAL: Confirmation ===== */}
@@ -839,8 +851,34 @@ const styles = StyleSheet.create({
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
     paddingVertical: 12, borderRadius: 8, backgroundColor: '#9b51e0',
   },
-  sendBtnDisabled: { opacity: 0.5 },
   sendBtnText: { fontSize: 15, fontWeight: '600', color: '#fff' },
+
+  // Counter proposal - bottom sheet
+  cpOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  cpSheet: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+    maxHeight: '90%',
+  },
+  cpHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#e0e0e0',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  cpTimeSection: {
+    marginTop: 16,
+    alignItems: 'center',
+  },
   
   // Confirmation
   confirmationText: { fontSize: 15, color: '#1a1a1a', textAlign: 'center', lineHeight: 24, marginBottom: 20 },
