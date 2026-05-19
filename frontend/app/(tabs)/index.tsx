@@ -2053,7 +2053,8 @@ export default function CalendarScreen() {
           />
           <KeyboardAvoidingView
             style={styles.detailModal}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            behavior="padding"
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 24}
           >
             {selectedEvent && (
               <>
@@ -2088,12 +2089,13 @@ export default function CalendarScreen() {
                   </TouchableOpacity>
                 </View>
 
-                <ScrollView 
+                <ScrollView
                   ref={detailScrollRef}
-                  style={styles.detailScroll} 
+                  style={styles.detailScroll}
                   showsVerticalScrollIndicator={false}
                   keyboardShouldPersistTaps="handled"
                   keyboardDismissMode="none"
+                  automaticallyAdjustKeyboardInsets={true}
                 >
                   {/* Location */}
                   {selectedEvent.location && (
@@ -2121,14 +2123,15 @@ export default function CalendarScreen() {
                     onObservationUpdated={handleObservationUpdated}
                     onSaveObservation={handleSaveObservationAPI}
                     onComposerOpen={() => {
-                      // Scroll immédiat quand le composer s'ouvre
                       setTimeout(() => {
                         detailScrollRef.current?.scrollToEnd({ animated: true });
-                      }, 100);
-                      // Second scroll après la fin de l'animation clavier (~300-500ms)
+                      }, 150);
                       setTimeout(() => {
                         detailScrollRef.current?.scrollToEnd({ animated: true });
-                      }, 550);
+                      }, 400);
+                      setTimeout(() => {
+                        detailScrollRef.current?.scrollToEnd({ animated: true });
+                      }, 700);
                     }}
                   />
 

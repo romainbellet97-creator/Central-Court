@@ -9,6 +9,8 @@ import {
   RefreshControl,
   Platform,
   Modal,
+  TextInput,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,6 +18,7 @@ import { useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import Constants from 'expo-constants';
 import { ALERT_TYPE_CONFIG, AlertType } from '../../src/data/alertsV1';
+import { useAuth } from '../../src/context/AuthContext';
 
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_BACKEND_URL ||
                 process.env.EXPO_PUBLIC_BACKEND_URL || '';
@@ -66,6 +69,7 @@ function timeAgo(iso: string): string {
 export default function StaffNotifications() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { user } = useAuth();
   const [alerts, setAlerts] = useState<StaffAlert[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -73,6 +77,12 @@ export default function StaffNotifications() {
   const [showResponseModal, setShowResponseModal] = useState(false);
   const [selectedResponseAlert, setSelectedResponseAlert] = useState<StaffAlert | null>(null);
   const [acceptingResponse, setAcceptingResponse] = useState(false);
+
+  // Observation reply modal
+  const [showObsModal, setShowObsModal] = useState(false);
+  const [selectedObsAlert, setSelectedObsAlert] = useState<StaffAlert | null>(null);
+  const [obsReplyText, setObsReplyText] = useState('');
+  const [sendingObsReply, setSendingObsReply] = useState(false);
 
   const loadAlerts = useCallback(async () => {
     try {
@@ -135,6 +145,27 @@ export default function StaffNotifications() {
     setSelectedResponseAlert(null);
   };
 
+  const handleSendObsReply = async () => {
+    if (!selectedObsAlert?.eventId || !obsReplyText.trim()) return;
+    setSendingObsReply(true);
+    try {
+      await authFetch(`/api/events/${selectedObsAlert.eventId}/observations`, {
+        method: 'POST',
+        body: JSON.stringify({
+          author: user?.name || 'Agent',
+          role: user?.role || 'staff',
+          text: obsReplyText.trim(),
+          parentId: null,
+        }),
+      });
+      dismiss(selectedObsAlert.id);
+    } catch { /* ignore */ }
+    setSendingObsReply(false);
+    setShowObsModal(false);
+    setSelectedObsAlert(null);
+    setObsReplyText('');
+  };
+
   const unreadCount = alerts.filter(a => !a.read).length;
   const displayed = showAll ? alerts : alerts.filter(a => !a.read).concat(alerts.filter(a => a.read)).slice(0, 30);
 
@@ -186,6 +217,10 @@ export default function StaffNotifications() {
                   if (alert.type === 'event_rescheduled' && alert.eventId) {
                     setSelectedResponseAlert(alert);
                     setShowResponseModal(true);
+                  } else if (alert.type === 'event_comment' && alert.eventId) {
+                    setSelectedObsAlert(alert);
+                    setObsReplyText('');
+                    setShowObsModal(true);
                   } else if (alert.eventId) {
                     router.push('/(staff)/calendar');
                   }
@@ -224,6 +259,79 @@ export default function StaffNotifications() {
           </TouchableOpacity>
         )}
       </ScrollView>
+
+      {/* ===== MODAL: Répondre à une observation ===== */}
+      <Modal
+        visible={showObsModal}
+        animationType="slide"
+        transparent
+        onRequestClose={() => { setShowObsModal(false); setSelectedObsAlert(null); setObsReplyText(''); }}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.responseOverlay}
+        >
+          <View style={styles.responseContent}>
+            <View style={styles.responseHeader}>
+              <Text style={styles.responseTitle}>Observation du joueur</Text>
+              <TouchableOpacity onPress={() => { setShowObsModal(false); setSelectedObsAlert(null); setObsReplyText(''); }}>
+                <Ionicons name="close" size={24} color="#9CA3AF" />
+              </TouchableOpacity>
+            </View>
+
+            {selectedObsAlert && (
+              <>
+                <View style={styles.proposalBox}>
+                  <Text style={styles.proposalAlertTitle}>{selectedObsAlert.title}</Text>
+                  <Text style={styles.proposalAlertMessage}>{selectedObsAlert.message}</Text>
+                  {selectedObsAlert.fromUserName && (
+                    <Text style={styles.proposalAlertFrom}>
+                      De : {selectedObsAlert.fromUserName}{selectedObsAlert.fromUserRole ? ` · ${selectedObsAlert.fromUserRole}` : ''}
+                    </Text>
+                  )}
+                </View>
+
+                <Text style={styles.obsReplyLabel}>VOTRE RÉPONSE</Text>
+                <TextInput
+                  style={styles.obsReplyInput}
+                  placeholder="Écrire une réponse..."
+                  placeholderTextColor="#9CA3AF"
+                  value={obsReplyText}
+                  onChangeText={setObsReplyText}
+                  multiline
+                  maxLength={500}
+                  autoCorrect
+                  autoCapitalize="sentences"
+                />
+                <Text style={styles.obsCharCount}>{obsReplyText.length}/500</Text>
+
+                <TouchableOpacity
+                  style={[styles.responseAcceptBtn, { backgroundColor: '#4A9B8E' }, (!obsReplyText.trim() || sendingObsReply) && { opacity: 0.5 }]}
+                  onPress={handleSendObsReply}
+                  disabled={!obsReplyText.trim() || sendingObsReply}
+                >
+                  {sendingObsReply ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <>
+                      <Ionicons name="send" size={18} color="#fff" />
+                      <Text style={styles.responseAcceptBtnText}>Envoyer la réponse</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.responseCounterBtn}
+                  onPress={() => { setShowObsModal(false); setSelectedObsAlert(null); setObsReplyText(''); router.push('/(staff)/calendar'); }}
+                >
+                  <Ionicons name="calendar-outline" size={18} color="#4A9B8E" />
+                  <Text style={styles.responseCounterBtnText}>Voir le calendrier</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
 
       {/* ===== MODAL: Réponse à la contre-proposition ===== */}
       <Modal visible={showResponseModal} animationType="fade" transparent>
@@ -433,5 +541,35 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: '#4A9B8E',
+  },
+
+  // Observation reply modal
+  obsReplyLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6B7280',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 6,
+    marginTop: 4,
+  },
+  obsReplyInput: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
+    padding: 12,
+    fontSize: 15,
+    color: '#1F2937',
+    minHeight: 100,
+    maxHeight: 200,
+    textAlignVertical: 'top',
+  },
+  obsCharCount: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    textAlign: 'right',
+    marginTop: 4,
+    marginBottom: 12,
   },
 });
