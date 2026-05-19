@@ -120,7 +120,15 @@ async def list_events(
     is_staff = staff_ctx is not None
 
     if userId:
-        target_user_id = userId
+        # Resolve MongoDB ObjectId to custom user_id if needed
+        try:
+            from bson import ObjectId
+            player_doc = await db.users.find_one(
+                {"_id": ObjectId(userId)}, {"_id": 0, "user_id": 1}
+            )
+            target_user_id = player_doc["user_id"] if player_doc and player_doc.get("user_id") else userId
+        except Exception:
+            target_user_id = userId
     else:
         target_user_id = await get_current_user_id(request)
 

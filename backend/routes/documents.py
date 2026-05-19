@@ -282,10 +282,16 @@ async def get_documents_stats(
         raise HTTPException(status_code=500, detail="Database not initialized")
     
     if userId:
-        target_user_id = userId
+        try:
+            player_doc = await db.users.find_one(
+                {"_id": ObjectId(userId)}, {"_id": 0, "user_id": 1}
+            )
+            target_user_id = player_doc["user_id"] if player_doc and player_doc.get("user_id") else userId
+        except Exception:
+            target_user_id = userId
     else:
         target_user_id = await get_current_user_id(request)
-    
+
     query = {"userId": target_user_id}
     if startDate or endDate:
         date_query = {}
@@ -295,7 +301,7 @@ async def get_documents_stats(
             date_query["$lte"] = endDate
         if date_query:
             query["dateFacture"] = date_query
-    
+
     pipeline = [
         {"$match": query},
         {"$group": {
@@ -746,12 +752,18 @@ async def export_documents_pdf(
     from reportlab.lib.units import cm
     from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
     
-    # Use explicit userId (staff) or authenticated user
+    # Use explicit userId (staff) or authenticated user — resolve ObjectId if needed
     if userId:
-        target_user_id = userId
+        try:
+            player_doc = await db.users.find_one(
+                {"_id": ObjectId(userId)}, {"_id": 0, "user_id": 1}
+            )
+            target_user_id = player_doc["user_id"] if player_doc and player_doc.get("user_id") else userId
+        except Exception:
+            target_user_id = userId
     else:
         target_user_id = await get_current_user_id(request)
-    
+
     query = {"userId": target_user_id}
     if category:
         query["category"] = category
