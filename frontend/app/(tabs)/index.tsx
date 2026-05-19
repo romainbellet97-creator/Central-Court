@@ -592,7 +592,7 @@ export default function CalendarScreen() {
     tournamentWeeks.forEach(week => {
       if (!week?.tournaments) return;
       
-      week.tournaments.filter(t => t?.registration).forEach(tournament => {
+      week.tournaments.filter(t => t?.registration && !t.hidden).forEach(tournament => {
         if (!tournament?.startDate || !tournament?.endDate) return;
         
         try {

@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timezone
 import uuid
+from bson import ObjectId
 from .auth_helpers import get_current_user_id, get_staff_context
 
 router = APIRouter(prefix="/api/tournaments", tags=["tournaments"])
@@ -238,6 +239,19 @@ async def get_player_tournament_registrations(
     staff_ctx = await get_staff_context(request)
     if not staff_ctx:
         raise HTTPException(status_code=403, detail="Accès réservé au staff")
+
+    # The frontend passes linkedPlayerId which is a MongoDB ObjectId string.
+    # Registrations are stored with the player's custom user_id ("player_xxx"),
+    # so we resolve the ObjectId to the actual user_id before querying.
+    try:
+        player_doc = await db.users.find_one(
+            {"_id": ObjectId(userId)},
+            {"_id": 0, "user_id": 1}
+        )
+        if player_doc and player_doc.get("user_id"):
+            userId = player_doc["user_id"]
+    except Exception:
+        pass  # userId is already a user_id string, use as-is
 
     regs = await db.tournament_registrations.find(
         {"userId": userId, "status": status},

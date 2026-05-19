@@ -29,6 +29,7 @@ import {
   markAlertRead,
   dismissAlert as apiDismissAlert,
   markAllAlertsRead,
+  respondToEvent,
 } from '../src/services/api';
 
 // ============================================
@@ -220,21 +221,37 @@ export default function NotificationsScreen() {
         setSelectedAlert(alert);
         setShowSuggestionModal(true);
         break;
-        
+
+      case 'event_proposal':
+        setSelectedAlert(alert);
+        setShowSuggestionModal(true);
+        break;
+
       default:
         router.push('/');
         break;
     }
   };
   
-  // Accepter une suggestion de créneau
-  const acceptSuggestion = () => {
-    if (!selectedAlert || !selectedAlert.targetSlot) return;
-    
-    // Fermer le modal de suggestion
+  // Accepter une suggestion de créneau ou une proposition d'événement staff
+  const acceptSuggestion = async () => {
+    if (!selectedAlert) return;
     setShowSuggestionModal(false);
-    
-    // Préparer le message de confirmation
+
+    if (selectedAlert.type === 'event_proposal' && selectedAlert.eventId) {
+      try {
+        await respondToEvent(selectedAlert.eventId, 'accept');
+      } catch { /* ignore */ }
+      setConfirmationMessage(
+        `✅ Créneau confirmé\n\n` +
+        `${selectedAlert.fromUserName} a été notifié de votre confirmation.`
+      );
+      setShowConfirmationModal(true);
+      dismissAlert(selectedAlert.id);
+      return;
+    }
+
+    if (!selectedAlert.targetSlot) return;
     const slot = selectedAlert.targetSlot;
     setConfirmationMessage(
       `✅ Créneau ajouté à votre agenda\n\n` +
@@ -242,11 +259,7 @@ export default function NotificationsScreen() {
       `🕐 ${slot.time} - ${slot.endTime}\n\n` +
       `${selectedAlert.fromUserName} a été notifié de votre confirmation.`
     );
-    
-    // Afficher la confirmation
     setShowConfirmationModal(true);
-    
-    // Marquer comme traité
     dismissAlert(selectedAlert.id);
   };
   
@@ -258,10 +271,16 @@ export default function NotificationsScreen() {
   };
   
   // Confirmer le refus simple
-  const confirmRefuse = () => {
+  const confirmRefuse = async () => {
     if (!selectedAlert) return;
-    
     setShowRefuseModal(false);
+
+    if (selectedAlert.type === 'event_proposal' && selectedAlert.eventId) {
+      try {
+        await respondToEvent(selectedAlert.eventId, 'refuse', { note: refuseNote || undefined });
+      } catch { /* ignore */ }
+    }
+
     setConfirmationMessage(
       `❌ Créneau refusé\n\n` +
       `${selectedAlert.fromUserName} a été notifié${refuseNote ? ' avec votre message.' : '.'}`
@@ -288,11 +307,32 @@ export default function NotificationsScreen() {
   };
   
   // Envoyer la contre-proposition
-  const sendCounterProposal = () => {
+  const sendCounterProposal = async () => {
     if (!selectedAlert || !counterDate || !counterTime || !counterEndTime) return;
-    
     setShowCounterProposalModal(false);
-    
+
+    // For staff-proposed events, call the reschedule API
+    if (selectedAlert.type === 'event_proposal' && selectedAlert.eventId) {
+      try {
+        await respondToEvent(selectedAlert.eventId, 'reschedule', {
+          alternativeDate: counterDate,
+          alternativeTime: counterTime,
+          alternativeEndTime: counterEndTime,
+          note: counterMessage || undefined,
+        });
+      } catch { /* ignore */ }
+      setConfirmationMessage(
+        `🔄 Contre-proposition envoyée\n\n` +
+        `📅 ${new Date(counterDate).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}\n` +
+        `🕐 ${counterTime} - ${counterEndTime}\n\n` +
+        `${selectedAlert.fromUserName} recevra votre proposition.`
+      );
+      setShowConfirmationModal(true);
+      dismissAlert(selectedAlert.id);
+      setCounterDate(''); setCounterTime(''); setCounterEndTime(''); setCounterMessage('');
+      return;
+    }
+
     // Créer une nouvelle alerte pour la contre-proposition (simule l'envoi)
     const newAlert = createSlotSuggestion(
       'Vous',
