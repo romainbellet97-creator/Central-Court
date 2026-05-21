@@ -416,17 +416,19 @@ export default function StaffNotifications() {
         <View style={styles.responseOverlay}>
           <View style={styles.responseContent}>
             {selectedInfoAlert && (() => {
+              const INFO_CONFIG: Record<string, { title: string; color: string }> = {
+                event_accepted: { title: '✅ Créneau accepté', color: '#10B981' },
+                event_refused:  { title: '❌ Créneau refusé',  color: '#EF4444' },
+                event_created:  { title: '📅 Nouvel événement', color: '#4A9B8E' },
+                event_modified: { title: '✏️ Événement modifié', color: '#4A9B8E' },
+              };
+              const { title: modalTitle, color: accentColor } = INFO_CONFIG[selectedInfoAlert.type] ?? { title: selectedInfoAlert.type, color: '#4A9B8E' };
               const isRefused = selectedInfoAlert.type === 'event_refused';
-              const isAccepted = selectedInfoAlert.type === 'event_accepted';
-              const accentColor = isAccepted ? '#10B981' : isRefused ? '#EF4444' : '#4A9B8E';
               return (
                 <>
                   <View style={styles.responseHeader}>
                     <Text style={[styles.responseTitle, { color: accentColor }]}>
-                      {isAccepted ? '✅ Créneau accepté' :
-                       isRefused  ? '❌ Créneau refusé' :
-                       selectedInfoAlert.type === 'event_created' ? '📅 Nouvel événement' :
-                       '✏️ Événement modifié'}
+                      {modalTitle}
                     </Text>
                     <TouchableOpacity onPress={() => { setShowInfoModal(false); setSelectedInfoAlert(null); }}>
                       <Ionicons name="close" size={24} color="#9CA3AF" />

@@ -175,6 +175,8 @@ const EVENT_TYPES: Record<string, { label: string; color: string; icon: string }
   other: { label: '📌 Autre', color: '#607D8B', icon: 'ellipsis-horizontal-outline' },
 };
 
+const LEGACY_EVENT_TYPE_ALIASES = new Set(['training_tennis', 'training_physical', 'medical_kine']);
+
 const TOURNAMENT_STATUS_LABELS: Record<string, { label: string; color: string }> = {
   interested: { label: 'Intéressé', color: '#9E9E9E' },
   pending: { label: 'En attente', color: '#FF9800' },
@@ -252,6 +254,8 @@ interface CalendarEvent {
   alternativeDate?: string;
   alternativeTime?: string;
   alternativeEndTime?: string;
+  availableSlots?: Array<{ start: string; end: string }>;
+  slotDuration?: number;
 }
 
 interface Tournament {
@@ -1208,11 +1212,12 @@ export default function CalendarScreen() {
   const getCategoryColor = (category: string) => CATEGORY_COLORS[category] || '#607D8B';
   const getSurfaceColor = (surface: string) => SURFACE_COLORS[surface] || SURFACE_COLORS[surface?.toLowerCase()] || '#666';
 
-  // Event type options for picker — exclude activation_marque and legacy alias keys
-  const LEGACY_ALIAS_KEYS = new Set(['training_tennis', 'training_physical', 'medical_kine']);
-  const eventTypeOptions = Object.entries(EVENT_TYPES)
-    .filter(([key]) => key !== 'activation_marque' && !LEGACY_ALIAS_KEYS.has(key))
-    .map(([key, config]) => ({ label: config.label, value: key }));
+  const eventTypeOptions = useMemo(
+    () => Object.entries(EVENT_TYPES)
+      .filter(([key]) => key !== 'activation_marque' && !LEGACY_EVENT_TYPE_ALIASES.has(key))
+      .map(([key, config]) => ({ label: config.label, value: key })),
+    []
+  );
 
   // Future tournament weeks
   const futureTournamentWeeks = useMemo(() => {
@@ -2179,12 +2184,12 @@ export default function CalendarScreen() {
                   )}
 
                   {/* Activation marque: slot selection */}
-                  {selectedEvent.type === 'activation_marque' && selectedEvent.status === 'pending_slot_selection' && Array.isArray((selectedEvent as any).availableSlots) && (selectedEvent as any).availableSlots.length > 0 && (
+                  {selectedEvent.type === 'activation_marque' && selectedEvent.status === 'pending_slot_selection' && (selectedEvent.availableSlots?.length ?? 0) > 0 && (
                     <View style={{ marginBottom: 16 }}>
                       <Text style={{ fontSize: 14, fontWeight: '700', color: '#059669', marginBottom: 10 }}>
                         ⚡ Sélectionnez votre créneau :
                       </Text>
-                      {((selectedEvent as any).availableSlots as {start: string; end: string}[]).map((slot, i) => (
+                      {selectedEvent.availableSlots!.map((slot, i) => (
                         <TouchableOpacity
                           key={i}
                           style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#D1FAE5', borderWidth: 1.5, borderColor: '#059669', borderRadius: 12, paddingVertical: 13, marginBottom: 8 }}
@@ -2312,8 +2317,7 @@ export default function CalendarScreen() {
                       onChange={setRespondAltDate}
                       label="DATE SOUHAITÉE"
                     />
-                    <View style={{ height: 12 }} />
-                    <Text style={{ fontSize: 12, fontWeight: '600', color: '#6B7280', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>HORAIRES</Text>
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: '#6B7280', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6, marginTop: 12 }}>HORAIRES</Text>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                       <View style={{ flex: 1 }}>
                         <AppleTimePicker
@@ -2333,7 +2337,6 @@ export default function CalendarScreen() {
                         />
                       </View>
                     </View>
-                    <View style={{ height: 8 }} />
                   </View>
                 )}
 

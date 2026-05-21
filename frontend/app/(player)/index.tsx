@@ -65,6 +65,8 @@ const EVENT_TYPES: Record<string, { label: string; color: string; icon: string }
   other: { label: '📌 Autre', color: '#607D8B', icon: 'ellipsis-horizontal-outline' },
 };
 
+const LEGACY_EVENT_TYPE_ALIASES = new Set(['training_tennis', 'training_physical', 'medical_kine']);
+
 const TOURNAMENT_STATUS_LABELS: Record<string, { label: string; color: string }> = {
   interested: { label: 'Intéressé', color: '#9E9E9E' },
   pending: { label: 'En attente', color: '#FF9800' },
@@ -958,11 +960,12 @@ export default function CalendarScreen() {
   const getCategoryColor = (category: string) => CATEGORY_COLORS[category] || '#607D8B';
   const getSurfaceColor = (surface: string) => SURFACE_COLORS[surface] || SURFACE_COLORS[surface?.toLowerCase()] || '#666';
 
-  // Event type options for picker — exclude activation_marque and legacy alias keys
-  const LEGACY_ALIAS_KEYS = new Set(['training_tennis', 'training_physical', 'medical_kine']);
-  const eventTypeOptions = Object.entries(EVENT_TYPES)
-    .filter(([key]) => key !== 'activation_marque' && !LEGACY_ALIAS_KEYS.has(key))
-    .map(([key, config]) => ({ label: config.label, value: key }));
+  const eventTypeOptions = useMemo(
+    () => Object.entries(EVENT_TYPES)
+      .filter(([key]) => key !== 'activation_marque' && !LEGACY_EVENT_TYPE_ALIASES.has(key))
+      .map(([key, config]) => ({ label: config.label, value: key })),
+    []
+  );
 
   // Future tournament weeks
   const futureTournamentWeeks = useMemo(() => {

@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timezone
+import asyncio
 import uuid
 from .auth_helpers import get_current_user_id, get_staff_context
 
@@ -359,10 +360,9 @@ async def create_event(request: Request, req: CreateEventRequest):
                     )
                     staff_members = await staff_cursor.to_list(length=50)
                     time_str = f" à {req.time}" if req.time else ""
-                    for sm in staff_members:
-                        staff_user_id = f"staff_{str(sm['_id'])}"
-                        await _create_alert(
-                            user_id=staff_user_id,
+                    await asyncio.gather(*[
+                        _create_alert(
+                            user_id=f"staff_{str(sm['_id'])}",
                             alert_type="event_created",
                             title=f"{player_name} a ajouté un événement",
                             message=f"{req.title} · {req.date}{time_str}",
@@ -371,6 +371,8 @@ async def create_event(request: Request, req: CreateEventRequest):
                             from_role="player",
                             priority="low",
                         )
+                        for sm in staff_members
+                    ])
             except Exception:
                 pass  # notification failure must never block event creation
 
@@ -607,9 +609,9 @@ async def update_event(request: Request, event_id: str, req: UpdateEventRequest)
         await db.notifications.insert_one(notification)
 
         # Also create an alert for each assigned staff
-        for staff_id in event.get("assignedStaffIds", []):
-            time_str = f" à {event['time']}" if event.get("time") else ""
-            await _create_alert(
+        time_str = f" à {event['time']}" if event.get("time") else ""
+        await asyncio.gather(*[
+            _create_alert(
                 user_id=staff_id,
                 alert_type="event_modified",
                 title="📅 Horaire modifié",
@@ -618,6 +620,8 @@ async def update_event(request: Request, event_id: str, req: UpdateEventRequest)
                 from_name="Le joueur",
                 priority="medium",
             )
+            for staff_id in event.get("assignedStaffIds", [])
+        ])
 
     return event
 
