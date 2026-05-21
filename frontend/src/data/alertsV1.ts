@@ -13,7 +13,8 @@ export type AlertType =
   | 'event_refused'       // Joueur a refusé → notif staff
   | 'event_rescheduled'   // Joueur propose un autre horaire → notif staff
   | 'event_comment'       // Nouveau commentaire sur un événement
-  | 'event_modified';     // Événement modifié par le joueur → notif staff
+  | 'event_modified'      // Événement modifié par le joueur → notif staff
+  | 'event_created';      // Joueur a créé un événement → notif staff concerné
 
 export type AlertPriority = 'high' | 'medium' | 'low';
 
@@ -142,6 +143,12 @@ export const ALERT_TYPE_CONFIG: Record<AlertType, {
     icon: '✏️',
     color: '#8B5CF6',
     label: 'Événement modifié',
+    actionLabel: 'Voir'
+  },
+  event_created: {
+    icon: '📅',
+    color: '#0EA5E9',
+    label: 'Nouvel événement',
     actionLabel: 'Voir'
   },
 };

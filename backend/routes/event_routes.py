@@ -261,6 +261,62 @@ async def create_event(request: Request, req: CreateEventRequest):
             priority="medium",
         )
 
+    # Notify relevant staff when the PLAYER creates an event
+    elif not staff_ctx:
+        # Map event type → staff roles to notify (per permissions mastersheet)
+        TYPE_TO_ROLES = {
+            "tournament":    ["agent"],
+            "training":      ["tennis_coach"],
+            "training_tennis": ["tennis_coach"],
+            "physicalPrep":  ["physical_coach"],
+            "training_physical": ["physical_coach"],
+            "medical":       ["physio"],
+            "medical_kine":  ["physio"],
+            "media":         ["agent"],
+            "sponsor":       ["agent"],
+            "travel":        ["agent"],
+            "hotel":         ["agent"],
+            # personal / personal: no notification
+        }
+        roles_to_notify = TYPE_TO_ROLES.get(req.type, [])
+        if roles_to_notify:
+            try:
+                from bson import ObjectId
+                # Find player's MongoDB _id from their user_id
+                player_doc = await db.users.find_one(
+                    {"user_id": current_user_id},
+                    {"_id": 1, "name": 1, "firstName": 1}
+                )
+                if player_doc:
+                    player_mongo_id = str(player_doc["_id"])
+                    player_name = player_doc.get("name") or player_doc.get("firstName") or "Le joueur"
+
+                    # Find active staff members for this player with the target roles
+                    staff_cursor = db.staff_members.find(
+                        {
+                            "playerId": player_mongo_id,
+                            "role": {"$in": roles_to_notify},
+                            "status": {"$ne": "removed"},
+                        },
+                        {"_id": 1, "role": 1}
+                    )
+                    staff_members = await staff_cursor.to_list(length=50)
+                    time_str = f" à {req.time}" if req.time else ""
+                    for sm in staff_members:
+                        staff_user_id = f"staff_{str(sm['_id'])}"
+                        await _create_alert(
+                            user_id=staff_user_id,
+                            alert_type="event_created",
+                            title=f"{player_name} a ajouté un événement",
+                            message=f"{req.title} · {req.date}{time_str}",
+                            event_id=event_id,
+                            from_name=player_name,
+                            from_role="player",
+                            priority="low",
+                        )
+            except Exception:
+                pass  # notification failure must never block event creation
+
     return event
 
 

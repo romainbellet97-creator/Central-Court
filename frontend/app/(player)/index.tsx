@@ -51,12 +51,13 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const EVENT_TYPES: Record<string, { label: string; color: string; icon: string }> = {
   training: { label: '🎾 Entraînement Tennis', color: '#10B981', icon: 'tennisball-outline' },
   physicalPrep: { label: '💪 Préparation Physique', color: '#F59E0B', icon: 'fitness-outline' },
-  match: { label: '🏆 Match', color: '#EF4444', icon: 'trophy-outline' },
-  tournament: { label: '🎯 Tournoi', color: '#8B5CF6', icon: 'flag-outline' },
-  recovery: { label: '🧘 Récupération', color: '#06B6D4', icon: 'heart-outline' },
-  meeting: { label: '📋 Réunion', color: '#6B7280', icon: 'people-outline' },
-  medical: { label: '🏥 Médical', color: '#E91E63', icon: 'medkit-outline' },
-  travel: { label: '✈️ Voyage', color: '#9C27B0', icon: 'airplane-outline' },
+  tournament: { label: '🏆 Tournoi', color: '#8B5CF6', icon: 'flag-outline' },
+  medical: { label: '🏥 Kiné-Récup', color: '#E91E63', icon: 'medkit-outline' },
+  media: { label: '📺 Médias', color: '#F97316', icon: 'tv-outline' },
+  sponsor: { label: '🤝 Sponsors', color: '#7C3AED', icon: 'briefcase-outline' },
+  personal: { label: '👤 Perso', color: '#6B7280', icon: 'person-outline' },
+  travel: { label: '✈️ Vol', color: '#9C27B0', icon: 'airplane-outline' },
+  hotel: { label: '🏨 Hôtel', color: '#FF7043', icon: 'bed-outline' },
   other: { label: '📌 Autre', color: '#607D8B', icon: 'ellipsis-horizontal-outline' },
 };
 

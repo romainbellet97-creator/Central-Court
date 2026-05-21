@@ -132,6 +132,7 @@ def get_default_permissions(role: str) -> dict:
             'canUploadDocuments': True,
             'canViewFinances': False,
             'canManageInvoices': False,
+            'canCreateBrandActivation': False,
         },
         'physical_coach': {
             'canViewCalendar': True,
@@ -140,14 +141,16 @@ def get_default_permissions(role: str) -> dict:
             'canUploadDocuments': True,
             'canViewFinances': False,
             'canManageInvoices': False,
+            'canCreateBrandActivation': False,
         },
         'physio': {
             'canViewCalendar': True,
-            'canEditCalendar': False,
+            'canEditCalendar': True,   # CSV row 91: all roles can propose
             'canViewDocuments': True,
             'canUploadDocuments': True,
             'canViewFinances': False,
             'canManageInvoices': False,
+            'canCreateBrandActivation': False,
         },
         'agent': {
             'canViewCalendar': True,
@@ -156,14 +159,16 @@ def get_default_permissions(role: str) -> dict:
             'canUploadDocuments': True,
             'canViewFinances': True,
             'canManageInvoices': True,
+            'canCreateBrandActivation': True,  # agent-only per CSV
         },
         'family': {
             'canViewCalendar': True,
-            'canEditCalendar': False,
+            'canEditCalendar': True,   # CSV row 91: all roles can propose
             'canViewDocuments': True,
             'canUploadDocuments': False,
             'canViewFinances': False,
             'canManageInvoices': False,
+            'canCreateBrandActivation': False,
         },
     }
     return permissions_map.get(role, {

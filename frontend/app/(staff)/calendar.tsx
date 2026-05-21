@@ -86,12 +86,13 @@ const EVENT_STATUS_CONFIG: Record<string, { label: string; color: string; icon: 
 const EVENT_COLORS: Record<string, string> = {
   training: '#10B981',
   physicalPrep: '#F59E0B',
-  match: '#EF4444',
   tournament: '#8B5CF6',
-  recovery: '#06B6D4',
-  meeting: '#6B7280',
   medical: '#E91E63',
+  media: '#F97316',
+  sponsor: '#7C3AED',
+  personal: '#6B7280',
   travel: '#9C27B0',
+  hotel: '#FF7043',
   other: '#607D8B',
 };
 

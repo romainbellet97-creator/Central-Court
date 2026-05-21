@@ -37,6 +37,7 @@ export interface StaffPermissions {
   canUploadDocuments: boolean;
   canViewFinances: boolean;
   canManageInvoices: boolean;
+  canCreateBrandActivation: boolean;
 }
 
 export const ROLE_PERMISSIONS: Record<StaffRole, StaffPermissions> = {
@@ -47,6 +48,7 @@ export const ROLE_PERMISSIONS: Record<StaffRole, StaffPermissions> = {
     canUploadDocuments: true,
     canViewFinances: false,
     canManageInvoices: false,
+    canCreateBrandActivation: false,
   },
   physical_coach: {
     canViewCalendar: true,
@@ -55,14 +57,16 @@ export const ROLE_PERMISSIONS: Record<StaffRole, StaffPermissions> = {
     canUploadDocuments: true,
     canViewFinances: false,
     canManageInvoices: false,
+    canCreateBrandActivation: false,
   },
   physio: {
     canViewCalendar: true,
-    canEditCalendar: false,
+    canEditCalendar: true,  // CSV row 91: all roles can propose
     canViewDocuments: true,
     canUploadDocuments: true,
     canViewFinances: false,
     canManageInvoices: false,
+    canCreateBrandActivation: false,
   },
   agent: {
     canViewCalendar: true,
@@ -71,14 +75,16 @@ export const ROLE_PERMISSIONS: Record<StaffRole, StaffPermissions> = {
     canUploadDocuments: true,
     canViewFinances: true,
     canManageInvoices: true,
+    canCreateBrandActivation: true,  // agent-only per CSV
   },
   family: {
     canViewCalendar: true,
-    canEditCalendar: false,
+    canEditCalendar: true,  // CSV row 91: all roles can propose
     canViewDocuments: true,
     canUploadDocuments: false,
     canViewFinances: false,
     canManageInvoices: false,
+    canCreateBrandActivation: false,
   },
 };
 
