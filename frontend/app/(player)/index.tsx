@@ -55,6 +55,7 @@ const EVENT_TYPES: Record<string, { label: string; color: string; icon: string }
   medical: { label: '🏥 Kiné-Récup', color: '#E91E63', icon: 'medkit-outline' },
   media: { label: '📺 Médias', color: '#F97316', icon: 'tv-outline' },
   sponsor: { label: '🤝 Sponsors', color: '#7C3AED', icon: 'briefcase-outline' },
+  activation_marque: { label: '⚡ Activation marque', color: '#059669', icon: 'flash-outline' },
   personal: { label: '👤 Perso', color: '#6B7280', icon: 'person-outline' },
   travel: { label: '✈️ Vol', color: '#9C27B0', icon: 'airplane-outline' },
   hotel: { label: '🏨 Hôtel', color: '#FF7043', icon: 'bed-outline' },

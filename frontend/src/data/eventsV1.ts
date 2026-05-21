@@ -1,12 +1,13 @@
 // Types d'événements V1 MVP avec codes couleur
 
-export type EventTypeV1 = 
+export type EventTypeV1 =
   | 'tournament'
   | 'training_tennis'
   | 'training_physical'
   | 'medical_kine'
   | 'media'
   | 'sponsor'
+  | 'activation_marque'
   | 'personal'
   | 'travel'
   | 'hotel';
@@ -59,6 +60,11 @@ export const EVENT_CATEGORIES: Record<EventTypeV1, EventCategoryV1> = {
     color: '#00796b',
     icon: '✈️',
     label: 'Vol'
+  },
+  activation_marque: {
+    color: '#059669',
+    icon: '⚡',
+    label: 'Activation marque'
   },
   hotel: {
     color: '#5d4037',

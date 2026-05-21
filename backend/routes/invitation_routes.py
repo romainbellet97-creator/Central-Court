@@ -133,6 +133,7 @@ def get_default_permissions(role: str) -> dict:
             'canViewFinances': False,
             'canManageInvoices': False,
             'canCreateBrandActivation': False,
+            'proposableTypes': ['tournament', 'training', 'medical', 'media', 'sponsor', 'travel', 'hotel'],
         },
         'physical_coach': {
             'canViewCalendar': True,
@@ -142,15 +143,17 @@ def get_default_permissions(role: str) -> dict:
             'canViewFinances': False,
             'canManageInvoices': False,
             'canCreateBrandActivation': False,
+            'proposableTypes': ['physicalPrep', 'travel', 'hotel'],
         },
         'physio': {
             'canViewCalendar': True,
-            'canEditCalendar': True,   # CSV row 91: all roles can propose
+            'canEditCalendar': True,
             'canViewDocuments': True,
             'canUploadDocuments': True,
             'canViewFinances': False,
             'canManageInvoices': False,
             'canCreateBrandActivation': False,
+            'proposableTypes': ['medical'],
         },
         'agent': {
             'canViewCalendar': True,
@@ -159,16 +162,18 @@ def get_default_permissions(role: str) -> dict:
             'canUploadDocuments': True,
             'canViewFinances': True,
             'canManageInvoices': True,
-            'canCreateBrandActivation': True,  # agent-only per CSV
+            'canCreateBrandActivation': True,
+            'proposableTypes': None,  # all types
         },
         'family': {
             'canViewCalendar': True,
-            'canEditCalendar': True,   # CSV row 91: all roles can propose
+            'canEditCalendar': False,
             'canViewDocuments': True,
             'canUploadDocuments': False,
             'canViewFinances': False,
             'canManageInvoices': False,
             'canCreateBrandActivation': False,
+            'proposableTypes': [],
         },
     }
     return permissions_map.get(role, {

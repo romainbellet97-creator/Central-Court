@@ -27,10 +27,41 @@ class CreateEventRequest(BaseModel):
     tournamentId: Optional[str] = None
     visibleToStaff: bool = True
     assignedStaffIds: Optional[List[str]] = []
+    slotDuration: Optional[int] = None  # activation_marque: 15, 30 or 45 min
     # Staff-side fields (ignored when player creates)
     status: Optional[str] = None
     proposedBy: Optional[str] = None
     proposedByName: Optional[str] = None
+
+
+class SelectSlotRequest(BaseModel):
+    slotStart: str  # HH:MM
+    slotEnd: str    # HH:MM
+
+
+# Per-role proposable event types (mirrors frontend staff.ts)
+_ROLE_PROPOSABLE_TYPES: dict = {
+    "tennis_coach":   {"tournament", "training", "medical", "media", "sponsor", "travel", "hotel"},
+    "physical_coach": {"physicalPrep", "travel", "hotel"},
+    "physio":         {"medical"},
+    "family":         set(),  # read-only
+    # agent: unrestricted (None handled below)
+}
+
+
+def _generate_slots(start_time: str, end_time: str, duration_min: int) -> list:
+    """Generate time slots of `duration_min` within a [start, end) window."""
+    h, m = map(int, start_time.split(':'))
+    eh, em = map(int, end_time.split(':'))
+    cur = h * 60 + m
+    end = eh * 60 + em
+    slots = []
+    while cur + duration_min <= end:
+        s = f"{cur // 60:02d}:{cur % 60:02d}"
+        cur += duration_min
+        e = f"{cur // 60:02d}:{cur % 60:02d}"
+        slots.append({"start": s, "end": e})
+    return slots
 
 
 class UpdateEventRequest(BaseModel):
@@ -208,12 +239,24 @@ async def create_event(request: Request, req: CreateEventRequest):
     staff_ctx = await get_staff_context(request)
 
     if staff_ctx and staff_ctx.get("player_id"):
+        # Validate event type against role restrictions
+        role = staff_ctx.get("role", "")
+        if role in _ROLE_PROPOSABLE_TYPES:
+            allowed = _ROLE_PROPOSABLE_TYPES[role]
+            if req.type not in allowed:
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Role '{role}' cannot propose events of type '{req.type}'"
+                )
+        elif req.type == "activation_marque" and role != "agent":
+            raise HTTPException(status_code=403, detail="Only agents can create brand activation events")
+
         # Staff proposing a slot to the player
         owner_user_id = staff_ctx["player_id"]
         event_status = "pending_approval"
         proposed_by = staff_ctx["user_id"]
         proposed_by_name = staff_ctx["name"]
-        proposed_by_role = staff_ctx.get("role", "")
+        proposed_by_role = role
     else:
         owner_user_id = current_user_id
         event_status = None
@@ -244,6 +287,13 @@ async def create_event(request: Request, req: CreateEventRequest):
         "proposedByRole": proposed_by_role,
         "createdAt": datetime.now(timezone.utc).isoformat(),
     }
+    # Generate available slots for brand activation events
+    if req.type == "activation_marque" and req.time and req.endTime and req.slotDuration:
+        slots = _generate_slots(req.time, req.endTime, req.slotDuration)
+        event["availableSlots"] = slots
+        event["slotDuration"] = req.slotDuration
+        event["status"] = "pending_slot_selection"
+
     await db.events.insert_one(event)
     event.pop("_id", None)
 
@@ -395,6 +445,52 @@ async def respond_to_event(request: Request, event_id: str, req: RespondEventReq
     updated = await db.events.find_one({"id": event_id}, {"_id": 0})
     updated.pop("_id", None)
     return updated
+
+
+@router.put("/{event_id}/select-slot")
+async def select_slot(request: Request, event_id: str, req: SelectSlotRequest):
+    """Player selects a time slot from a brand activation event."""
+    current_user_id = await get_current_user_id(request)
+
+    event = await db.events.find_one({"id": event_id}, {"_id": 0})
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    if event.get("type") != "activation_marque":
+        raise HTTPException(status_code=400, detail="Event is not a brand activation")
+    if event.get("userId") != current_user_id and current_user_id != "default-user":
+        raise HTTPException(status_code=403, detail="Access denied")
+    if event.get("status") != "pending_slot_selection":
+        raise HTTPException(status_code=400, detail="Slot already selected or event not pending")
+
+    await db.events.update_one(
+        {"id": event_id},
+        {"$set": {
+            "time": req.slotStart,
+            "endTime": req.slotEnd,
+            "status": "confirmed",
+            "availableSlots": [],
+        }}
+    )
+
+    # Notify the agent who created the event
+    proposed_by = event.get("proposedBy")
+    if proposed_by:
+        player_doc = await db.users.find_one(
+            {"user_id": current_user_id}, {"_id": 0, "name": 1, "firstName": 1}
+        )
+        player_name = (player_doc or {}).get("name") or (player_doc or {}).get("firstName") or "Le joueur"
+        await _create_alert(
+            user_id=proposed_by,
+            alert_type="event_accepted",
+            title=f"{player_name} a sélectionné un créneau",
+            message=f"{event.get('title', 'Activation marque')} · {req.slotStart} → {req.slotEnd}",
+            event_id=event_id,
+            from_name=player_name,
+            from_role="player",
+            priority="medium",
+        )
+
+    return {"ok": True, "time": req.slotStart, "endTime": req.slotEnd}
 
 
 @router.put("/{event_id}")

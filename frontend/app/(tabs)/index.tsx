@@ -165,6 +165,7 @@ const EVENT_TYPES: Record<string, { label: string; color: string; icon: string }
   medical: { label: '🏥 Kiné-Récup', color: '#E91E63', icon: 'medkit-outline' },
   media: { label: '📺 Médias', color: '#F97316', icon: 'tv-outline' },
   sponsor: { label: '🤝 Sponsors', color: '#7C3AED', icon: 'briefcase-outline' },
+  activation_marque: { label: '⚡ Activation marque', color: '#059669', icon: 'flash-outline' },
   personal: { label: '👤 Perso', color: '#6B7280', icon: 'person-outline' },
   travel: { label: '✈️ Vol', color: '#9C27B0', icon: 'airplane-outline' },
   hotel: { label: '🏨 Hôtel', color: '#FF7043', icon: 'bed-outline' },
@@ -963,6 +964,25 @@ export default function CalendarScreen() {
   }, [selectedEvent]);
 
   // BUG #1 FIX: Utiliser getCurrentUser().name au lieu de 'Coach Martin' hardcodé
+  const handleSelectSlot = useCallback(async (eventId: string, slotStart: string, slotEnd: string) => {
+    try {
+      const res = await authFetch(`/api/events/${eventId}/select-slot`, {
+        method: 'PUT',
+        body: JSON.stringify({ slotStart, slotEnd }),
+      });
+      if (res.ok) {
+        setEvents(prev => prev.map(e =>
+          e.id === eventId
+            ? { ...e, time: slotStart, endTime: slotEnd, status: 'confirmed', availableSlots: [] }
+            : e
+        ));
+        if (selectedEvent?.id === eventId) {
+          setSelectedEvent(prev => prev ? { ...prev, time: slotStart, endTime: slotEnd, status: 'confirmed', availableSlots: [] } : prev);
+        }
+      }
+    } catch { /* ignore */ }
+  }, [selectedEvent]);
+
   const handleSaveObservationAPI = useCallback(async (data: { eventId: string; text: string; parentId?: string | null }) => {
     const currentUser = getCurrentUser();
     const newObservation = await apiAddObservation(data.eventId, {
@@ -1185,11 +1205,10 @@ export default function CalendarScreen() {
   const getCategoryColor = (category: string) => CATEGORY_COLORS[category] || '#607D8B';
   const getSurfaceColor = (surface: string) => SURFACE_COLORS[surface] || SURFACE_COLORS[surface?.toLowerCase()] || '#666';
 
-  // Event type options for picker
-  const eventTypeOptions = Object.entries(EVENT_TYPES).map(([key, config]) => ({
-    label: config.label,
-    value: key,
-  }));
+  // Event type options for picker — player cannot create activation_marque
+  const eventTypeOptions = Object.entries(EVENT_TYPES)
+    .filter(([key]) => key !== 'activation_marque')
+    .map(([key, config]) => ({ label: config.label, value: key }));
 
   // Future tournament weeks
   const futureTournamentWeeks = useMemo(() => {
@@ -2148,6 +2167,27 @@ export default function CalendarScreen() {
                           💬 {selectedEvent.playerNote}
                         </Text>
                       )}
+                    </View>
+                  )}
+
+                  {/* Activation marque: slot selection */}
+                  {selectedEvent.type === 'activation_marque' && selectedEvent.status === 'pending_slot_selection' && Array.isArray((selectedEvent as any).availableSlots) && (selectedEvent as any).availableSlots.length > 0 && (
+                    <View style={{ marginBottom: 16 }}>
+                      <Text style={{ fontSize: 14, fontWeight: '700', color: '#059669', marginBottom: 10 }}>
+                        ⚡ Sélectionnez votre créneau :
+                      </Text>
+                      {((selectedEvent as any).availableSlots as {start: string; end: string}[]).map((slot, i) => (
+                        <TouchableOpacity
+                          key={i}
+                          style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#D1FAE5', borderWidth: 1.5, borderColor: '#059669', borderRadius: 12, paddingVertical: 13, marginBottom: 8 }}
+                          onPress={() => handleSelectSlot(selectedEvent.id, slot.start, slot.end)}
+                        >
+                          <Ionicons name="time-outline" size={18} color="#059669" />
+                          <Text style={{ color: '#059669', fontWeight: '700', fontSize: 15 }}>
+                            {slot.start} → {slot.end}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
                     </View>
                   )}
 

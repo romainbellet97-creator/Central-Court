@@ -38,6 +38,8 @@ export interface StaffPermissions {
   canViewFinances: boolean;
   canManageInvoices: boolean;
   canCreateBrandActivation: boolean;
+  // null = all standard event types; string[] = restricted list
+  proposableTypes: string[] | null;
 }
 
 export const ROLE_PERMISSIONS: Record<StaffRole, StaffPermissions> = {
@@ -49,6 +51,8 @@ export const ROLE_PERMISSIONS: Record<StaffRole, StaffPermissions> = {
     canViewFinances: false,
     canManageInvoices: false,
     canCreateBrandActivation: false,
+    // Alex col J: coach proposes tournament, training, kine, media, sponsor, travel, hotel
+    proposableTypes: ['tournament', 'training', 'medical', 'media', 'sponsor', 'travel', 'hotel'],
   },
   physical_coach: {
     canViewCalendar: true,
@@ -58,15 +62,19 @@ export const ROLE_PERMISSIONS: Record<StaffRole, StaffPermissions> = {
     canViewFinances: false,
     canManageInvoices: false,
     canCreateBrandActivation: false,
+    // Alex col J: prépa proposes only physicalPrep, travel, hotel
+    proposableTypes: ['physicalPrep', 'travel', 'hotel'],
   },
   physio: {
     canViewCalendar: true,
-    canEditCalendar: true,  // CSV row 91: all roles can propose
+    canEditCalendar: true,
     canViewDocuments: true,
     canUploadDocuments: true,
     canViewFinances: false,
     canManageInvoices: false,
     canCreateBrandActivation: false,
+    // Alex col J: kiné proposes only Kiné-Récup
+    proposableTypes: ['medical'],
   },
   agent: {
     canViewCalendar: true,
@@ -75,16 +83,20 @@ export const ROLE_PERMISSIONS: Record<StaffRole, StaffPermissions> = {
     canUploadDocuments: true,
     canViewFinances: true,
     canManageInvoices: true,
-    canCreateBrandActivation: true,  // agent-only per CSV
+    canCreateBrandActivation: true,
+    // Alex col J: agent proposes media, sponsor, travel, hotel + activation_marque
+    // null = all standard types + activation_marque via canCreateBrandActivation
+    proposableTypes: null,
   },
   family: {
     canViewCalendar: true,
-    canEditCalendar: true,  // CSV row 91: all roles can propose
+    canEditCalendar: false,  // all event types are read-only for family per data columns
     canViewDocuments: true,
     canUploadDocuments: false,
     canViewFinances: false,
     canManageInvoices: false,
     canCreateBrandActivation: false,
+    proposableTypes: [],  // cannot propose any type
   },
 };
 

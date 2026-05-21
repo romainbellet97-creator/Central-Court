@@ -90,6 +90,7 @@ const EVENT_COLORS: Record<string, string> = {
   medical: '#E91E63',
   media: '#F97316',
   sponsor: '#7C3AED',
+  activation_marque: '#059669',
   personal: '#6B7280',
   travel: '#9C27B0',
   hotel: '#FF7043',
@@ -114,10 +115,12 @@ export default function StaffCalendar() {
 
   // Propose slot form
   const [proposeTitle, setProposeTitle] = useState('');
+  const [proposeType, setProposeType] = useState('training');
   const [proposeDate, setProposeDate] = useState(new Date().toISOString().split('T')[0]);
   const [proposeTime, setProposeTime] = useState('09:00');
   const [proposeEndTime, setProposeEndTime] = useState('10:00');
   const [proposeNotes, setProposeNotes] = useState('');
+  const [proposeSlotDuration, setProposeSlotDuration] = useState(30);
   const [endTimeManuallySet, setEndTimeManuallySet] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -126,6 +129,26 @@ export default function StaffCalendar() {
   const linkedPlayerId = user?.player_id;
   const permissions = getStaffPermissions(user?.role);
   const canEdit = permissions?.canEditCalendar ?? false;
+
+  // Build the list of event types this staff member can propose
+  const proposableEventTypes = React.useMemo(() => {
+    const all: Record<string, { label: string; color: string }> = {
+      training:      { label: '🎾 Entraînement Tennis', color: '#10B981' },
+      physicalPrep:  { label: '💪 Préparation Physique', color: '#F59E0B' },
+      tournament:    { label: '🏆 Tournoi', color: '#8B5CF6' },
+      medical:       { label: '🏥 Kiné-Récup', color: '#E91E63' },
+      media:         { label: '📺 Médias', color: '#F97316' },
+      sponsor:       { label: '🤝 Sponsors', color: '#7C3AED' },
+      travel:        { label: '✈️ Vol', color: '#9C27B0' },
+      hotel:         { label: '🏨 Hôtel', color: '#FF7043' },
+    };
+    if (permissions?.canCreateBrandActivation) {
+      all['activation_marque'] = { label: '⚡ Activation marque', color: '#059669' };
+    }
+    const allowed = permissions?.proposableTypes;
+    if (allowed === null || allowed === undefined) return Object.entries(all);
+    return Object.entries(all).filter(([key]) => allowed.includes(key));
+  }, [permissions]);
 
   const timeIsValid = proposeEndTime > proposeTime;
   const titleMissing = !proposeTitle.trim();
@@ -252,7 +275,8 @@ export default function StaffCalendar() {
           date: proposeDate,
           time: proposeTime,
           endTime: proposeEndTime,
-          type: 'training',
+          type: proposeType,
+          slotDuration: proposeType === 'activation_marque' ? proposeSlotDuration : undefined,
           description: proposeNotes.trim() || undefined,
         }),
       });
@@ -276,10 +300,12 @@ export default function StaffCalendar() {
 
   const resetProposeForm = () => {
     setProposeTitle('');
+    setProposeType(proposableEventTypes[0]?.[0] || 'training');
     setProposeDate(selectedDate);
     setProposeTime('09:00');
     setProposeEndTime('10:00');
     setProposeNotes('');
+    setProposeSlotDuration(30);
     setEndTimeManuallySet(false);
     setSubmitError(null);
     setTitleTouched(false);
@@ -477,6 +503,59 @@ export default function StaffCalendar() {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
+              {/* Event Type Selector */}
+              <Text style={styles.inputLabel}>TYPE D'ÉVÉNEMENT</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.typeScrollRow}>
+                {proposableEventTypes.map(([key, cfg]) => (
+                  <TouchableOpacity
+                    key={key}
+                    style={[
+                      styles.typeChip,
+                      { borderColor: cfg.color },
+                      proposeType === key && { backgroundColor: cfg.color },
+                    ]}
+                    onPress={() => {
+                      setProposeType(key);
+                      setSubmitError(null);
+                      if (key === 'activation_marque' && !endTimeManuallySet) {
+                        setProposeEndTime('11:00');
+                      }
+                    }}
+                  >
+                    <Text style={[styles.typeChipText, proposeType === key && { color: '#fff' }]}>
+                      {cfg.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              <View style={styles.pickerSpacer} />
+
+              {/* Activation marque: slot duration picker */}
+              {proposeType === 'activation_marque' && (
+                <>
+                  <Text style={styles.inputLabel}>DURÉE DES CRÉNEAUX</Text>
+                  <View style={styles.slotDurationRow}>
+                    {[15, 30, 45].map(d => (
+                      <TouchableOpacity
+                        key={d}
+                        style={[styles.slotDurationBtn, proposeSlotDuration === d && styles.slotDurationBtnActive]}
+                        onPress={() => setProposeSlotDuration(d)}
+                      >
+                        <Text style={[styles.slotDurationText, proposeSlotDuration === d && styles.slotDurationTextActive]}>
+                          {d} min
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <Text style={styles.slotDurationHint}>
+                    La plage horaire ci-dessous sera découpée en créneaux de {proposeSlotDuration} min.{'\n'}
+                    Le joueur sélectionnera le créneau qui lui convient.
+                  </Text>
+                  <View style={styles.pickerSpacer} />
+                </>
+              )}
+
               {/* Title */}
               <Text style={styles.inputLabel}>
                 TITRE <Text style={{ color: '#EF4444' }}>*</Text>
@@ -906,5 +985,58 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#EF4444',
     flex: 1,
+  },
+
+  // Event type selector
+  typeScrollRow: {
+    flexDirection: 'row',
+    marginBottom: 4,
+  },
+  typeChip: {
+    borderWidth: 1.5,
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    marginRight: 8,
+    backgroundColor: '#fff',
+  },
+  typeChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+
+  // Slot duration for activation_marque
+  slotDurationRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 8,
+  },
+  slotDurationBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#D1D5DB',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+  },
+  slotDurationBtnActive: {
+    borderColor: '#059669',
+    backgroundColor: '#059669',
+  },
+  slotDurationText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  slotDurationTextActive: {
+    color: '#fff',
+  },
+  slotDurationHint: {
+    fontSize: 12,
+    color: '#6B7280',
+    lineHeight: 18,
+    marginBottom: 4,
   },
 });
