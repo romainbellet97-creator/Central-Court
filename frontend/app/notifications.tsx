@@ -373,7 +373,7 @@ export default function NotificationsScreen() {
               </Text>
               <Text style={styles.alertTime}>{formatTime(alert.createdAt)}</Text>
             </View>
-            <Text style={styles.alertMessage} numberOfLines={1}>{alert.message}</Text>
+            <Text style={styles.alertMessage} numberOfLines={2}>{alert.message}</Text>
             {(alert.type === 'flight_missing' || alert.type === 'hotel_missing') && alert.tournamentCity && (
               <Text style={styles.alertDestination}>📍 {alert.tournamentCity}</Text>
             )}
@@ -472,6 +472,19 @@ export default function NotificationsScreen() {
             {selectedAlert && (
               <>
                 <View style={styles.infoBox}>
+                  {/* Event name — for backend event_proposal the event name is before '·' in message */}
+                  {(() => {
+                    const eventName = selectedAlert.type === 'event_proposal'
+                      ? selectedAlert.message.split('·')[0].trim()
+                      : null;
+                    return eventName ? (
+                      <View style={styles.infoRow}>
+                        <Text style={styles.infoLabel}>Événement</Text>
+                        <Text style={[styles.infoValue, { fontSize: 16 }]}>{eventName}</Text>
+                      </View>
+                    ) : null;
+                  })()}
+
                   <View style={styles.infoRow}>
                     <Text style={styles.infoLabel}>De</Text>
                     <Text style={styles.infoValue}>
@@ -479,7 +492,7 @@ export default function NotificationsScreen() {
                       <Text style={styles.infoSub}> • {selectedAlert.fromUserRole}</Text>
                     </Text>
                   </View>
-                  
+
                   {selectedAlert.targetSlot && (
                     <View style={styles.infoRow}>
                       <Text style={styles.infoLabel}>Créneau proposé</Text>
@@ -488,18 +501,23 @@ export default function NotificationsScreen() {
                           weekday: 'long', day: 'numeric', month: 'long'
                         })}
                       </Text>
-                      <Text style={styles.infoTime}>
-                        {selectedAlert.targetSlot.time} - {selectedAlert.targetSlot.endTime}
+                      {(selectedAlert.targetSlot.time || selectedAlert.targetSlot.endTime) ? (
+                        <Text style={styles.infoTime}>
+                          {selectedAlert.targetSlot.time}{selectedAlert.targetSlot.time && selectedAlert.targetSlot.endTime ? ' - ' : ''}{selectedAlert.targetSlot.endTime}
+                        </Text>
+                      ) : null}
+                    </View>
+                  )}
+
+                  {/* Message row only for slot_suggestion (demo) — not for backend event_proposal */}
+                  {selectedAlert.type !== 'event_proposal' && (
+                    <View style={styles.infoRow}>
+                      <Text style={styles.infoLabel}>Message</Text>
+                      <Text style={styles.infoMessage}>
+                        {selectedAlert.message.split('•')[1]?.trim().replace(/"/g, '') || 'Séance proposée'}
                       </Text>
                     </View>
                   )}
-                  
-                  <View style={styles.infoRow}>
-                    <Text style={styles.infoLabel}>Message</Text>
-                    <Text style={styles.infoMessage}>
-                      {selectedAlert.message.split('•')[1]?.trim().replace(/"/g, '') || 'Séance proposée'}
-                    </Text>
-                  </View>
                 </View>
                 
                 <View style={styles.actionRow}>
