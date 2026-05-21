@@ -145,6 +145,20 @@ export default function PlayerInfo() {
     return `${startDate.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} - ${endDate.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}`;
   };
 
+  const CIRCUIT_LABELS: Record<string, string> = {
+    atp: 'ATP',
+    wta: 'WTA',
+    itf: 'ITF',
+    itf_wheelchair: 'ITF Wheelchair',
+    challenger: 'Challenger',
+    future: 'Future',
+  };
+
+  const formatCircuit = (c: string) => {
+    const key = c.toLowerCase().replace(/-/g, '_');
+    return CIRCUIT_LABELS[key] || c;
+  };
+
   const playerName = player?.prenom || 'Joueur';
 
   if (!linkedPlayerId) {
@@ -198,7 +212,7 @@ export default function PlayerInfo() {
           <View style={styles.card}>
             <InfoRow label="Prénom" value={playerName} />
             <InfoRow label="Email" value={player?.email || 'Non renseigné'} />
-            <InfoRow label="Circuits" value={player?.circuits?.join(', ') || 'Non renseigné'} />
+            <InfoRow label="Circuits" value={player?.circuits?.map(formatCircuit).join(', ') || 'Non renseigné'} />
             <InfoRow
               label="Date de naissance"
               value={formatDate(player?.dateNaissance)}
@@ -219,7 +233,9 @@ export default function PlayerInfo() {
               <Text style={styles.statLabel}>Classement</Text>
             </View>
             <View style={styles.statCard}>
-              <Text style={styles.statValue}>{player?.circuits?.[0] || '—'}</Text>
+              <Text style={[styles.statValue, styles.statValueCircuit]} numberOfLines={2} adjustsFontSizeToFit>
+                {player?.circuits?.[0] ? formatCircuit(player.circuits[0]) : '—'}
+              </Text>
               <Text style={styles.statLabel}>Circuit</Text>
             </View>
           </View>
@@ -457,6 +473,12 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '700',
     color: '#1e3c72',
+    textAlign: 'center',
+  },
+  statValueCircuit: {
+    fontSize: 20,
+    minHeight: 56,
+    textAlignVertical: 'center',
   },
   statLabel: {
     fontSize: 12,
