@@ -84,6 +84,10 @@ export default function StaffNotifications() {
   const [obsReplyText, setObsReplyText] = useState('');
   const [sendingObsReply, setSendingObsReply] = useState(false);
 
+  // Info modal (event_accepted / event_refused / event_created / event_modified)
+  const [showInfoModal, setShowInfoModal] = useState(false);
+  const [selectedInfoAlert, setSelectedInfoAlert] = useState<StaffAlert | null>(null);
+
   const loadAlerts = useCallback(async () => {
     try {
       const res = await authFetch('/api/alerts');
@@ -221,6 +225,15 @@ export default function StaffNotifications() {
                     setSelectedObsAlert(alert);
                     setObsReplyText('');
                     setShowObsModal(true);
+                  } else if (
+                    (alert.type === 'event_accepted' ||
+                     alert.type === 'event_refused' ||
+                     alert.type === 'event_created' ||
+                     alert.type === 'event_modified') &&
+                    alert.eventId
+                  ) {
+                    setSelectedInfoAlert(alert);
+                    setShowInfoModal(true);
                   } else if (alert.eventId) {
                     router.push('/(staff)/calendar');
                   }
@@ -366,7 +379,7 @@ export default function StaffNotifications() {
                   ) : (
                     <>
                       <Ionicons name="checkmark-circle" size={20} color="#fff" />
-                      <Text style={styles.responseAcceptBtnText}>Accepter le créneau</Text>
+                      <Text style={styles.responseAcceptBtnText}>Confirmer le nouvel horaire</Text>
                     </>
                   )}
                 </TouchableOpacity>
@@ -384,6 +397,84 @@ export default function StaffNotifications() {
                 </TouchableOpacity>
               </>
             )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* ===== MODAL: Info (event_accepted / event_refused / event_created / event_modified) ===== */}
+      <Modal
+        visible={showInfoModal}
+        animationType="fade"
+        transparent
+        onRequestClose={() => { setShowInfoModal(false); setSelectedInfoAlert(null); }}
+      >
+        <View style={styles.responseOverlay}>
+          <View style={styles.responseContent}>
+            {selectedInfoAlert && (() => {
+              const isRefused = selectedInfoAlert.type === 'event_refused';
+              const isAccepted = selectedInfoAlert.type === 'event_accepted';
+              const accentColor = isAccepted ? '#10B981' : isRefused ? '#EF4444' : '#4A9B8E';
+              return (
+                <>
+                  <View style={styles.responseHeader}>
+                    <Text style={[styles.responseTitle, { color: accentColor }]}>
+                      {isAccepted ? '✅ Créneau accepté' :
+                       isRefused  ? '❌ Créneau refusé' :
+                       selectedInfoAlert.type === 'event_created' ? '📅 Nouvel événement' :
+                       '✏️ Événement modifié'}
+                    </Text>
+                    <TouchableOpacity onPress={() => { setShowInfoModal(false); setSelectedInfoAlert(null); }}>
+                      <Ionicons name="close" size={24} color="#9CA3AF" />
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={[styles.proposalBox, { borderLeftWidth: 3, borderLeftColor: accentColor }]}>
+                    <Text style={styles.proposalAlertTitle}>{selectedInfoAlert.title}</Text>
+                    <Text style={styles.proposalAlertMessage}>{selectedInfoAlert.message}</Text>
+                    {selectedInfoAlert.fromUserName && (
+                      <Text style={styles.proposalAlertFrom}>
+                        De : {selectedInfoAlert.fromUserName}
+                      </Text>
+                    )}
+                  </View>
+
+                  {isRefused ? (
+                    <>
+                      <TouchableOpacity
+                        style={[styles.responseAcceptBtn, { backgroundColor: '#4A9B8E' }]}
+                        onPress={() => {
+                          setShowInfoModal(false);
+                          setSelectedInfoAlert(null);
+                          router.push('/(staff)/calendar');
+                        }}
+                      >
+                        <Ionicons name="swap-horizontal" size={20} color="#fff" />
+                        <Text style={styles.responseAcceptBtnText}>Proposer un autre créneau</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.responseCounterBtn}
+                        onPress={() => { dismiss(selectedInfoAlert.id); setShowInfoModal(false); setSelectedInfoAlert(null); }}
+                      >
+                        <Text style={styles.responseCounterBtnText}>Ignorer</Text>
+                      </TouchableOpacity>
+                    </>
+                  ) : (
+                    <TouchableOpacity
+                      style={[styles.responseAcceptBtn, { backgroundColor: accentColor }]}
+                      onPress={() => {
+                        dismiss(selectedInfoAlert.id);
+                        setShowInfoModal(false);
+                        setSelectedInfoAlert(null);
+                        router.push('/(staff)/calendar');
+                      }}
+                    >
+                      <Ionicons name="calendar-outline" size={20} color="#fff" />
+                      <Text style={styles.responseAcceptBtnText}>Voir le calendrier</Text>
+                    </TouchableOpacity>
+                  )}
+                </>
+              );
+            })()}
           </View>
         </View>
       </Modal>

@@ -160,9 +160,12 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 // Types d'événements avec couleurs et icônes
 const EVENT_TYPES: Record<string, { label: string; color: string; icon: string }> = {
   training: { label: '🎾 Entraînement Tennis', color: '#10B981', icon: 'tennisball-outline' },
+  training_tennis: { label: '🎾 Entraînement Tennis', color: '#10B981', icon: 'tennisball-outline' },
   physicalPrep: { label: '💪 Préparation Physique', color: '#F59E0B', icon: 'fitness-outline' },
+  training_physical: { label: '💪 Préparation Physique', color: '#F59E0B', icon: 'fitness-outline' },
   tournament: { label: '🏆 Tournoi', color: '#8B5CF6', icon: 'flag-outline' },
   medical: { label: '🏥 Kiné-Récup', color: '#E91E63', icon: 'medkit-outline' },
+  medical_kine: { label: '🏥 Kiné-Récup', color: '#E91E63', icon: 'medkit-outline' },
   media: { label: '📺 Médias', color: '#F97316', icon: 'tv-outline' },
   sponsor: { label: '🤝 Sponsors', color: '#7C3AED', icon: 'briefcase-outline' },
   activation_marque: { label: '⚡ Activation marque', color: '#059669', icon: 'flash-outline' },
@@ -1205,9 +1208,10 @@ export default function CalendarScreen() {
   const getCategoryColor = (category: string) => CATEGORY_COLORS[category] || '#607D8B';
   const getSurfaceColor = (surface: string) => SURFACE_COLORS[surface] || SURFACE_COLORS[surface?.toLowerCase()] || '#666';
 
-  // Event type options for picker — player cannot create activation_marque
+  // Event type options for picker — exclude activation_marque and legacy alias keys
+  const LEGACY_ALIAS_KEYS = new Set(['training_tennis', 'training_physical', 'medical_kine']);
   const eventTypeOptions = Object.entries(EVENT_TYPES)
-    .filter(([key]) => key !== 'activation_marque')
+    .filter(([key]) => key !== 'activation_marque' && !LEGACY_ALIAS_KEYS.has(key))
     .map(([key, config]) => ({ label: config.label, value: key }));
 
   // Future tournament weeks
