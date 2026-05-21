@@ -29,6 +29,7 @@ import {
   markAlertRead,
   dismissAlert as apiDismissAlert,
   markAllAlertsRead,
+  respondToEvent,
 } from '../src/services/api';
 
 // ============================================
@@ -217,10 +218,11 @@ export default function NotificationsScreen() {
         break;
         
       case 'slot_suggestion':
+      case 'event_proposal':
         setSelectedAlert(alert);
         setShowSuggestionModal(true);
         break;
-        
+
       default:
         router.push('/');
         break;
@@ -228,25 +230,25 @@ export default function NotificationsScreen() {
   };
   
   // Accepter une suggestion de créneau
-  const acceptSuggestion = () => {
-    if (!selectedAlert || !selectedAlert.targetSlot) return;
-    
-    // Fermer le modal de suggestion
+  const acceptSuggestion = async () => {
+    if (!selectedAlert) return;
+
     setShowSuggestionModal(false);
-    
-    // Préparer le message de confirmation
+
+    if (selectedAlert.eventId) {
+      try { await respondToEvent(selectedAlert.eventId, 'accept'); } catch { /* ignore */ }
+    }
+
     const slot = selectedAlert.targetSlot;
     setConfirmationMessage(
-      `✅ Créneau ajouté à votre agenda\n\n` +
-      `📅 ${new Date(slot.date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}\n` +
-      `🕐 ${slot.time} - ${slot.endTime}\n\n` +
+      `✅ Créneau confirmé\n\n` +
+      (slot
+        ? `📅 ${new Date(slot.date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}\n🕐 ${slot.time} - ${slot.endTime}\n\n`
+        : '') +
       `${selectedAlert.fromUserName} a été notifié de votre confirmation.`
     );
-    
-    // Afficher la confirmation
+
     setShowConfirmationModal(true);
-    
-    // Marquer comme traité
     dismissAlert(selectedAlert.id);
   };
   
@@ -258,10 +260,15 @@ export default function NotificationsScreen() {
   };
   
   // Confirmer le refus simple
-  const confirmRefuse = () => {
+  const confirmRefuse = async () => {
     if (!selectedAlert) return;
-    
+
     setShowRefuseModal(false);
+
+    if (selectedAlert.eventId) {
+      try { await respondToEvent(selectedAlert.eventId, 'refuse', { note: refuseNote || undefined }); } catch { /* ignore */ }
+    }
+
     setConfirmationMessage(
       `❌ Créneau refusé\n\n` +
       `${selectedAlert.fromUserName} a été notifié${refuseNote ? ' avec votre message.' : '.'}`
@@ -288,21 +295,22 @@ export default function NotificationsScreen() {
   };
   
   // Envoyer la contre-proposition
-  const sendCounterProposal = () => {
+  const sendCounterProposal = async () => {
     if (!selectedAlert || !counterDate || !counterTime || !counterEndTime) return;
-    
+
     setShowCounterProposalModal(false);
-    
-    // Créer une nouvelle alerte pour la contre-proposition (simule l'envoi)
-    const newAlert = createSlotSuggestion(
-      'Vous',
-      'Joueur',
-      selectedAlert.fromUserName || '',
-      'Contre-proposition',
-      { date: counterDate, time: counterTime, endTime: counterEndTime },
-      counterMessage || 'Voici ma proposition alternative'
-    );
-    
+
+    if (selectedAlert.eventId) {
+      try {
+        await respondToEvent(selectedAlert.eventId, 'reschedule', {
+          alternativeDate: counterDate,
+          alternativeTime: counterTime,
+          alternativeEndTime: counterEndTime,
+          note: counterMessage || undefined,
+        });
+      } catch { /* ignore */ }
+    }
+
     setConfirmationMessage(
       `🔄 Contre-proposition envoyée\n\n` +
       `📅 ${new Date(counterDate).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}\n` +
@@ -311,8 +319,7 @@ export default function NotificationsScreen() {
     );
     setShowConfirmationModal(true);
     dismissAlert(selectedAlert.id);
-    
-    // Reset
+
     setCounterDate('');
     setCounterTime('');
     setCounterEndTime('');
@@ -343,6 +350,7 @@ export default function NotificationsScreen() {
     const getActionLabel = () => {
       if (alert.type === 'flight_missing') return 'Skyscanner';
       if (alert.type === 'hotel_missing') return 'Booking';
+      if (alert.type === 'event_proposal') return 'Répondre';
       return config.actionLabel;
     };
     
@@ -448,12 +456,14 @@ export default function NotificationsScreen() {
         )}
       </ScrollView>
       
-      {/* ===== MODAL: Suggestion de créneau ===== */}
+      {/* ===== MODAL: Suggestion / Proposition de créneau ===== */}
       <Modal visible={showSuggestionModal} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Suggestion de créneau</Text>
+              <Text style={styles.modalTitle}>
+                {selectedAlert?.type === 'event_proposal' ? 'Proposition de créneau' : 'Suggestion de créneau'}
+              </Text>
               <TouchableOpacity onPress={() => setShowSuggestionModal(false)}>
                 <Ionicons name="close" size={24} color="#9e9e9e" />
               </TouchableOpacity>

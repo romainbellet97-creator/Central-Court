@@ -89,6 +89,10 @@ class AddObservationRequest(BaseModel):
 class RespondEventRequest(BaseModel):
     """Player response to a staff-proposed event."""
     action: str  # accept | refuse | reschedule
+    note: Optional[str] = None
+    alternativeDate: Optional[str] = None
+    alternativeTime: Optional[str] = None
+    alternativeEndTime: Optional[str] = None
 
 class CalendarEventItem(BaseModel):
     externalId: str
@@ -112,7 +116,7 @@ class SyncCalendarRequest(BaseModel):
 
 async def _create_alert(user_id: str, alert_type: str, title: str, message: str,
                          event_id: str, from_name: str = None, from_role: str = None,
-                         priority: str = "medium"):
+                         priority: str = "medium", target_slot: dict = None):
     """Helper: insert an alert document into the alerts collection."""
     alert = {
         "id": f"alert-evt-{uuid.uuid4().hex[:8]}",
@@ -128,6 +132,8 @@ async def _create_alert(user_id: str, alert_type: str, title: str, message: str,
         "dismissed": False,
         "createdAt": datetime.now(timezone.utc).isoformat(),
     }
+    if target_slot:
+        alert["targetSlot"] = target_slot
     await db.alerts.insert_one(alert)
     alert.pop("_id", None)
     return alert
@@ -309,6 +315,7 @@ async def create_event(request: Request, req: CreateEventRequest):
             from_name=proposed_by_name,
             from_role=proposed_by_role,
             priority="medium",
+            target_slot={"date": req.date, "time": req.time or "", "endTime": req.endTime or ""},
         )
 
     # Notify relevant staff when the PLAYER creates an event
@@ -445,6 +452,62 @@ async def respond_to_event(request: Request, event_id: str, req: RespondEventReq
     updated = await db.events.find_one({"id": event_id}, {"_id": 0})
     updated.pop("_id", None)
     return updated
+
+
+@router.put("/{event_id}/confirm-reschedule")
+async def confirm_reschedule(request: Request, event_id: str):
+    """Staff accepts the player's counter-proposal and confirms the rescheduled time.
+
+    Applies the player's alternativeDate/Time stored on the event and sets
+    status → confirmed. Sends an event_accepted alert to the player.
+    """
+    staff_ctx = await get_staff_context(request)
+    if not staff_ctx:
+        raise HTTPException(status_code=403, detail="Staff access required")
+
+    event = await db.events.find_one({"id": event_id}, {"_id": 0})
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    if event.get("proposedBy") != staff_ctx["user_id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    if event.get("status") != "rescheduled":
+        raise HTTPException(status_code=400, detail="Event is not awaiting reschedule confirmation")
+
+    update: dict = {
+        "status": "confirmed",
+        "updatedAt": datetime.now(timezone.utc).isoformat(),
+    }
+    alt_date = event.get("alternativeDate")
+    alt_time = event.get("alternativeTime")
+    alt_end_time = event.get("alternativeEndTime")
+    if alt_date:
+        update["date"] = alt_date
+    if alt_time:
+        update["time"] = alt_time
+    if alt_end_time:
+        update["endTime"] = alt_end_time
+
+    await db.events.update_one({"id": event_id}, {"$set": update})
+
+    player_user_id = event.get("userId")
+    if player_user_id:
+        confirmed_date = update.get("date", event.get("date", ""))
+        confirmed_time = update.get("time", event.get("time", ""))
+        time_str = f" à {confirmed_time}" if confirmed_time else ""
+        await _create_alert(
+            user_id=player_user_id,
+            alert_type="event_accepted",
+            title="✅ Créneau confirmé",
+            message=f"{event.get('title', 'Événement')} · {confirmed_date}{time_str}",
+            event_id=event_id,
+            from_name=staff_ctx.get("name", ""),
+            from_role=staff_ctx.get("role", ""),
+            priority="medium",
+        )
+
+    return {"ok": True}
 
 
 @router.put("/{event_id}/select-slot")
