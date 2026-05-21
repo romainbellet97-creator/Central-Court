@@ -12,7 +12,12 @@ from services.email_service import send_email
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
 db = None
-SECRET_KEY = os.getenv("ADMIN_SECRET_KEY", "lecourtcentral-admin-secret-2026")
+SECRET_KEY = os.getenv("ADMIN_SECRET_KEY")
+if not SECRET_KEY:
+    raise RuntimeError(
+        "ADMIN_SECRET_KEY environment variable is required. "
+        "Add it to your .env file: ADMIN_SECRET_KEY=<strong-random-string>"
+    )
 ALGORITHM = "HS256"
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 

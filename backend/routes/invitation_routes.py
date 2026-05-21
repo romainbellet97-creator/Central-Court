@@ -399,7 +399,6 @@ async def staff_signup(request: StaffSignupRequest):
     if expires_at and expires_at < now:
         raise HTTPException(status_code=400, detail="Invitation expirée")
     
-    import hashlib
     player_id = invitation["playerId"]
 
     # Check if a staff member with this email already exists (any player)
@@ -439,8 +438,9 @@ async def staff_signup(request: StaffSignupRequest):
             "authToken": auth_token,
         }
 
-    # New staff member — hash password
-    password_hash = hashlib.sha256(request.password.encode()).hexdigest()
+    # New staff member — hash password with bcrypt
+    import bcrypt as _bcrypt
+    password_hash = _bcrypt.hashpw(request.password.encode(), _bcrypt.gensalt()).decode()
 
     # Generate auth token with staff_ prefix (required by auth_helpers.py)
     auth_token = f"staff_{generate_token(48)}"
@@ -527,21 +527,33 @@ async def staff_login(req: StaffLoginRequest):
     if db is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
     
+    import bcrypt as _bcrypt
     import hashlib
-    
+
     # Find staff by email
     staff = await db.staff_members.find_one({
         "email": req.email.lower(),
         "status": "active"
     })
-    
+
     if not staff:
         raise HTTPException(status_code=401, detail="Email ou mot de passe incorrect")
-    
-    # Verify password
-    password_hash = hashlib.sha256(req.password.encode()).hexdigest()
-    if staff.get("passwordHash") != password_hash:
-        raise HTTPException(status_code=401, detail="Email ou mot de passe incorrect")
+
+    stored_hash = staff.get("passwordHash", "")
+    password_bytes = req.password.encode()
+
+    # Try bcrypt first (new accounts), then SHA256 (legacy migration)
+    try:
+        valid = _bcrypt.checkpw(password_bytes, stored_hash.encode())
+    except Exception:
+        valid = False
+
+    if not valid:
+        if hashlib.sha256(password_bytes).hexdigest() != stored_hash:
+            raise HTTPException(status_code=401, detail="Email ou mot de passe incorrect")
+        # Re-hash with bcrypt silently
+        new_hash = _bcrypt.hashpw(password_bytes, _bcrypt.gensalt()).decode()
+        await db.staff_members.update_one({"_id": staff["_id"]}, {"$set": {"passwordHash": new_hash}})
     
     # Generate new auth token
     auth_token = generate_token(64)

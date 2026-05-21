@@ -5,6 +5,9 @@ from typing import Optional, List
 from datetime import datetime, timezone, timedelta
 from motor.motor_asyncio import AsyncIOMotorClient
 from dotenv import load_dotenv
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 import os
 import uuid
 import httpx
@@ -20,12 +23,23 @@ load_dotenv()
 
 app = FastAPI(title="Central Court API")
 
-# CORS
+# Rate limiter
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# CORS — restrict to known origins; in production set ALLOWED_ORIGINS env var
+_raw_origins = os.getenv(
+    "ALLOWED_ORIGINS",
+    "http://localhost:8081,http://localhost:19006,http://localhost:19000,http://localhost:3000"
+)
+ALLOWED_ORIGINS = [o.strip() for o in _raw_origins.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -734,23 +748,40 @@ class StaffLoginRequest(BaseModel):
     password: str
 
 @app.post("/api/auth/staff-login")
-async def staff_login(req: StaffLoginRequest):
+@limiter.limit("10/minute")
+async def staff_login(request: Request, req: StaffLoginRequest):
     """Login for staff members - proxies to invitation routes"""
+    import bcrypt as _bcrypt
     import hashlib
-    
+
     # Find staff by email
     staff = await db.staff_members.find_one({
         "email": req.email.lower(),
         "status": "active"
     })
-    
+
     if not staff:
         raise HTTPException(status_code=401, detail="Email ou mot de passe incorrect")
-    
-    # Verify password
-    password_hash = hashlib.sha256(req.password.encode()).hexdigest()
-    if staff.get("passwordHash") != password_hash:
-        raise HTTPException(status_code=401, detail="Email ou mot de passe incorrect")
+
+    stored_hash = staff.get("passwordHash", "")
+    password_bytes = req.password.encode()
+
+    # Try bcrypt first (new accounts), then SHA256 (legacy migration)
+    try:
+        valid = _bcrypt.checkpw(password_bytes, stored_hash.encode())
+    except Exception:
+        valid = False
+
+    if not valid:
+        legacy_hash = hashlib.sha256(password_bytes).hexdigest()
+        if legacy_hash != stored_hash:
+            raise HTTPException(status_code=401, detail="Email ou mot de passe incorrect")
+        # Re-hash with bcrypt and save (silent migration)
+        new_hash = _bcrypt.hashpw(password_bytes, _bcrypt.gensalt()).decode()
+        await db.staff_members.update_one(
+            {"_id": staff["_id"]},
+            {"$set": {"passwordHash": new_hash}}
+        )
     
     # Generate new auth token
     auth_token = f"staff_{uuid.uuid4().hex}"
@@ -815,7 +846,8 @@ class PlayerLoginRequest(BaseModel):
     password: str
 
 @app.post("/api/auth/player-login")
-async def player_login(req: PlayerLoginRequest, response: Response):
+@limiter.limit("10/minute")
+async def player_login(request: Request, req: PlayerLoginRequest, response: Response):
     """Login for players with email + password (onboarding-created accounts)"""
     import bcrypt as _bcrypt
 
@@ -992,9 +1024,42 @@ def categorize_receipt(text: str, merchant: Optional[str]) -> str:
     # Default to invoices (general expenses)
     return 'invoices'
 
+async def _analyze_with_claude(image_b64: str, media_type: str = "image/jpeg") -> dict:
+    """Extract receipt data using Claude vision. Returns dict with date/amount/merchant/category."""
+    import anthropic
+    client = anthropic.AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+    msg = await client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=256,
+        messages=[{
+            "role": "user",
+            "content": [
+                {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": image_b64}},
+                {"type": "text", "text": (
+                    "Extract from this receipt: date (YYYY-MM-DD), total amount (number only), "
+                    "merchant name, and category.\n"
+                    "Category must be one of: travel, medical, invoices.\n"
+                    'Reply in JSON only — no markdown: {"date":"YYYY-MM-DD or null","amount":number_or_null,'
+                    '"merchant":"string or null","category":"travel|medical|invoices"}'
+                )},
+            ],
+        }]
+    )
+    raw = msg.content[0].text.strip()
+    raw = re.sub(r'^```[a-z]*\n?', '', raw)
+    raw = re.sub(r'\n?```$', '', raw)
+    return json.loads(raw)
+
+
 @app.post("/api/ocr/analyze-receipt", response_model=OCRResult)
-async def analyze_receipt(request: OCRRequest):
-    """Analyze a receipt image or PDF using Tesseract OCR to extract date, amount, and category"""
+async def analyze_receipt(http_request: Request, request: OCRRequest):
+    """Analyze a receipt image or PDF using OCR to extract date, amount, and category.
+
+    Uses Claude vision when ANTHROPIC_API_KEY is set, otherwise falls back to Tesseract.
+    """
+    from routes.auth_helpers import get_current_user_id as _get_uid
+    await _get_uid(http_request)  # raises 401 if unauthenticated
+
     try:
         # Decode base64 data
         try:
@@ -1005,73 +1070,87 @@ async def analyze_receipt(request: OCRRequest):
                 error=f"Failed to decode base64: {str(e)}"
             )
         
-        # Check if it's a PDF
         is_pdf = file_data[:4] == b'%PDF'
-        
+
+        # ── Claude Vision (primary, when ANTHROPIC_API_KEY is set) ──────────
+        if os.getenv("ANTHROPIC_API_KEY"):
+            try:
+                if is_pdf:
+                    from pdf2image import convert_from_bytes
+                    pages = convert_from_bytes(file_data, dpi=150, first_page=1, last_page=1)
+                    if pages:
+                        buf = io.BytesIO()
+                        pages[0].save(buf, format="JPEG")
+                        img_b64 = base64.b64encode(buf.getvalue()).decode()
+                        media_type = "image/jpeg"
+                    else:
+                        img_b64 = None
+                else:
+                    img_b64 = request.image_base64
+                    if file_data[:8] == b'\x89PNG\r\n\x1a\n':
+                        media_type = "image/png"
+                    elif file_data[:4] == b'RIFF' and file_data[8:12] == b'WEBP':
+                        media_type = "image/webp"
+                    elif file_data[:3] == b'GIF':
+                        media_type = "image/gif"
+                    else:
+                        media_type = "image/jpeg"
+
+                if img_b64:
+                    claude_result = await _analyze_with_claude(img_b64, media_type)
+                    return OCRResult(
+                        success=True,
+                        date=claude_result.get("date"),
+                        amount=claude_result.get("amount"),
+                        category=claude_result.get("category", "invoices"),
+                        merchant=claude_result.get("merchant"),
+                        confidence="high",
+                    )
+            except Exception:
+                pass  # fall through to Tesseract
+
+        # ── Tesseract fallback ───────────────────────────────────────────────
         if is_pdf:
-            # Handle PDF - convert first page to image
             try:
                 from pdf2image import convert_from_bytes
                 pages = convert_from_bytes(file_data, dpi=150, first_page=1, last_page=1)
                 if not pages:
-                    return OCRResult(
-                        success=False,
-                        error="Could not convert PDF to image"
-                    )
+                    return OCRResult(success=False, error="Could not convert PDF to image")
                 image = pages[0]
             except Exception as e:
-                return OCRResult(
-                    success=False,
-                    error=f"Failed to process PDF: {str(e)}"
-                )
+                return OCRResult(success=False, error=f"Failed to process PDF: {str(e)}")
         else:
-            # Handle image
             try:
                 image = Image.open(io.BytesIO(file_data))
             except Exception as e:
-                return OCRResult(
-                    success=False,
-                    error=f"Failed to open image: {str(e)}"
-                )
-        
-        # Convert to RGB if necessary
+                return OCRResult(success=False, error=f"Failed to open image: {str(e)}")
+
         if image.mode != 'RGB':
             image = image.convert('RGB')
-        
-        # Preprocess image for better OCR
-        # Resize if too large
+
         max_size = 2000
         if max(image.size) > max_size:
             ratio = max_size / max(image.size)
-            new_size = (int(image.size[0] * ratio), int(image.size[1] * ratio))
-            image = image.resize(new_size, Image.Resampling.LANCZOS)
-        
-        # Run Tesseract OCR with French language
+            image = image.resize(
+                (int(image.size[0] * ratio), int(image.size[1] * ratio)),
+                Image.Resampling.LANCZOS,
+            )
+
         try:
             ocr_text = pytesseract.image_to_string(image, lang='fra+eng')
-        except Exception as e:
-            # Fallback to English only
+        except Exception:
             ocr_text = pytesseract.image_to_string(image, lang='eng')
-        
+
         if not ocr_text or len(ocr_text.strip()) < 10:
-            return OCRResult(
-                success=False,
-                error="No text could be extracted from the image",
-                raw_text=ocr_text
-            )
-        
-        print(f"OCR Raw Text:\n{ocr_text[:500]}...")  # Log for debugging
-        
-        # Extract information
+            return OCRResult(success=False, error="No text could be extracted from the image", raw_text=ocr_text)
+
         amount = extract_amount_from_text(ocr_text)
         date = extract_date_from_text(ocr_text)
         merchant = extract_merchant_from_text(ocr_text)
         category = categorize_receipt(ocr_text, merchant)
-        
-        # Calculate confidence based on what was found
         found_count = sum([amount is not None, date is not None, merchant is not None])
         confidence = 'high' if found_count >= 2 else ('medium' if found_count == 1 else 'low')
-        
+
         return OCRResult(
             success=True,
             date=date,
@@ -1079,17 +1158,11 @@ async def analyze_receipt(request: OCRRequest):
             category=category,
             merchant=merchant,
             confidence=confidence,
-            raw_text=ocr_text[:500] if ocr_text else None  # Include truncated raw text for debugging
+            raw_text=ocr_text[:500],
         )
-            
+
     except Exception as e:
-        print(f"OCR error: {e}")
-        import traceback
-        traceback.print_exc()
-        return OCRResult(
-            success=False,
-            error=str(e)
-        )
+        return OCRResult(success=False, error=str(e))
 
 # ============ AI QUICK REPLIES ============
 
