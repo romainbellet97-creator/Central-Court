@@ -1843,6 +1843,9 @@ export default function CalendarScreen() {
                 onChangeText={setEventLocation}
                 placeholder="Ex: Court Central"
                 placeholderTextColor="#999"
+                returnKeyType="done"
+                blurOnSubmit={true}
+                onSubmitEditing={Keyboard.dismiss}
               />
 
               {/* Notes */}
@@ -1855,6 +1858,7 @@ export default function CalendarScreen() {
                 placeholderTextColor="#999"
                 multiline
                 numberOfLines={4}
+                blurOnSubmit={false}
               />
 
               {/* Buttons */}
@@ -2300,42 +2304,42 @@ export default function CalendarScreen() {
                   </View>
                 )}
 
-                {/* Alternative time fields for reschedule */}
+                {/* Alternative date/time for reschedule — proper wheel pickers */}
                 {respondAction === 'reschedule' && (
-                  <View style={{ marginBottom: 16, gap: 10 }}>
-                    <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151' }}>Date souhaitée</Text>
-                    <TextInput
-                      style={{ borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 11, fontSize: 15 }}
-                      placeholder="YYYY-MM-DD"
-                      value={respondAltDate}
-                      onChangeText={setRespondAltDate}
+                  <View style={{ marginBottom: 8 }}>
+                    <AppleDatePicker
+                      value={respondAltDate || new Date().toISOString().split('T')[0]}
+                      onChange={setRespondAltDate}
+                      label="DATE SOUHAITÉE"
                     />
-                    <View style={{ flexDirection: 'row', gap: 10 }}>
+                    <View style={{ height: 12 }} />
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: '#6B7280', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>HORAIRES</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                       <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 6 }}>Début</Text>
-                        <TextInput
-                          style={{ borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 11, fontSize: 15 }}
-                          placeholder="09:00"
-                          value={respondAltTime}
-                          onChangeText={setRespondAltTime}
+                        <AppleTimePicker
+                          value={respondAltTime || '09:00'}
+                          onChange={setRespondAltTime}
+                          minuteStep={5}
+                          label="DÉBUT"
                         />
                       </View>
+                      <Ionicons name="arrow-forward" size={18} color="#9CA3AF" style={{ marginTop: 16 }} />
                       <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 6 }}>Fin</Text>
-                        <TextInput
-                          style={{ borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 11, fontSize: 15 }}
-                          placeholder="10:00"
-                          value={respondAltEndTime}
-                          onChangeText={setRespondAltEndTime}
+                        <AppleTimePicker
+                          value={respondAltEndTime || '10:00'}
+                          onChange={setRespondAltEndTime}
+                          minuteStep={5}
+                          label="FIN"
                         />
                       </View>
                     </View>
+                    <View style={{ height: 8 }} />
                   </View>
                 )}
 
                 {/* Note */}
                 <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 6 }}>
-                  Note {respondAction === 'accept' ? '(optionnel)' : respondAction === 'refuse' ? '(optionnel)' : '(optionnel)'}
+                  Note (optionnel)
                 </Text>
                 <TextInput
                   style={{ borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 11, fontSize: 15, minHeight: 72, textAlignVertical: 'top', marginBottom: 20 }}
@@ -2343,6 +2347,7 @@ export default function CalendarScreen() {
                   value={respondNote}
                   onChangeText={setRespondNote}
                   multiline
+                  blurOnSubmit={false}
                 />
 
                 {/* Submit */}
@@ -2353,7 +2358,7 @@ export default function CalendarScreen() {
                     borderRadius: 14, paddingVertical: 15,
                     opacity: submittingResponse ? 0.6 : 1,
                   }}
-                  onPress={handleSubmitResponse}
+                  onPress={() => { Keyboard.dismiss(); handleSubmitResponse(); }}
                   disabled={submittingResponse}
                 >
                   {submittingResponse

@@ -11,6 +11,8 @@ import {
   Modal,
   TextInput,
   KeyboardAvoidingView,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -280,6 +282,7 @@ export default function StaffNotifications() {
         transparent
         onRequestClose={() => { setShowObsModal(false); setSelectedObsAlert(null); setObsReplyText(''); }}
       >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.responseOverlay}
@@ -313,6 +316,7 @@ export default function StaffNotifications() {
                   onChangeText={setObsReplyText}
                   multiline
                   maxLength={500}
+                  blurOnSubmit={false}
                   autoCorrect
                   autoCapitalize="sentences"
                 />
@@ -320,7 +324,7 @@ export default function StaffNotifications() {
 
                 <TouchableOpacity
                   style={[styles.responseAcceptBtn, { backgroundColor: '#4A9B8E' }, (!obsReplyText.trim() || sendingObsReply) && { opacity: 0.5 }]}
-                  onPress={handleSendObsReply}
+                  onPress={() => { Keyboard.dismiss(); handleSendObsReply(); }}
                   disabled={!obsReplyText.trim() || sendingObsReply}
                 >
                   {sendingObsReply ? (
@@ -344,6 +348,7 @@ export default function StaffNotifications() {
             )}
           </View>
         </KeyboardAvoidingView>
+        </TouchableWithoutFeedback>
       </Modal>
 
       {/* ===== MODAL: Réponse à la contre-proposition ===== */}

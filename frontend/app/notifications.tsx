@@ -11,6 +11,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Keyboard,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -558,6 +559,7 @@ export default function NotificationsScreen() {
               onChangeText={setRefuseNote}
               multiline
               numberOfLines={3}
+              blurOnSubmit={false}
             />
             
             <View style={styles.optionsDivider}>
@@ -575,7 +577,7 @@ export default function NotificationsScreen() {
               <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowRefuseModal(false)}>
                 <Text style={styles.cancelBtnText}>Annuler</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.confirmRefuseBtn} onPress={confirmRefuse}>
+              <TouchableOpacity style={styles.confirmRefuseBtn} onPress={() => { Keyboard.dismiss(); confirmRefuse(); }}>
                 <Text style={styles.confirmRefuseBtnText}>Confirmer le refus</Text>
               </TouchableOpacity>
             </View>
@@ -636,6 +638,7 @@ export default function NotificationsScreen() {
                     onChangeText={setCounterMessage}
                     multiline
                     numberOfLines={2}
+                    blurOnSubmit={false}
                   />
                 </View>
               </ScrollView>
@@ -644,7 +647,7 @@ export default function NotificationsScreen() {
                 <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowCounterProposalModal(false)}>
                   <Text style={styles.cancelBtnText}>Annuler</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.sendBtn} onPress={sendCounterProposal}>
+                <TouchableOpacity style={styles.sendBtn} onPress={() => { Keyboard.dismiss(); sendCounterProposal(); }}>
                   <Ionicons name="send" size={16} color="#fff" />
                   <Text style={styles.sendBtnText}>Envoyer</Text>
                 </TouchableOpacity>

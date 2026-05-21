@@ -11,6 +11,7 @@ import {
   Alert,
   Platform,
   KeyboardAvoidingView,
+  Keyboard,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -570,6 +571,9 @@ export default function StaffCalendar() {
                 onChangeText={(t) => { setProposeTitle(t); setSubmitError(null); }}
                 onBlur={() => setTitleTouched(true)}
                 placeholderTextColor="#9CA3AF"
+                returnKeyType="next"
+                blurOnSubmit={true}
+                onSubmitEditing={Keyboard.dismiss}
               />
               {titleTouched && titleMissing && (
                 <View style={styles.fieldError}>
