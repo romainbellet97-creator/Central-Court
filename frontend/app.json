@@ -14,6 +14,8 @@
         "NSCameraUsageDescription": "L'app a besoin d'accéder à l'appareil photo pour scanner les factures",
         "NSPhotoLibraryUsageDescription": "L'app a besoin d'accéder à vos photos pour sélectionner des factures",
         "NSPhotoLibraryAddUsageDescription": "L'app a besoin de sauvegarder des photos",
+        "NSCalendarsUsageDescription": "Le Court Central accède à votre calendrier pour importer vos événements et détecter les conflits avec vos tournois.",
+        "NSCalendarsWriteOnlyAccessUsageDescription": "Le Court Central peut ajouter des événements à votre calendrier.",
         "NSLocationWhenInUseUsageDescription": "Le Court Central utilise votre position pour enregistrer automatiquement vos jours de présence dans chaque pays, conformément au suivi de résidence fiscale.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Le Court Central utilise votre position en arrière-plan pour enregistrer automatiquement vos jours de présence, même lorsque l'app est fermée.",
         "NSLocationAlwaysUsageDescription": "Le Court Central utilise votre position en arrière-plan pour enregistrer automatiquement vos jours de présence, même lorsque l'app est fermée.",
@@ -36,7 +38,9 @@
         "android.permission.ACCESS_BACKGROUND_LOCATION",
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_LOCATION",
-        "android.permission.RECEIVE_BOOT_COMPLETED"
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.READ_CALENDAR",
+        "android.permission.WRITE_CALENDAR"
       ]
     },
     "web": {
@@ -84,6 +88,12 @@
           "locationWhenInUsePermission": "Le Court Central utilise votre position pour enregistrer vos jours de présence dans chaque pays.",
           "isIosBackgroundLocationEnabled": true,
           "isAndroidBackgroundLocationEnabled": true
+        }
+      ],
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "Le Court Central accède à votre calendrier pour importer vos événements et détecter les conflits avec vos tournois."
         }
       ],
       [

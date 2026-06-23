@@ -58,6 +58,21 @@ class AddObservationRequest(BaseModel):
 class RespondEventRequest(BaseModel):
     """Player response to a staff-proposed event."""
     action: str  # accept | refuse | reschedule
+
+class CalendarEventItem(BaseModel):
+    externalId: str
+    title: str
+    date: str          # YYYY-MM-DD
+    endDate: Optional[str] = None
+    time: Optional[str] = None    # HH:MM
+    endTime: Optional[str] = None
+    location: Optional[str] = None
+    description: Optional[str] = None
+    allDay: bool = False
+    calendarName: Optional[str] = None
+
+class SyncCalendarRequest(BaseModel):
+    events: List[CalendarEventItem]
     note: Optional[str] = None
     alternativeDate: Optional[str] = None
     alternativeTime: Optional[str] = None
@@ -392,6 +407,24 @@ async def update_event(request: Request, event_id: str, req: UpdateEventRequest)
     return event
 
 
+@router.delete("/calendar-imported")
+async def delete_calendar_imported(request: Request, keep_observations: bool = False):
+    """Delete events imported from device calendar (source='device_calendar').
+
+    keep_observations=false (default): delete ALL imported calendar events.
+    keep_observations=true: only delete imported events that have NO observations.
+    """
+    user_id = await get_current_user_id(request)
+    query: dict = {"userId": user_id, "source": "device_calendar"}
+    if keep_observations:
+        query["$or"] = [
+            {"observations": {"$exists": False}},
+            {"observations": {"$size": 0}},
+        ]
+    result = await db.events.delete_many(query)
+    return {"success": True, "deleted": result.deleted_count}
+
+
 @router.delete("/{event_id}")
 async def delete_event(request: Request, event_id: str):
     """Delete an event. Only owner or proposing staff can delete."""
@@ -469,3 +502,60 @@ async def add_observation(request: Request, event_id: str, req: AddObservationRe
         )
 
     return observation
+
+
+# ── External calendar sync ──
+
+@router.post("/sync-external")
+async def sync_external_events(req: SyncCalendarRequest, request: Request):
+    """Bulk upsert events imported from the device calendar (expo-calendar).
+
+    - Keyed on (userId, externalId) — safe to call repeatedly (idempotent).
+    - Only manages events with source='device_calendar'; never touches
+      events created manually inside the app.
+    - Returns counts of inserted / updated events.
+    """
+    user_id = await get_current_user_id(request)
+    inserted = 0
+    updated = 0
+
+    for item in req.events:
+        if not item.date:
+            continue
+
+        existing = await db.events.find_one(
+            {"userId": user_id, "externalId": item.externalId},
+            {"_id": 1, "id": 1}
+        )
+
+        now = datetime.now(timezone.utc).isoformat()
+        doc = {
+            "userId": user_id,
+            "externalId": item.externalId,
+            "type": "personal",
+            "title": item.title or "(Sans titre)",
+            "date": item.date,
+            "endDate": item.endDate,
+            "time": item.time,
+            "endTime": item.endTime,
+            "location": item.location or "",
+            "description": item.description or "",
+            "allDay": item.allDay,
+            "calendarName": item.calendarName,
+            "visibleToStaff": False,
+            "source": "device_calendar",
+            "updatedAt": now,
+        }
+
+        if existing:
+            await db.events.update_one({"_id": existing["_id"]}, {"$set": doc})
+            updated += 1
+        else:
+            doc["id"] = f"cal-{uuid.uuid4().hex[:12]}"
+            doc["createdAt"] = now
+            doc["observations"] = []
+            await db.events.insert_one(doc)
+            doc.pop("_id", None)
+            inserted += 1
+
+    return {"success": True, "inserted": inserted, "updated": updated}

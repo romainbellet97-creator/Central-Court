@@ -120,10 +120,9 @@ export default function Step7Password() {
         useNativeDriver: Platform.OS !== 'web',
       }).start();
       
-      // Navigate to main app after delay
-      setTimeout(async () => {
-        await AsyncStorage.setItem('onboarding_completed', 'true');
-        router.replace('/(tabs)');
+      // Navigate to calendar connection step after delay
+      setTimeout(() => {
+        router.replace('/onboarding/step8-calendar');
       }, 2000);
       
     } catch (error: any) {
@@ -157,7 +156,7 @@ export default function Step7Password() {
             <Ionicons name="checkmark-circle" size={80} color={COLORS.success} />
           </View>
           <Text style={styles.successTitle}>Compte créé !</Text>
-          <Text style={styles.successSubtitle}>Bienvenue sur Tennis Pro</Text>
+          <Text style={styles.successSubtitle}>Bienvenue sur Central Court</Text>
         </Animated.View>
       </View>
     );
@@ -172,7 +171,7 @@ export default function Step7Password() {
         <Ionicons name="chevron-back" size={28} color={COLORS.text} />
       </TouchableOpacity>
       
-      <OnboardingProgressBar currentStep={7} totalSteps={7} />
+      <OnboardingProgressBar currentStep={7} totalSteps={8} />
       
       <View style={styles.content}>
         <Text style={styles.question}>Choisissez un mot de passe</Text>
