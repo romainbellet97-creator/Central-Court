@@ -10,21 +10,32 @@ import {
   TextInput,
   Alert,
   Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Calendar, LocaleConfig } from 'react-native-calendars';
 import { useAuth } from '../../src/context/AuthContext';
-import { PermissionGate, RestrictedScreen } from '../../src/components/PermissionGate';
+import { PermissionGate } from '../../src/components/PermissionGate';
 import { getStaffPermissions } from '../../src/types/staff';
 import Constants from 'expo-constants';
 import * as SecureStore from 'expo-secure-store';
+import AppleDatePicker from '../../src/components/inputs/AppleDatePicker';
+import AppleTimePicker from '../../src/components/inputs/AppleTimePicker';
+import NotesInput from '../../src/components/inputs/NotesInput';
 
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_BACKEND_URL ||
                 process.env.EXPO_PUBLIC_BACKEND_URL || '';
 
 async function getStoredToken(): Promise<string | null> {
-  return SecureStore.getItemAsync('session_token');
+  try {
+    if (Platform.OS === 'web') {
+      return typeof localStorage !== 'undefined' ? localStorage.getItem('session_token') : null;
+    }
+    return await SecureStore.getItemAsync('session_token');
+  } catch {
+    return null;
+  }
 }
 
 async function authFetch(path: string, options: RequestInit = {}): Promise<Response> {
@@ -84,25 +95,40 @@ const EVENT_COLORS: Record<string, string> = {
   other: '#607D8B',
 };
 
+const getDefaultEndTime = (startTime: string) => {
+  const [hours, minutes] = startTime.split(':').map(Number);
+  const endHours = (hours + 1) % 24;
+  return `${endHours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+};
+
 export default function StaffCalendar() {
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
-  
+
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [tournaments, setTournaments] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showProposeModal, setShowProposeModal] = useState(false);
-  
+
   // Propose slot form
   const [proposeTitle, setProposeTitle] = useState('');
+  const [proposeDate, setProposeDate] = useState(new Date().toISOString().split('T')[0]);
   const [proposeTime, setProposeTime] = useState('09:00');
   const [proposeEndTime, setProposeEndTime] = useState('10:00');
   const [proposeNotes, setProposeNotes] = useState('');
+  const [endTimeManuallySet, setEndTimeManuallySet] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [titleTouched, setTitleTouched] = useState(false);
 
   const linkedPlayerId = user?.player_id;
   const permissions = getStaffPermissions(user?.role);
   const canEdit = permissions?.canEditCalendar ?? false;
+
+  const timeIsValid = proposeEndTime > proposeTime;
+  const titleMissing = !proposeTitle.trim();
+  const canSubmit = !titleMissing && timeIsValid;
 
   const loadEvents = useCallback(async () => {
     if (!linkedPlayerId) {
@@ -116,13 +142,21 @@ export default function StaffCalendar() {
       const endDate = new Date();
       endDate.setMonth(endDate.getMonth() + 2);
 
-      const response = await authFetch(
-        `/api/events?userId=${linkedPlayerId}&startDate=${startDate.toISOString().split('T')[0]}&endDate=${endDate.toISOString().split('T')[0]}`
-      );
+      const [eventsRes, tournamentsRes] = await Promise.all([
+        authFetch(
+          `/api/events?userId=${linkedPlayerId}&startDate=${startDate.toISOString().split('T')[0]}&endDate=${endDate.toISOString().split('T')[0]}`
+        ),
+        authFetch(`/api/tournaments/player-registrations?userId=${linkedPlayerId}&status=participating`),
+      ]);
 
-      if (response.ok) {
-        const data = await response.json();
+      if (eventsRes.ok) {
+        const data = await eventsRes.json();
         setEvents(Array.isArray(data) ? data : []);
+      }
+
+      if (tournamentsRes.ok) {
+        const data = await tournamentsRes.json();
+        setTournaments(Array.isArray(data) ? data : []);
       }
     } catch (error) {
       console.error('Error loading events:', error);
@@ -138,11 +172,11 @@ export default function StaffCalendar() {
   // Build marked dates for calendar
   const markedDates = useMemo(() => {
     const marks: Record<string, any> = {};
-    
+
     events.forEach(event => {
       const color = EVENT_COLORS[event.type] || EVENT_COLORS.other;
       const isPending = event.status === 'pending_approval';
-      
+
       if (!marks[event.date]) {
         marks[event.date] = { dots: [] };
       }
@@ -150,6 +184,22 @@ export default function StaffCalendar() {
         key: event.id,
         color: isPending ? '#9CA3AF' : color,
       });
+    });
+
+    // Add tournament dots for every day in each participating tournament's span
+    tournaments.forEach(t => {
+      const start = t.startDate ? t.startDate.split('T')[0] : null;
+      const end = t.endDate ? t.endDate.split('T')[0] : start;
+      if (!start) return;
+      const cur = new Date(start);
+      const last = new Date(end || start);
+      while (cur <= last) {
+        const d = cur.toISOString().split('T')[0];
+        if (!marks[d]) marks[d] = { dots: [] };
+        if (!marks[d].dots) marks[d].dots = [];
+        marks[d].dots.push({ key: `t-${t.id}-${d}`, color: EVENT_COLORS.tournament });
+        cur.setDate(cur.getDate() + 1);
+      }
     });
 
     // Add selected date marker
@@ -161,30 +211,44 @@ export default function StaffCalendar() {
     }
 
     return marks;
-  }, [events, selectedDate]);
+  }, [events, tournaments, selectedDate]);
 
-  // Events for selected date
+  // Events for selected date (including participating tournaments spanning that day)
   const dayEvents = useMemo(() => {
-    return events
+    const regular = events
       .filter(e => e.date === selectedDate)
       .sort((a, b) => (a.time || '').localeCompare(b.time || ''));
-  }, [events, selectedDate]);
+
+    const tournamentEvents: CalendarEvent[] = tournaments
+      .filter(t => {
+        const start = t.startDate ? t.startDate.split('T')[0] : null;
+        const end = t.endDate ? t.endDate.split('T')[0] : start;
+        return start && selectedDate >= start && selectedDate <= (end || start);
+      })
+      .map(t => ({
+        id: `tournament-${t.id}`,
+        title: t.name || 'Tournoi',
+        date: selectedDate,
+        type: 'tournament',
+        status: undefined,
+      }));
+
+    return [...tournamentEvents, ...regular];
+  }, [events, tournaments, selectedDate]);
 
   const handleProposeSlot = async () => {
-    if (!proposeTitle.trim()) {
-      Alert.alert('Erreur', 'Veuillez entrer un titre');
-      return;
-    }
+    setTitleTouched(true);
+    setSubmitError(null);
+
+    if (!canSubmit) return;
 
     setIsSubmitting(true);
     try {
-      // Auth header is sent by authFetch → backend detects staff context
-      // and stores event under linked player's userId with status=pending_approval
       const response = await authFetch(`/api/events`, {
         method: 'POST',
         body: JSON.stringify({
           title: proposeTitle.trim(),
-          date: selectedDate,
+          date: proposeDate,
           time: proposeTime,
           endTime: proposeEndTime,
           type: 'training',
@@ -193,19 +257,17 @@ export default function StaffCalendar() {
       });
 
       if (response.ok) {
-        Alert.alert(
-          'Proposition envoyée',
-          'Le joueur recevra une notification pour valider ce créneau.',
-          [{ text: 'OK' }]
-        );
         setShowProposeModal(false);
         resetProposeForm();
         loadEvents();
+        // Success alert is OK here (only fires on actual success, not validation)
+        Alert.alert('Proposition envoyée', 'Le joueur recevra une notification pour valider ce créneau.');
       } else {
-        Alert.alert('Erreur', 'Impossible d\'envoyer la proposition');
+        const body = await response.text().catch(() => '');
+        setSubmitError(body || 'Impossible d\'envoyer la proposition. Vérifiez votre connexion.');
       }
-    } catch (error) {
-      Alert.alert('Erreur', 'Une erreur est survenue');
+    } catch {
+      setSubmitError('Erreur réseau. Vérifiez votre connexion et réessayez.');
     } finally {
       setIsSubmitting(false);
     }
@@ -213,17 +275,26 @@ export default function StaffCalendar() {
 
   const resetProposeForm = () => {
     setProposeTitle('');
+    setProposeDate(selectedDate);
     setProposeTime('09:00');
     setProposeEndTime('10:00');
     setProposeNotes('');
+    setEndTimeManuallySet(false);
+    setSubmitError(null);
+    setTitleTouched(false);
+  };
+
+  const openProposeModal = () => {
+    setProposeDate(selectedDate);
+    setShowProposeModal(true);
   };
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
-    return date.toLocaleDateString('fr-FR', { 
-      weekday: 'long', 
-      day: 'numeric', 
-      month: 'long' 
+    return date.toLocaleDateString('fr-FR', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long'
     });
   };
 
@@ -285,7 +356,7 @@ export default function StaffCalendar() {
           {/* Selected date events */}
           <View style={styles.eventsSection}>
             <Text style={styles.dateTitle}>{formatDate(selectedDate)}</Text>
-            
+
             {dayEvents.length === 0 ? (
               <View style={styles.emptyState}>
                 <Ionicons name="calendar-outline" size={40} color="#D1D5DB" />
@@ -366,7 +437,7 @@ export default function StaffCalendar() {
       <PermissionGate permission="canEditCalendar">
         <TouchableOpacity
           style={[styles.fab, { bottom: insets.bottom + 90 }]}
-          onPress={() => setShowProposeModal(true)}
+          onPress={openProposeModal}
           activeOpacity={0.8}
           accessibilityLabel="Proposer un créneau au joueur"
           accessibilityRole="button"
@@ -376,8 +447,22 @@ export default function StaffCalendar() {
       </PermissionGate>
 
       {/* Propose Modal */}
-      <Modal visible={showProposeModal} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
+      <Modal visible={showProposeModal} animationType="slide" transparent onRequestClose={() => {
+        setShowProposeModal(false);
+        resetProposeForm();
+      }}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <TouchableOpacity
+            style={styles.modalBackdrop}
+            activeOpacity={1}
+            onPress={() => {
+              setShowProposeModal(false);
+              resetProposeForm();
+            }}
+          />
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Proposer un créneau</Text>
@@ -389,70 +474,120 @@ export default function StaffCalendar() {
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.modalDate}>{formatDate(selectedDate)}</Text>
-
-            <Text style={styles.inputLabel}>Titre</Text>
-            <TextInput
-              style={styles.textInput}
-              placeholder="Ex: Entraînement, Réunion..."
-              value={proposeTitle}
-              onChangeText={setProposeTitle}
-              placeholderTextColor="#9CA3AF"
-            />
-
-            <View style={styles.timeRow}>
-              <View style={styles.timeField}>
-                <Text style={styles.inputLabel}>Début</Text>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="09:00"
-                  value={proposeTime}
-                  onChangeText={setProposeTime}
-                  placeholderTextColor="#9CA3AF"
-                />
-              </View>
-              <View style={styles.timeField}>
-                <Text style={styles.inputLabel}>Fin</Text>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="10:00"
-                  value={proposeEndTime}
-                  onChangeText={setProposeEndTime}
-                  placeholderTextColor="#9CA3AF"
-                />
-              </View>
-            </View>
-
-            <Text style={styles.inputLabel}>Notes (optionnel)</Text>
-            <TextInput
-              style={[styles.textInput, styles.notesInput]}
-              placeholder="Détails supplémentaires..."
-              value={proposeNotes}
-              onChangeText={setProposeNotes}
-              multiline
-              placeholderTextColor="#9CA3AF"
-            />
-
-            <TouchableOpacity
-              style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
-              onPress={handleProposeSlot}
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <>
-                  <Ionicons name="send" size={20} color="#FFFFFF" />
-                  <Text style={styles.submitButtonText}>Envoyer la proposition</Text>
-                </>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {/* Title */}
+              <Text style={styles.inputLabel}>
+                TITRE <Text style={{ color: '#EF4444' }}>*</Text>
+              </Text>
+              <TextInput
+                style={[styles.textInput, titleTouched && titleMissing && styles.textInputError]}
+                placeholder="Ex: Entraînement, Réunion..."
+                value={proposeTitle}
+                onChangeText={(t) => { setProposeTitle(t); setSubmitError(null); }}
+                onBlur={() => setTitleTouched(true)}
+                placeholderTextColor="#9CA3AF"
+              />
+              {titleTouched && titleMissing && (
+                <View style={styles.fieldError}>
+                  <Ionicons name="alert-circle" size={14} color="#EF4444" />
+                  <Text style={styles.fieldErrorText}>Le titre est obligatoire</Text>
+                </View>
               )}
-            </TouchableOpacity>
 
-            <Text style={styles.infoText}>
-              Le joueur recevra une notification pour accepter ou refuser ce créneau.
-            </Text>
+              <View style={styles.pickerSpacer} />
+
+              {/* Date Picker */}
+              <AppleDatePicker
+                value={proposeDate}
+                onChange={setProposeDate}
+                label="DATE"
+              />
+
+              <View style={styles.pickerSpacer} />
+
+              {/* Time Pickers */}
+              <Text style={styles.timeRangeLabel}>HORAIRES</Text>
+              <View style={styles.timeRangeContainer}>
+                <View style={styles.timePickerHalf}>
+                  <AppleTimePicker
+                    value={proposeTime}
+                    onChange={(time) => {
+                      setProposeTime(time);
+                      if (!endTimeManuallySet) {
+                        setProposeEndTime(getDefaultEndTime(time));
+                      }
+                    }}
+                    minuteStep={5}
+                    label="DÉBUT"
+                  />
+                </View>
+                <View style={styles.timeRangeSeparator}>
+                  <Ionicons name="arrow-forward" size={20} color="#9CA3AF" />
+                </View>
+                <View style={styles.timePickerHalf}>
+                  <AppleTimePicker
+                    value={proposeEndTime}
+                    onChange={(time) => {
+                      setProposeEndTime(time);
+                      setEndTimeManuallySet(true);
+                    }}
+                    minuteStep={5}
+                    label="FIN"
+                  />
+                </View>
+              </View>
+
+              {/* Validation: fin >= début */}
+              {!timeIsValid && (
+                <View style={styles.validationError}>
+                  <Ionicons name="warning" size={16} color="#D97706" />
+                  <Text style={styles.validationErrorText}>
+                    L'heure de fin doit être après l'heure de début
+                  </Text>
+                </View>
+              )}
+
+              <View style={styles.pickerSpacer} />
+
+              {/* Notes */}
+              <NotesInput
+                label="NOTES (optionnel)"
+                value={proposeNotes}
+                onChange={setProposeNotes}
+                placeholder="Détails supplémentaires..."
+              />
+
+              {submitError && (
+                <View style={styles.submitErrorBox}>
+                  <Ionicons name="alert-circle" size={16} color="#EF4444" />
+                  <Text style={styles.submitErrorText}>{submitError}</Text>
+                </View>
+              )}
+
+              <TouchableOpacity
+                style={[styles.submitButton, (!canSubmit || isSubmitting) && styles.submitButtonDisabled]}
+                onPress={handleProposeSlot}
+                disabled={isSubmitting}
+                activeOpacity={0.8}
+              >
+                {isSubmitting ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Ionicons name="send" size={20} color="#FFFFFF" />
+                    <Text style={styles.submitButtonText}>Envoyer la proposition</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              <Text style={styles.infoText}>
+                Le joueur recevra une notification pour accepter ou refuser ce créneau.
+              </Text>
+
+              <View style={{ height: 20 }} />
+            </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -567,22 +702,6 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 14,
   },
-  pendingBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    alignSelf: 'flex-start',
-    marginBottom: 6,
-  },
-  pendingText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#D97706',
-  },
   eventTitle: {
     fontSize: 15,
     fontWeight: '600',
@@ -654,36 +773,35 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
   },
+  modalBackdrop: {
+    flex: 1,
+  },
   modalContent: {
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 24,
     paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+    maxHeight: '90%',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 20,
   },
   modalTitle: {
     fontSize: 20,
     fontWeight: '700',
     color: '#1F2937',
   },
-  modalDate: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginBottom: 20,
-    textTransform: 'capitalize',
-  },
   inputLabel: {
     fontSize: 13,
     fontWeight: '600',
     color: '#6B7280',
     marginBottom: 6,
-    marginTop: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   textInput: {
     backgroundColor: '#F9FAFB',
@@ -694,15 +812,45 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
-  notesInput: {
-    height: 80,
-    textAlignVertical: 'top',
+  pickerSpacer: {
+    height: 16,
   },
-  timeRow: {
+  timeRangeLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#6B7280',
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  timeRangeContainer: {
     flexDirection: 'row',
-    gap: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
   },
-  timeField: {
+  timePickerHalf: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  timeRangeSeparator: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 24,
+  },
+  validationError: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FEF3C7',
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 8,
+  },
+  validationErrorText: {
+    fontSize: 13,
+    color: '#D97706',
+    fontWeight: '500',
     flex: 1,
   },
   submitButton: {
@@ -716,7 +864,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   submitButtonDisabled: {
-    opacity: 0.6,
+    opacity: 0.5,
   },
   submitButtonText: {
     fontSize: 16,
@@ -728,5 +876,33 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     textAlign: 'center',
     marginTop: 12,
+  },
+  textInputError: {
+    borderColor: '#EF4444',
+    borderWidth: 1.5,
+  },
+  fieldError: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
+  fieldErrorText: {
+    fontSize: 12,
+    color: '#EF4444',
+  },
+  submitErrorBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: '#FEF2F2',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 12,
+  },
+  submitErrorText: {
+    fontSize: 13,
+    color: '#EF4444',
+    flex: 1,
   },
 });

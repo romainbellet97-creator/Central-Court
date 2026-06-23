@@ -95,6 +95,20 @@ async def get_staff_context(request: Request) -> Optional[dict]:
     else:
         effective_player_id = default_player_id or (player_ids[0] if player_ids else None)
 
+    # Resolve MongoDB ObjectId player_id to user_id string (e.g. "player_abc123")
+    # staff.playerId stores the _id of the user doc, but events/registrations use user_id
+    if effective_player_id:
+        try:
+            from bson import ObjectId
+            player_doc = await db.users.find_one(
+                {"_id": ObjectId(str(effective_player_id))},
+                {"_id": 0, "user_id": 1}
+            )
+            if player_doc and player_doc.get("user_id"):
+                effective_player_id = player_doc["user_id"]
+        except Exception:
+            pass  # fall back to raw playerId if lookup fails
+
     return {
         "user_id": f"staff_{str(staff['_id'])}",
         "player_id": effective_player_id,
